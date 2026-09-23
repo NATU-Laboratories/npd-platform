@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { AlertTriangle, ArrowDown, ArrowUp, ChevronRight, FileEdit } from "lucide-react";
 import { HBarChart, MonthlyChart, PhaseFunnel } from "@/components/dashboard/charts";
 import { Filters } from "@/components/dashboard/filters";
-import { DeptChip, StatusBadge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { requireUser } from "@/lib/server/authz";
 import { dashboardStats, filterOptions, listProjects, myDrafts, PAGE_SIZE, type ProjectFilters } from "@/lib/server/dashboard";
@@ -40,10 +40,10 @@ function sortHref(f: ProjectFilters, key: string) {
   return `/?${sp.toString()}`;
 }
 
-function SortTh({ f, k, children }: { f: ProjectFilters; k: string; children: React.ReactNode }) {
+function SortTh({ f, k, children, className }: { f: ProjectFilters; k: string; children: React.ReactNode; className?: string }) {
   const current = (f.sort ?? "requested") === k;
   return (
-    <th className="px-3 py-2 font-medium" aria-sort={current ? (f.dir === "asc" ? "ascending" : "descending") : undefined}>
+    <th className={cn("px-3 py-2 font-medium", className)} aria-sort={current ? (f.dir === "asc" ? "ascending" : "descending") : undefined}>
       <Link href={sortHref(f, k)} className="inline-flex items-center gap-1 hover:text-slate-900" scroll={false}>
         {children}
         {current && (f.dir === "asc" ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />)}
@@ -165,64 +165,70 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
       <Card>
         <CardHeader title="Proyectos" description={`${list.total} resultado${list.total === 1 ? "" : "s"}`} />
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px] text-left text-sm">
+          <table className="w-full min-w-[760px] text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-xs text-slate-500">
               <tr>
-                <SortTh f={f} k="code">Código</SortTh>
-                <SortTh f={f} k="name">Nombre</SortTh>
+                <SortTh f={f} k="name">Proyecto</SortTh>
                 <th className="px-3 py-2 font-medium">Tipo</th>
-                <th className="px-3 py-2 font-medium">Categoría</th>
                 <SortTh f={f} k="client">Cliente</SortTh>
-                <th className="px-3 py-2 font-medium">Solicitante</th>
-                <SortTh f={f} k="requested">Solicitud</SortTh>
+                <SortTh f={f} k="requested" className="hidden xl:table-cell">Solicitud</SortTh>
                 <SortTh f={f} k="needed">Fecha necesaria</SortTh>
                 <SortTh f={f} k="status">Estado</SortTh>
                 <SortTh f={f} k="phase">Fase</SortTh>
-                <th className="px-3 py-2 font-medium">Departamentos</th>
-                <th className="px-3 py-2" />
+                <th className="hidden px-3 py-2 font-medium lg:table-cell">Dptos.</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {list.rows.map((p) => (
-                <tr key={p.id} className="hover:bg-slate-50">
-                  <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{p.code}</td>
-                  <td className="max-w-64 px-3 py-2">
-                    <Link href={`/proyectos/${p.id}`} className="font-medium text-slate-900 hover:underline">
+                <tr key={p.id} className="group relative hover:bg-slate-50">
+                  <td className="px-3 py-2.5">
+                    {/* El enlace cubre toda la fila */}
+                    <Link href={`/proyectos/${p.id}`} className="font-medium text-slate-900 after:absolute after:inset-0 group-hover:underline">
                       {p.name}
                     </Link>
-                    {p.priority && (p.priority === "high" || p.priority === "urgent") && (
-                      <span className={cn("ml-1.5 text-xs", PRIORITY_COLOR[p.priority])}>· {PRIORITY_LABEL[p.priority]}</span>
-                    )}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2">{p.type === "MP" ? `MP – ${p.brandName ?? ""}` : "PL"}</td>
-                  <td className="px-3 py-2">{p.category ? CATEGORY_LABEL[p.category] : "—"}</td>
-                  <td className="px-3 py-2">{p.clientName ?? "—"}</td>
-                  <td className="whitespace-nowrap px-3 py-2">{p.requesterName}</td>
-                  <td className="whitespace-nowrap px-3 py-2">{formatDate(p.requestedAt)}</td>
-                  <td className="px-3 py-2">
-                    <NeededBySignal date={p.neededBy} riskDays={settings.risk_days} status={p.status} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <StatusBadge status={p.status} />
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-xs">{PHASES[p.phase]?.name}</td>
-                  <td className="px-3 py-2">
-                    <div className="flex max-w-56 flex-wrap gap-1">
-                      {p.departments.map((d) => (
-                        <DeptChip key={d.name} {...d} />
-                      ))}
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-slate-500">
+                      <span className="font-mono">{p.code}</span>
+                      <span>· {p.requesterName}</span>
+                      {p.priority && (p.priority === "high" || p.priority === "urgent") && (
+                        <span className={PRIORITY_COLOR[p.priority]}>· {PRIORITY_LABEL[p.priority]}</span>
+                      )}
                     </div>
                   </td>
-                  <td className="px-3 py-2">
-                    <Link href={`/proyectos/${p.id}`} className="whitespace-nowrap text-xs font-medium text-brand-700 hover:underline">
-                      Ver detalle
-                    </Link>
+                  <td className="px-3 py-2.5">
+                    <div className="whitespace-nowrap">{p.type === "MP" ? `MP · ${p.brandName ?? ""}` : "PL"}</div>
+                    <div className="text-xs text-slate-500">{p.category ? CATEGORY_LABEL[p.category] : "—"}</div>
+                  </td>
+                  <td className="px-3 py-2.5">{p.clientName ?? <span className="text-slate-300">—</span>}</td>
+                  <td className="hidden whitespace-nowrap px-3 py-2.5 xl:table-cell">{formatDate(p.requestedAt)}</td>
+                  <td className="px-3 py-2.5">
+                    <NeededBySignal date={p.neededBy} riskDays={settings.risk_days} status={p.status} compact />
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <StatusBadge status={p.status} />
+                  </td>
+                  <td className="px-3 py-2.5 text-xs">
+                    <span className="whitespace-nowrap">
+                      {p.phase} · {PHASES[p.phase]?.short}
+                    </span>
+                  </td>
+                  <td className="hidden px-3 py-2.5 lg:table-cell">
+                    {p.departments.length > 0 ? (
+                      <span className="flex items-center gap-1" title={p.departments.map((d) => d.name).join(", ")}>
+                        {p.departments.map((d) => (
+                          <span key={d.name} className="size-2.5 rounded-full ring-1 ring-white" style={{ backgroundColor: d.color }} aria-hidden />
+                        ))}
+                        <span className="ml-1 text-xs text-slate-500">{p.departments.length}</span>
+                        <span className="sr-only">{p.departments.map((d) => d.name).join(", ")}</span>
+                      </span>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
                   </td>
                 </tr>
               ))}
               {!list.rows.length && (
                 <tr>
-                  <td colSpan={12} className="px-3 py-10 text-center text-sm text-slate-500">
+                  <td colSpan={8} className="px-3 py-10 text-center text-sm text-slate-500">
                     No hay proyectos con estos filtros.
                   </td>
                 </tr>

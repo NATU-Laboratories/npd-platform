@@ -47,11 +47,11 @@ export const PRIORITY_COLOR = {
 } as const;
 
 export const PHASES = [
-  { n: 0, name: "Solicitud", gate: "G1", gateName: "Viabilidad" },
-  { n: 1, name: "Validez del concepto", gate: "G2", gateName: "Validez del mix" },
-  { n: 2, name: "Desarrollo", gate: "G3", gateName: "Muestra aprobada" },
-  { n: 3, name: "Diseño y artes finales", gate: "G4", gateName: "AAFF aprobados" },
-  { n: 4, name: "Preparación para producción", gate: "G5", gateName: "Listo para producción" },
+  { n: 0, name: "Solicitud", short: "Solicitud", gate: "G1", gateName: "Viabilidad" },
+  { n: 1, name: "Validez del concepto", short: "Concepto", gate: "G2", gateName: "Validez del mix" },
+  { n: 2, name: "Desarrollo", short: "Desarrollo", gate: "G3", gateName: "Muestra aprobada" },
+  { n: 3, name: "Diseño y artes finales", short: "Diseño/AAFF", gate: "G4", gateName: "AAFF aprobados" },
+  { n: 4, name: "Preparación para producción", short: "Producción", gate: "G5", gateName: "Listo para producción" },
 ] as const;
 
 /** Subcarpetas de SharePoint por fase (§9.1). */
