@@ -50,7 +50,7 @@ pnpm db:generate                  # tras cambiar src/db/schema.ts
 
 1. Crear la base de datos en Neon y ejecutar `pnpm db:migrate` y `pnpm db:seed` (sin `--demo`) contra ella.
 2. Variables de entorno de `.env.example` en Vercel (nunca en el repo). `ADMIN_EMAILS` con el email de quien administra: entra como Admin en su primer login.
-3. Cron: `vercel.json` programa `/api/cron/jobs` cada 10 minutos (requiere plan Pro; en Hobby solo se permite una vez al día). Definir `CRON_SECRET`.
+3. Cron: `vercel.json` programa `/api/cron/jobs` una vez al día (06:00 UTC), compatible con el plan Hobby. En plan Pro conviene cambiarlo a `*/10 * * * *` para reintentar emails fallidos cada 10 minutos. Definir `CRON_SECRET`.
 4. IT (tenant Microsoft 365), según §9.2 del SPEC: app single-tenant en Entra ID con redirect `https://<dominio>/api/auth/callback/microsoft-entra-id`; permisos delegados `openid profile email User.Read`; permisos de aplicación `Sites.Selected` (write solo en "Proyectos NPD") y `Mail.Send` restringido por Application Access Policy al buzón `proyectos@…`. Facilitar Tenant ID, Client ID, secreto, Site ID y buzón.
 
 ## Estructura
