@@ -82,6 +82,18 @@ export function ClientPicker({
     );
   }
 
+  const term = q.trim();
+  const norm = (x: string) => x.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().trim();
+  const exact = term ? results.find((c) => norm(c.name) === norm(term)) : undefined;
+
+  /** Confirma lo escrito: si coincide con un cliente existente lo selecciona; si no, lo da de alta como nuevo. */
+  const commit = () => {
+    if (!term) return;
+    if (exact) onSelect(exact);
+    else if (allowNew) onNewClient({ name: term });
+    setOpen(false);
+  };
+
   return (
     <div className="relative">
       <div className="relative">
@@ -89,16 +101,32 @@ export function ClientPicker({
         <Input
           id={id}
           className="pl-8"
-          placeholder="Buscar cliente…"
+          placeholder={allowNew ? "Busca un cliente o escribe el nombre de uno nuevo…" : "Buscar cliente…"}
           value={q}
-          onChange={(e) => setQ(e.target.value)}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setOpen(true);
+          }}
           onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          onBlur={() =>
+            setTimeout(() => {
+              setOpen(false);
+              // Escribir un nombre y salir del campo también lo da de alta (o selecciona el existente)
+              commit();
+            }, 150)
+          }
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commit();
+            } else if (e.key === "Escape") setOpen(false);
+          }}
           role="combobox"
           aria-expanded={open}
+          autoComplete="off"
         />
       </div>
-      {open && (
+      {open && results.length > 0 && (
         <ul className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg" role="listbox">
           {results.map((c) => (
             <li
@@ -115,25 +143,12 @@ export function ClientPicker({
               {c.name} {c.country && <span className="text-slate-400">· {c.country}</span>}
             </li>
           ))}
-          {!results.length && <li className="px-3 py-1.5 text-sm text-slate-500">Sin resultados</li>}
-          {allowNew && (
-            <li className="border-t border-slate-100 px-2 pt-1">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  onNewClient({ name: q });
-                  setOpen(false);
-                }}
-              >
-                <Plus /> Nuevo cliente{q && `: “${q}”`}
-              </Button>
-            </li>
-          )}
         </ul>
+      )}
+      {allowNew && term && !exact && (
+        <Button type="button" variant="secondary" size="sm" className="mt-2" onClick={commit}>
+          <Plus /> Dar de alta «{term}» como cliente nuevo
+        </Button>
       )}
     </div>
   );
