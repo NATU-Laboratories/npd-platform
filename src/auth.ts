@@ -1,6 +1,7 @@
 import NextAuth, { type NextAuthConfig } from "next-auth";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import Credentials from "next-auth/providers/credentials";
+import { CredentialsSignin } from "next-auth";
 import { timingSafeEqual } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -10,6 +11,11 @@ declare module "next-auth" {
   interface Session {
     user: { id: string; email: string; name: string };
   }
+}
+
+/** Fallo técnico (p. ej. base de datos) durante el acceso provisional. */
+class LoginBackendError extends CredentialsSignin {
+  code = "backend";
 }
 
 /**
@@ -102,8 +108,13 @@ if (devLoginEnabled) {
         const email = String(creds?.email ?? "").trim();
         if (!email.includes("@")) return null;
         const name = String(creds?.name ?? "").trim() || email.split("@")[0]!;
-        const id = await upsertUser({ email, name });
-        return id ? { id, email, name } : null;
+        try {
+          const id = await upsertUser({ email, name });
+          return id ? { id, email, name } : null;
+        } catch (err) {
+          console.error("[auth] fallo en el acceso provisional", err);
+          throw new LoginBackendError();
+        }
       },
     }),
   );
