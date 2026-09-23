@@ -8,7 +8,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { requireUser } from "@/lib/server/authz";
 import { dashboardStats, filterOptions, listProjects, myDrafts, PAGE_SIZE, type ProjectFilters } from "@/lib/server/dashboard";
 import { getSettings } from "@/lib/server/settings";
-import { CATEGORY_LABEL, PHASES, PRIORITY_COLOR, PRIORITY_LABEL, STATUS_LABEL } from "@/lib/labels";
+import { CATEGORY_LABEL, PHASES, PRIORITY_COLOR, PRIORITY_LABEL } from "@/lib/labels";
 import { cn, formatDate } from "@/lib/utils";
 import { NeededBySignal } from "@/components/needed-by";
 
@@ -106,12 +106,12 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
         <Filters {...options} />
       </Suspense>
 
-      <section className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6" aria-label="Indicadores">
-        <Kpi label="Proyectos" value={t.total} hint={`${t.pl} PL · ${t.mp} MP`} />
-        <Kpi label="Solicitados" value={t.solicitados} href="/?status=g:solicitados" hint="Solicitado + pendiente de info" />
-        <Kpi label="En proceso" value={t.enProceso} href="/?status=g:en_proceso" hint="En curso + en pausa" />
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8" aria-label="Indicadores">
+        <Kpi label="Proyectos" value={t.total} hint="Según los filtros" />
+        <Kpi label="Solicitados" value={t.solicitados} href="/?status=g:solicitados" hint="Incl. pendiente de info" />
+        <Kpi label="En proceso" value={t.enProceso} href="/?status=g:en_proceso" hint="Incl. en pausa" />
         <Kpi label="Cerrados" value={t.cerrados} href="/?status=g:cerrados" hint="En producción" />
-        <Kpi label="Rechazados / cancelados" value={t.rechazados} href="/?status=g:rechazados" />
+        <Kpi label="Rechazados" value={t.rechazados} href="/?status=g:rechazados" hint="Incl. cancelados" />
         <Kpi
           label="En riesgo"
           value={
@@ -120,12 +120,12 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
               {t.atRisk}
             </span>
           }
-          hint={`Fecha necesaria < ${settings.risk_days} días`}
+          hint={`Fecha < ${settings.risk_days} días`}
           href="/?risk=1"
           tone={t.atRisk > 0 ? "warn" : undefined}
         />
-        <Kpi label="Tiempo medio hasta G1" value={t.avgDaysToG1 == null ? "—" : `${t.avgDaysToG1.toFixed(1)} d`} />
-        <Kpi label="% aprobados en G1" value={decided ? `${Math.round((t.approvedG1 / decided) * 100)}%` : "—"} hint={`${t.approvedG1} de ${decided} decididos`} />
+        <Kpi label="Tiempo hasta G1" value={t.avgDaysToG1 == null ? "—" : `${t.avgDaysToG1.toFixed(1)} d`} />
+        <Kpi label="Aprobados en G1" value={decided ? `${Math.round((t.approvedG1 / decided) * 100)}%` : "—"} hint={`${t.approvedG1} de ${decided}`} />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-3">
@@ -141,23 +141,21 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
             <PhaseFunnel data={PHASES.map((p) => ({ name: `${p.n} · ${p.name}`, n: stats.byPhase.find((x) => x.phase === p.n)?.n ?? 0 }))} />
           </CardBody>
         </Card>
-        <Card>
-          <CardHeader title="Por estado" />
-          <CardBody>
-            <HBarChart label="Proyectos por estado" data={stats.byStatus.map((r) => ({ name: STATUS_LABEL[r.key as keyof typeof STATUS_LABEL] ?? r.key, n: r.n }))} />
-          </CardBody>
-        </Card>
-        <Card>
-          <CardHeader title="Por tipo / marca" />
-          <CardBody>
-            <HBarChart label="Proyectos por tipo y marca" data={stats.byBrand.map((r) => ({ name: r.key, n: r.n }))} />
-          </CardBody>
-        </Card>
-        <Card>
-          <CardHeader title="Por categoría y solicitante" />
-          <CardBody className="flex flex-col gap-4">
-            <HBarChart label="Proyectos por categoría" data={stats.byCategory.map((r) => ({ name: CATEGORY_LABEL[r.key as keyof typeof CATEGORY_LABEL] ?? r.key, n: r.n }))} />
-            <HBarChart label="Proyectos por solicitante" data={stats.byRequester.slice(0, 6).map((r) => ({ name: r.key, n: r.n }))} />
+        <Card className="lg:col-span-3">
+          <CardHeader title="Distribución" description="Proyectos por tipo, categoría y solicitante" />
+          <CardBody className="grid gap-6 md:grid-cols-3">
+            <div>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Tipo / marca</h3>
+              <HBarChart label="Proyectos por tipo y marca" data={stats.byBrand.map((r) => ({ name: r.key, n: r.n }))} />
+            </div>
+            <div>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Categoría</h3>
+              <HBarChart label="Proyectos por categoría" data={stats.byCategory.map((r) => ({ name: CATEGORY_LABEL[r.key as keyof typeof CATEGORY_LABEL] ?? r.key, n: r.n }))} />
+            </div>
+            <div>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Solicitante</h3>
+              <HBarChart label="Proyectos por solicitante" data={stats.byRequester.slice(0, 6).map((r) => ({ name: r.key, n: r.n }))} />
+            </div>
           </CardBody>
         </Card>
       </section>
