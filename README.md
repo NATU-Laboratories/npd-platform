@@ -46,6 +46,10 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm build
 pnpm db:generate                  # tras cambiar src/db/schema.ts
 ```
 
+## Modo pruebas en Vercel (antes de configurar Microsoft)
+
+Con `AUTH_DEV_LOGIN=true` y `AUTH_DEV_PASSWORD=<clave>` la pantalla de login muestra un **acceso provisional** (email + nombre + clave). Los emails de `ADMIN_EMAILS` entran como Admin; el resto queda pendiente de activación. Sin credenciales de Graph, los archivos se guardan en Postgres (`storage_items`) y los emails no se envían: se pueden ver en *Backoffice → Notificaciones → Ver email*. Una franja amarilla avisa de que es modo pruebas. Para cerrarlo, borrar ambas variables y hacer *Redeploy*.
+
 ## Despliegue (Vercel + Neon)
 
 1. Crear la base de datos en Neon y ejecutar `pnpm db:migrate` y `pnpm db:seed` (sin `--demo`) contra ella.

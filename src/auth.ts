@@ -1,6 +1,7 @@
 import NextAuth, { type NextAuthConfig } from "next-auth";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import Credentials from "next-auth/providers/credentials";
+import { timingSafeEqual } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { loginEvents, roles, userRoles, users } from "@/db/schema";
@@ -11,9 +12,22 @@ declare module "next-auth" {
   }
 }
 
-/** Login de desarrollo (sin Entra ID). Nunca disponible en producción de Vercel. */
+/**
+ * Acceso provisional sin Entra ID (desarrollo y pruebas previas a la
+ * configuración de Microsoft). En un despliegue de Vercel exige una clave
+ * compartida (AUTH_DEV_PASSWORD); sin ella solo funciona en local.
+ */
+const devPassword = process.env.AUTH_DEV_PASSWORD ?? "";
+export const devLoginRequiresPassword = devPassword.length > 0;
 export const devLoginEnabled =
-  process.env.AUTH_DEV_LOGIN === "true" && process.env.VERCEL_ENV !== "production";
+  process.env.AUTH_DEV_LOGIN === "true" && (devLoginRequiresPassword || !process.env.VERCEL);
+
+function passwordOk(given: unknown) {
+  if (!devLoginRequiresPassword) return true;
+  const a = Buffer.from(String(given ?? ""));
+  const b = Buffer.from(devPassword);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
 const adminEmails = (process.env.ADMIN_EMAILS ?? "")
   .split(",")
@@ -82,8 +96,9 @@ if (devLoginEnabled) {
     Credentials({
       id: "dev",
       name: "Desarrollo",
-      credentials: { email: { label: "Email" }, name: { label: "Nombre" } },
+      credentials: { email: { label: "Email" }, name: { label: "Nombre" }, password: { label: "Clave", type: "password" } },
       async authorize(creds) {
+        if (!passwordOk(creds?.password)) return null;
         const email = String(creds?.email ?? "").trim();
         if (!email.includes("@")) return null;
         const name = String(creds?.name ?? "").trim() || email.split("@")[0]!;

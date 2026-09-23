@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  customType,
   date,
   index,
   integer,
@@ -494,3 +495,28 @@ export type Project = typeof projects.$inferSelect;
 export type Department = typeof departments.$inferSelect;
 export type ProjectStatus = (typeof projectStatus.enumValues)[number];
 export type GateKey = (typeof gateKey.enumValues)[number];
+
+// ─── Almacenamiento provisional en BD (pruebas sin SharePoint) ────────────
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
+
+/** Sustituto de SharePoint mientras no haya credenciales de Graph (STORAGE_DRIVER=db). */
+export const storageItems = pgTable("storage_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  parentId: uuid("parent_id"),
+  isFolder: boolean("is_folder").notNull().default(false),
+  size: integer("size").notNull().default(0),
+  mime: text("mime"),
+  data: bytea("data"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const storageUploads = pgTable("storage_uploads", {
+  token: uuid("token").primaryKey().defaultRandom(),
+  parentId: uuid("parent_id").notNull(),
+  name: text("name").notNull(),
+  received: integer("received").notNull().default(0),
+  data: bytea("data").notNull().default(sql`''::bytea`),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

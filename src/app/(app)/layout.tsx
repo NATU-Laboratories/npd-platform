@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { LogOut, Plus, Settings } from "lucide-react";
-import { signOut } from "@/auth";
+import { devLoginEnabled, signOut } from "@/auth";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { canRequest, isAdmin, requireUser } from "@/lib/server/authz";
@@ -12,6 +12,11 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const u = await requireUser();
   return (
     <div className="flex min-h-dvh flex-col">
+      {devLoginEnabled && (
+        <div className="bg-amber-400 px-4 py-1 text-center text-xs font-medium text-amber-950">
+          Modo pruebas: acceso provisional sin Microsoft. Los emails no se envían y los archivos no van a SharePoint.
+        </div>
+      )}
       <header className="sticky top-0 z-30 bg-brand-700 text-white shadow">
         <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4">
           <Link href="/" className="shrink-0">

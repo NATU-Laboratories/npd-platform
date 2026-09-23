@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { auth, devLoginEnabled, signIn } from "@/auth";
+import { AuthError } from "next-auth";
+import { auth, devLoginEnabled, devLoginRequiresPassword, signIn } from "@/auth";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/form";
@@ -18,7 +19,8 @@ const DEMO = [
 const ERRORS: Record<string, string> = {
   disabled: "Tu usuario está desactivado. Contacta con el administrador.",
   AccessDenied: "Acceso denegado. Usa tu cuenta corporativa de Microsoft 365.",
-  CredentialsSignin: "No se pudo iniciar sesión.",
+  CredentialsSignin: "Email o clave de acceso incorrectos.",
+  Configuration: "El inicio de sesión con Microsoft aún no está configurado.",
 };
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
@@ -54,34 +56,45 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
 
         {devLoginEnabled && (
           <div className="mt-8 border-t border-dashed border-slate-200 pt-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Login de desarrollo</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+              {devLoginRequiresPassword ? "Acceso provisional (pruebas)" : "Login de desarrollo"}
+            </p>
             <form
-              className="mt-3 flex gap-2"
+              className="mt-3 flex flex-col gap-2"
               action={async (fd: FormData) => {
                 "use server";
-                await signIn("dev", { email: fd.get("email"), redirectTo: "/" });
+                try {
+                  await signIn("dev", { email: fd.get("email"), name: fd.get("name"), password: fd.get("password"), redirectTo: "/" });
+                } catch (e) {
+                  if (e instanceof AuthError) redirect("/login?error=CredentialsSignin");
+                  throw e;
+                }
               }}
             >
-              <Input name="email" type="email" placeholder="email@natu.test" required aria-label="Email" />
+              <Input name="email" type="email" placeholder="tu.email@natuaromatic.com" required aria-label="Email" autoComplete="email" />
+              <Input name="name" placeholder="Nombre y apellidos (primer acceso)" aria-label="Nombre" autoComplete="name" />
+              {devLoginRequiresPassword && <Input name="password" type="password" placeholder="Clave de acceso" required aria-label="Clave de acceso" autoComplete="current-password" />}
               <Button type="submit" variant="secondary">
                 Entrar
               </Button>
             </form>
-            <div className="mt-3 flex flex-col gap-1">
-              {DEMO.map(([email, name]) => (
-                <form
-                  key={email}
-                  action={async () => {
-                    "use server";
-                    await signIn("dev", { email, name: name.replace(/ \(.*\)$/, ""), redirectTo: "/" });
-                  }}
-                >
-                  <button type="submit" className="w-full rounded px-2 py-1 text-left text-sm text-slate-600 hover:bg-slate-50">
-                    {name} <span className="text-slate-400">· {email}</span>
-                  </button>
-                </form>
-              ))}
-            </div>
+            {!devLoginRequiresPassword && (
+              <div className="mt-3 flex flex-col gap-1">
+                {DEMO.map(([email, name]) => (
+                  <form
+                    key={email}
+                    action={async () => {
+                      "use server";
+                      await signIn("dev", { email, name: name.replace(/ \(.*\)$/, ""), redirectTo: "/" });
+                    }}
+                  >
+                    <button type="submit" className="w-full rounded px-2 py-1 text-left text-sm text-slate-600 hover:bg-slate-50">
+                      {name} <span className="text-slate-400">· {email}</span>
+                    </button>
+                  </form>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
