@@ -26,8 +26,13 @@ const ERRORS: Record<string, string> = {
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   const session = await auth();
   if (session?.user?.id) redirect("/");
-  const { error } = await searchParams;
-  const errorMsg = typeof error === "string" ? (ERRORS[error] ?? "No se pudo iniciar sesión.") : null;
+  const { error, code } = await searchParams;
+  const errorMsg =
+    code === "backend"
+      ? "No se pudo conectar con la base de datos. Revisa DATABASE_URL en Vercel o consulta /api/health."
+      : typeof error === "string"
+        ? (ERRORS[error] ?? "No se pudo iniciar sesión.")
+        : null;
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-brand-700 to-brand-900 p-4">
@@ -66,7 +71,10 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
                 try {
                   await signIn("dev", { email: fd.get("email"), name: fd.get("name"), password: fd.get("password"), redirectTo: "/" });
                 } catch (e) {
-                  if (e instanceof AuthError) redirect("/login?error=CredentialsSignin");
+                  if (e instanceof AuthError) {
+                    const code = (e as { code?: string }).code;
+                    redirect(`/login?error=${e.type}${code === "backend" ? "&code=backend" : ""}`);
+                  }
                   throw e;
                 }
               }}
