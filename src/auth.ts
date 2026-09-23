@@ -1,0 +1,131 @@
+import NextAuth, { type NextAuthConfig } from "next-auth";
+import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
+import Credentials from "next-auth/providers/credentials";
+import { eq, sql } from "drizzle-orm";
+import { db } from "@/db";
+import { loginEvents, roles, userRoles, users } from "@/db/schema";
+
+declare module "next-auth" {
+  interface Session {
+    user: { id: string; email: string; name: string };
+  }
+}
+
+/** Login de desarrollo (sin Entra ID). Nunca disponible en producción de Vercel. */
+export const devLoginEnabled =
+  process.env.AUTH_DEV_LOGIN === "true" && process.env.VERCEL_ENV !== "production";
+
+const adminEmails = (process.env.ADMIN_EMAILS ?? "")
+  .split(",")
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
+
+/**
+ * Da de alta o actualiza al usuario tras autenticarse. Los usuarios nuevos
+ * quedan "pendientes de activación" (§4) salvo los de ADMIN_EMAILS (arranque).
+ * Devuelve null si el usuario está desactivado.
+ */
+async function upsertUser(p: { oid?: string; email: string; name: string }) {
+  const email = p.email.toLowerCase();
+  const [existing] = await db
+    .select()
+    .from(users)
+    .where(p.oid ? sql`${users.entraOid} = ${p.oid} or lower(${users.email}) = ${email}` : sql`lower(${users.email}) = ${email}`)
+    .limit(1);
+
+  if (existing) {
+    if (existing.status === "disabled") return null;
+    await db
+      .update(users)
+      .set({ lastLoginAt: new Date(), name: p.name || existing.name, entraOid: existing.entraOid ?? p.oid ?? null })
+      .where(eq(users.id, existing.id));
+    await db.insert(loginEvents).values({ userId: existing.id });
+    return existing.id;
+  }
+
+  const bootstrapAdmin = adminEmails.includes(email);
+  const [created] = await db
+    .insert(users)
+    .values({
+      email,
+      name: p.name || email,
+      entraOid: p.oid ?? null,
+      status: bootstrapAdmin ? "active" : "pending",
+      isActive: bootstrapAdmin,
+      lastLoginAt: new Date(),
+    })
+    .returning({ id: users.id });
+  await db.insert(loginEvents).values({ userId: created!.id });
+
+  if (bootstrapAdmin) {
+    const [adminRole] = await db.select().from(roles).where(eq(roles.key, "admin"));
+    if (adminRole) await db.insert(userRoles).values({ userId: created!.id, roleId: adminRole.id }).onConflictDoNothing();
+  } else {
+    // Aviso a los administradores (import dinámico para no cargar Graph en el callback)
+    const { notifyPendingUser } = await import("@/lib/server/notifications");
+    await notifyPendingUser(created!.id);
+  }
+  return created!.id;
+}
+
+const providers: NextAuthConfig["providers"] = [
+  MicrosoftEntraID({
+    clientId: process.env.AUTH_MICROSOFT_ENTRA_ID_ID,
+    clientSecret: process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET,
+    issuer: process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER,
+    authorization: { params: { scope: "openid profile email User.Read" } },
+  }),
+];
+
+if (devLoginEnabled) {
+  providers.push(
+    Credentials({
+      id: "dev",
+      name: "Desarrollo",
+      credentials: { email: { label: "Email" }, name: { label: "Nombre" } },
+      async authorize(creds) {
+        const email = String(creds?.email ?? "").trim();
+        if (!email.includes("@")) return null;
+        const name = String(creds?.name ?? "").trim() || email.split("@")[0]!;
+        const id = await upsertUser({ email, name });
+        return id ? { id, email, name } : null;
+      },
+    }),
+  );
+}
+
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  providers,
+  session: { strategy: "jwt", maxAge: 8 * 60 * 60 },
+  pages: { signIn: "/login", error: "/login" },
+  trustHost: true,
+  callbacks: {
+    async signIn({ account, profile }) {
+      if (account?.provider !== "microsoft-entra-id") return true;
+      const tenant = process.env.AUTH_MICROSOFT_ENTRA_ID_TENANT_ID;
+      if (tenant && profile?.tid && profile.tid !== tenant) return false;
+      const email = String(profile?.email ?? profile?.preferred_username ?? "");
+      if (!email) return false;
+      const id = await upsertUser({ oid: String(profile?.oid ?? ""), email, name: String(profile?.name ?? "") });
+      return id ? true : "/login?error=disabled";
+    },
+    async jwt({ token, user, account, profile }) {
+      if (account?.provider === "dev" && user?.id) token.uid = user.id;
+      if (account?.provider === "microsoft-entra-id" && profile) {
+        const email = String(profile.email ?? profile.preferred_username ?? "").toLowerCase();
+        const [u] = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(sql`${users.entraOid} = ${String(profile.oid ?? "")} or lower(${users.email}) = ${email}`)
+          .limit(1);
+        if (u) token.uid = u.id;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      if (token.uid) session.user.id = token.uid as string;
+      return session;
+    },
+  },
+});
+
