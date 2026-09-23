@@ -107,8 +107,11 @@ export default async function NotificationsPage({ searchParams }: PageProps<"/ad
                   {n.sentAt ? ` · ${formatDate(n.sentAt, true)}` : ""}
                 </p>
               </Td>
-              <Td>
-                <form action={resendNotificationAction}>
+              <Td className="whitespace-nowrap">
+                <a href={`/api/admin/notifications/${n.id}`} target="_blank" rel="noreferrer" className="mr-2 text-xs font-medium text-brand-700 hover:underline">
+                  Ver email
+                </a>
+                <form action={resendNotificationAction} className="inline">
                   <input type="hidden" name="id" value={n.id} />
                   <Button size="sm" variant="secondary" type="submit">
                     Reenviar

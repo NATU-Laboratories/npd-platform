@@ -2,6 +2,9 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { and, eq, isNull, sql } from "drizzle-orm";
+import { db } from "@/db";
+import { storageItems, storageUploads } from "@/db/schema";
 import { graphConfigured, graphFetch, GraphError } from "./client";
 
 /**
@@ -300,12 +303,152 @@ export const local: Storage & {
   },
 };
 
-export function storageDriver(): "sharepoint" | "local" {
+// ─── Base de datos (pruebas en Vercel sin SharePoint) ─────────────────────
+
+type ChunkReceiver = {
+  receiveChunk(token: string, range: string | null, body: Buffer, mime: string | null): Promise<StoredItem | { nextExpectedRanges: string[] }>;
+  read(id: string): Promise<{ data: Buffer; item: StoredItem }>;
+};
+
+function dbRow(r: typeof storageItems.$inferSelect): StoredItem {
+  return {
+    id: r.id,
+    name: r.name,
+    size: r.size,
+    mime: r.mime,
+    parentId: r.parentId,
+    isFolder: r.isFolder,
+    createdAt: r.createdAt.toISOString(),
+    webUrl: r.isFolder ? null : `/api/storage/local/item/${r.id}`,
+  };
+}
+
+const UUID_RE = /^[0-9a-f-]{36}$/i;
+
+async function dbGet(id: string) {
+  if (!UUID_RE.test(id)) notFound(id);
+  const [r] = await db
+    .select({ id: storageItems.id, name: storageItems.name, parentId: storageItems.parentId, isFolder: storageItems.isFolder, size: storageItems.size, mime: storageItems.mime, createdAt: storageItems.createdAt, data: sql<null>`null` })
+    .from(storageItems)
+    .where(eq(storageItems.id, id));
+  if (!r) notFound(id);
+  return r as typeof storageItems.$inferSelect;
+}
+
+export const dbStore: Storage & ChunkReceiver = {
+  kind: "local",
+  async rootId() {
+    const [r] = await db.select({ id: storageItems.id }).from(storageItems).where(and(isNull(storageItems.parentId), eq(storageItems.isFolder, true)));
+    if (r) return r.id;
+    const [c] = await db.insert(storageItems).values({ name: "Proyectos", isFolder: true }).returning({ id: storageItems.id });
+    return c!.id;
+  },
+  async ensureFolder(parentId, name) {
+    const safe = sanitizeName(name);
+    await dbGet(parentId);
+    const [found] = await db
+      .select()
+      .from(storageItems)
+      .where(and(eq(storageItems.parentId, parentId), eq(storageItems.name, safe), eq(storageItems.isFolder, true)));
+    if (found) return dbRow(found);
+    const [c] = await db.insert(storageItems).values({ name: safe, parentId, isFolder: true }).returning();
+    return dbRow(c!);
+  },
+  async createUploadSession(parentId, fileName) {
+    await dbGet(parentId);
+    const [u] = await db.insert(storageUploads).values({ parentId, name: sanitizeName(fileName) }).returning({ token: storageUploads.token });
+    return { uploadUrl: `/api/storage/local/upload/${u!.token}` };
+  },
+  async receiveChunk(token, range, body, mime) {
+    if (!UUID_RE.test(token)) throw new GraphError("Sesión de subida no encontrada", 404);
+    const match = /bytes (\d+)-(\d+)\/(\d+)/.exec(range ?? "");
+    const [start, end, total] = match ? [Number(match[1]), Number(match[2]), Number(match[3])] : [0, body.length - 1, body.length];
+    const [s] = await db
+      .update(storageUploads)
+      .set({ data: sql`${storageUploads.data} || ${body}`, received: end + 1 })
+      .where(and(eq(storageUploads.token, token), eq(storageUploads.received, start)))
+      .returning({ received: storageUploads.received, parentId: storageUploads.parentId, name: storageUploads.name });
+    if (!s) throw new GraphError("Sesión no encontrada o rango inesperado", 416);
+    if (s.received < total) return { nextExpectedRanges: [`${s.received}-`] };
+    const siblings = new Set(
+      (await db.select({ name: storageItems.name }).from(storageItems).where(eq(storageItems.parentId, s.parentId))).map((r) => r.name),
+    );
+    let name = s.name;
+    for (let n = 1; siblings.has(name); n++) name = s.name.replace(/(\.[^.]*)?$/, ` ${n}$1`);
+    const [item] = await db.execute<typeof storageItems.$inferSelect & { parent_id: string; is_folder: boolean; created_at: Date }>(sql`
+      insert into storage_items (name, parent_id, is_folder, size, mime, data)
+      select ${name}, parent_id, false, ${total}, ${mime ?? "application/octet-stream"}, data from storage_uploads where token = ${token}
+      returning id, name, parent_id, is_folder, size, mime, created_at`).then((r) => r.rows);
+    await db.delete(storageUploads).where(eq(storageUploads.token, token));
+    return { id: item!.id, name: item!.name, size: Number(item!.size), mime: item!.mime, parentId: item!.parent_id, isFolder: false, webUrl: `/api/storage/local/item/${item!.id}` };
+  },
+  async getItem(id) {
+    return dbRow(await dbGet(id));
+  },
+  async listChildren(folderId) {
+    if (!UUID_RE.test(folderId)) return [];
+    const rows = await db
+      .select({ id: storageItems.id, name: storageItems.name, parentId: storageItems.parentId, isFolder: storageItems.isFolder, size: storageItems.size, mime: storageItems.mime, createdAt: storageItems.createdAt, data: sql<null>`null` })
+      .from(storageItems)
+      .where(eq(storageItems.parentId, folderId));
+    return rows.map((r) => dbRow(r as typeof storageItems.$inferSelect));
+  },
+  async moveItem(id, newParentId) {
+    await dbGet(newParentId);
+    await db.update(storageItems).set({ parentId: newParentId }).where(eq(storageItems.id, id));
+  },
+  async renameItem(id, name) {
+    await db.update(storageItems).set({ name: sanitizeName(name) }).where(eq(storageItems.id, id));
+  },
+  async deleteItem(id) {
+    if (!UUID_RE.test(id)) return;
+    // borra la carpeta y todo su contenido
+    await db.execute(sql`
+      with recursive tree as (select id from storage_items where id = ${id}
+        union all select s.id from storage_items s join tree t on s.parent_id = t.id)
+      delete from storage_items where id in (select id from tree)`);
+  },
+  async downloadUrl(id) {
+    return `/api/storage/local/item/${id}`;
+  },
+  async read(id) {
+    if (!UUID_RE.test(id)) notFound(id);
+    const [r] = await db.select().from(storageItems).where(eq(storageItems.id, id));
+    if (!r || r.isFolder || !r.data) notFound(id);
+    return { data: r.data, item: dbRow(r) };
+  },
+};
+
+export type StorageDriver = "sharepoint" | "local" | "db";
+
+/**
+ * sharepoint: con credenciales de Graph. db: pruebas en Vercel sin Graph
+ * (el disco de Vercel no persiste). local: desarrollo en disco.
+ */
+export function storageDriver(): StorageDriver {
   const d = process.env.STORAGE_DRIVER;
-  if (d === "sharepoint" || d === "local") return d;
-  return graphConfigured() && process.env.SHAREPOINT_SITE_ID ? "sharepoint" : "local";
+  if (d === "sharepoint" || d === "local" || d === "db") return d;
+  if (graphConfigured() && process.env.SHAREPOINT_SITE_ID) return "sharepoint";
+  return process.env.VERCEL ? "db" : "local";
 }
 
 export function getStorage(): Storage {
-  return storageDriver() === "sharepoint" ? sharepoint : local;
+  const d = storageDriver();
+  return d === "sharepoint" ? sharepoint : d === "db" ? dbStore : local;
+}
+
+/** Almacén no-SharePoint que recibe subidas por la API propia. */
+export function chunkStore(): (ChunkReceiver & Storage) | null {
+  const d = storageDriver();
+  if (d === "db") return dbStore;
+  if (d === "local") {
+    return {
+      ...local,
+      async read(id: string) {
+        const { file, item } = await local.blobPath(id);
+        return { data: await fs.readFile(file), item };
+      },
+    };
+  }
+  return null;
 }

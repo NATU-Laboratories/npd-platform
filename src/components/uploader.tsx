@@ -10,7 +10,8 @@ import { cn, formatBytes } from "@/lib/utils";
 export type UploadedFile = { id: number; name: string; size: number; mime: string | null; tag: string | null };
 
 // Graph exige trozos múltiplos de 320 KiB (y < 60 MiB)
-const CHUNK = 320 * 1024 * 16; // 5 MiB
+// y las funciones de Vercel aceptan cuerpos de hasta 4,5 MB (subidas sin SharePoint)
+const CHUNK = 320 * 1024 * 12; // 3,75 MiB
 
 async function uploadChunks(uploadUrl: string, file: File, onProgress: (pct: number) => void) {
   let start = 0;

@@ -42,8 +42,15 @@ export default async function AdminHome() {
         <p className="font-medium">Integraciones</p>
         <ul className="mt-2 space-y-1 text-slate-600">
           <li>Microsoft Graph: {graphConfigured() ? "configurado" : <span className="text-amber-700">sin credenciales (modo local)</span>}</li>
-          <li>Almacenamiento: {storageDriver() === "sharepoint" ? "SharePoint" : <span className="text-amber-700">local (.storage) — solo desarrollo</span>}</li>
-          <li>Email: {mailDriver() === "graph" ? "Graph sendMail" : <span className="text-amber-700">{mailDriver()} — no se envían emails reales</span>}</li>
+          <li>
+            Almacenamiento:{" "}
+            {storageDriver() === "sharepoint" ? (
+              "SharePoint"
+            ) : (
+              <span className="text-amber-700">{storageDriver() === "db" ? "base de datos (provisional, solo pruebas)" : "local (.storage) — solo desarrollo"}</span>
+            )}
+          </li>
+          <li>Email: {mailDriver() === "graph" ? "Graph sendMail" : <span className="text-amber-700">no se envían emails reales; puedes verlos en Notificaciones</span>}</li>
         </ul>
       </Card>
     </>
