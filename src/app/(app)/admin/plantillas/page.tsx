@@ -23,7 +23,7 @@ export default async function TemplatesPage() {
     <>
       <PageTitle
         title="Plantillas de flujo"
-        description="Plantillas iniciales (seed). En V1 se usan para sugerir los departamentos al aprobar G1; el editor de tareas llega con V2."
+        description="Plantillas iniciales (seed). En V1 se usan para sugerir los departamentos al aprobar P1; el editor de tareas llega con V2."
       />
       <div className="flex flex-col gap-4">
         {tpls.map((tpl) => (

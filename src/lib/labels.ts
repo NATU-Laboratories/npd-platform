@@ -2,7 +2,7 @@ import type { ProjectStatus } from "@/db/schema";
 
 export const STATUS_LABEL: Record<ProjectStatus, string> = {
   draft: "Borrador",
-  submitted: "Pendiente de G1",
+  submitted: "Solicitado",
   info_requested: "Pendiente de info",
   in_progress: "En curso",
   paused: "En pausa",
@@ -22,7 +22,7 @@ export const STATUS_COLOR: Record<ProjectStatus, string> = {
   cancelled: "bg-rose-50 text-rose-700 ring-rose-200",
 };
 
-/** Color del estado "En validación" (activo antes de G2), en verde salvia de marca. */
+/** Color del estado "Validando cliente" (activo antes de G2), en verde salvia de marca. */
 export const VALIDATION_COLOR = "bg-[#eef0e6] text-[#56613f] ring-natu-sage";
 
 /**
@@ -32,25 +32,25 @@ export const VALIDATION_COLOR = "bg-[#eef0e6] text-[#56613f] ring-natu-sage";
 export const SITUATIONS = [
   {
     key: "g1",
-    label: "Pendiente de G1",
+    label: "Solicitado",
     color: "bg-natu-peach",
-    hint: "Solicitudes enviadas que esperan la aprobación G1, incluidas las que están pendientes de información del solicitante.",
+    hint: "Solicitudes enviadas que esperan la aprobación P1, incluidas las que están pendientes de información del solicitante.",
   },
   {
     key: "validacion",
-    label: "En validación",
+    label: "Validando cliente",
     color: "bg-natu-sage",
-    hint: "Aprobadas en G1 y en cotización o en valoración con el cliente (pendientes de G2).",
+    hint: "Aprobadas en P1 y en cotización o en valoración con el cliente (pendientes de P2).",
   },
   {
     key: "en_curso",
     label: "En curso",
     color: "bg-brand-400",
-    hint: "El cliente ha aprobado el presupuesto (G2): en desarrollo, diseño y artes finales o preparación para producción.",
+    hint: "El cliente ha aprobado el presupuesto (P2): en desarrollo, diseño y artes finales o preparación para producción.",
   },
   { key: "pausa", label: "En pausa", color: "bg-slate-400", hint: "Proyectos detenidos temporalmente en cualquier fase." },
   { key: "produccion", label: "En producción", color: "bg-natu-dark", hint: "Proyectos que han completado todas las fases y han pasado a producción." },
-  { key: "descartado", label: "Rechazados / cancelados", color: "bg-slate-300", hint: "Proyectos rechazados (en G1 o por el cliente en G2) o cancelados." },
+  { key: "descartado", label: "Rechazados / cancelados", color: "bg-slate-300", hint: "Proyectos rechazados (en P1 o por el cliente en P2) o cancelados." },
 ] as const;
 export type SituationKey = (typeof SITUATIONS)[number]["key"];
 
@@ -96,14 +96,20 @@ export const PHASES = [
   { n: 5, stage: "en_curso", name: "Preparación para producción", short: "Producción", gate: null, gateName: null },
 ] as const;
 export const FIRST_RUNNING_PHASE = 3;
-/** Etiqueta de estado teniendo en cuenta la etapa: un proyecto activo antes de G2 está "En validación". */
+/** Etiqueta de estado teniendo en cuenta la etapa: un proyecto activo antes de G2 está "Validando cliente". */
 export function statusLabel(status: ProjectStatus, phase?: number | null) {
-  if (status === "in_progress" && phase != null && phase < FIRST_RUNNING_PHASE) return "En validación";
+  if (status === "in_progress" && phase != null && phase < FIRST_RUNNING_PHASE) return "Validando cliente";
   return STATUS_LABEL[status];
 }
 export function stageOf(phase: number) {
   return STAGES.find((s) => phase >= s.from && phase <= s.to) ?? STAGES[0];
 }
+/**
+ * Nombre visible de las puertas de aprobación: P1 / P2 ("paso"). En código y
+ * base de datos se mantienen las claves G1 / G2.
+ */
+export const GATE_LABEL: Record<string, string> = { G1: "P1", G2: "P2" };
+
 export const LAST_PHASE = PHASES.length - 1;
 export const APPROVAL_GATES = [
   { gate: "G1", name: "Aprobación de la solicitud", phase: 0, description: "Solicitud → Cotización. Decide si el proyecto es viable y se cotiza." },

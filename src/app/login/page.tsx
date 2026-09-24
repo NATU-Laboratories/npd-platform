@@ -10,7 +10,7 @@ export const metadata = { title: "Iniciar sesión" };
 const DEMO = [
   ["admin@natu.test", "Irene Admin"],
   ["comercial@natu.test", "Carlos Comercial"],
-  ["marketing@natu.test", "Marta Marketing (decisora G1)"],
+  ["marketing@natu.test", "Marta Marketing (decisora P1)"],
   ["idi@natu.test", "Luis Laboratorio"],
   ["direccion@natu.test", "Diego Dirección"],
   ["nuevo@natu.test", "Usuario sin rol"],

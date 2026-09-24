@@ -17,7 +17,7 @@ Next.js 16 (App Router, Server Actions) · TypeScript · Tailwind v4 · Drizzle 
 | Código | `AAAA-PL-NNNN` / `AAAA-MP-NNNN`, secuencial por año y tipo (contador transaccional). |
 | SharePoint | Carpeta `AAAA-XX-NNNN · Cliente/Marca · Nombre` con subcarpetas de fase. Los adjuntos del borrador se suben a `_Borradores/<id>` y se mueven a `00 Solicitud` al enviar. En BD se guardan `drive_item_id`, no rutas. |
 | Subidas | El navegador sube por trozos **directamente** a la *upload session* de Graph (sin pasar por el límite de 4,5 MB de Vercel, sin exponer tokens). El servidor verifica que el item está en la carpeta del proyecto antes de registrarlo. |
-| Flujo | Dos etapas. **Validación**: Solicitud → **G1** → Cotización → Valoración con cliente → **G2** (presupuesto; en PL anticipo 30 % o responsable). **En curso**: Desarrollo → Diseño y AAFF → Preparación para producción → En producción. Tipos PL, MP y MDD. Aprobadores G1/G2 configurables por tipo en el backoffice. |
+| Flujo | Dos etapas. **Validación**: Solicitud → **P1** → Cotización → Valoración con cliente → **P2** (presupuesto; en PL anticipo 30 % o responsable). **En curso**: Desarrollo → Diseño y AAFF → Preparación para producción → En producción. Tipos PL, MP y MDD. Aprobadores P1/P2 configurables por tipo en el backoffice. |
 | Máquina de estados | `src/lib/server/state-machine.ts`: único punto de cambio de estado; valida permiso y transición, escribe `activity_log` y dispara notificaciones. |
 | Notificaciones | Email HTML con marca NATU vía Graph desde buzón compartido. Todo envío queda en `notification_log`; reenvío manual desde el backoffice. |
 | Resiliencia | Cola `jobs` con reintentos y backoff exponencial: se intenta tras la respuesta (`after()`) y el cron `/api/cron/jobs` reintenta. Si Graph cae, la solicitud se guarda igual y el error queda en `error_log`. |
@@ -26,7 +26,7 @@ Next.js 16 (App Router, Server Actions) · TypeScript · Tailwind v4 · Drizzle 
 | Ficha técnica | Apartados por departamento (cotización, fórmula y pirámides, envase, regulatorio, etiqueta, producción) que completan y cierran sus responsables; resumen hecho/falta, aviso al avanzar de fase y notificación a los departamentos de cada fase. |
 | Backoffice | Usuarios (roles, departamentos, estado), departamentos (color, emails, miembros; asignación de apartados de la ficha técnica), matriz de aprobadores puerta × tipo, marcas propias, plantillas (lectura), configuración, auditoría con export CSV, errores, notificaciones/cola, uso. |
 
-Pendiente para V2/V3 según el SPEC: tareas por departamento, carriles, Gantt, "Mis tareas", puertas G2–G5, editor de plantillas, resumen diario/alertas de riesgo, Teams, Pipedrive, PDF. La preferencia "resumen diario" ya se guarda por usuario, pero en V1 todos los avisos son inmediatos.
+Pendiente para V2/V3 según el SPEC: tareas por departamento, carriles, Gantt, "Mis tareas", puertas adicionales (G3–G5 del SPEC original), editor de plantillas, resumen diario/alertas de riesgo, Teams, Pipedrive, PDF. La preferencia "resumen diario" ya se guarda por usuario, pero en V1 todos los avisos son inmediatos.
 
 ## Desarrollo local
 
@@ -40,7 +40,7 @@ pnpm db:seed --demo               # catálogos + usuarios/clientes de ejemplo
 pnpm dev
 ```
 
-Sin credenciales de Graph la app usa **almacenamiento local** (`.storage/`) y **guarda los emails como HTML** en `.storage/mails/` en lugar de enviarlos. Con `AUTH_DEV_LOGIN=true` la pantalla de login ofrece entrar como los usuarios demo (admin, comercial, marketing/decisora G1, I+D, dirección, usuario sin rol).
+Sin credenciales de Graph la app usa **almacenamiento local** (`.storage/`) y **guarda los emails como HTML** en `.storage/mails/` en lugar de enviarlos. Con `AUTH_DEV_LOGIN=true` la pantalla de login ofrece entrar como los usuarios demo (admin, comercial, marketing/decisora P1, I+D, dirección, usuario sin rol).
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm build

@@ -135,9 +135,9 @@ export function BudgetDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>Registrar respuesta del cliente (G2)</Button>
+        <Button>Registrar respuesta del cliente (P2)</Button>
       </DialogTrigger>
-      <DialogContent title="G2 · Aprobación del presupuesto" description={quoteInfo ?? "Registra la respuesta del cliente a la cotización."} wide>
+      <DialogContent title="P2 · Aprobación del presupuesto" description={quoteInfo ?? "Registra la respuesta del cliente a la cotización."} wide>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="tablist">
           {TABS.map(({ k, label, icon: Icon, tone }) => (
             <button

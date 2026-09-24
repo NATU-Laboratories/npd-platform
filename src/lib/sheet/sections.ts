@@ -107,7 +107,7 @@ export const SHEET_SECTIONS: SheetSection[] = [
         detail: (c) => (c.quotedAt ? `${fmtDate(c.quotedAt)}${c.quoteAmount != null ? ` · ${euro(c.quoteAmount)}` : ""}` : null),
       },
       {
-        label: "Presupuesto aprobado por el cliente (G2)",
+        label: "Presupuesto aprobado por el cliente (P2)",
         ok: (c) => !!c.g2At,
         detail: (c) => (c.g2At ? [fmtDate(c.g2At), c.prepayment].filter(Boolean).join(" · ") : null),
       },
