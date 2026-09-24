@@ -95,8 +95,10 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
         atRisk={t.atRisk}
         riskDays={settings.risk_days}
         avgDaysToG1={t.avgDaysToG1}
-        approvedG1={t.approvedG1}
-        rejectedG1={t.rejectedG1}
+        avgDaysRunning={t.avgDaysRunning}
+        runningCount={t.runningCount}
+        p2Approved={t.p2Approved}
+        p2Rejected={t.p2Rejected}
       />
 
       <section className="grid gap-4 lg:grid-cols-3">
