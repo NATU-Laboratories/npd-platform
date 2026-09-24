@@ -2,7 +2,7 @@ import type { ProjectStatus } from "@/db/schema";
 
 export const STATUS_LABEL: Record<ProjectStatus, string> = {
   draft: "Borrador",
-  submitted: "Solicitado",
+  submitted: "Pendiente de G1",
   info_requested: "Pendiente de info",
   in_progress: "En curso",
   paused: "En pausa",
@@ -25,13 +25,34 @@ export const STATUS_COLOR: Record<ProjectStatus, string> = {
 /** Color del estado "En validación" (activo antes de G2), en verde salvia de marca. */
 export const VALIDATION_COLOR = "bg-[#eef0e6] text-[#56613f] ring-natu-sage";
 
-/** Agrupación para el panel (§2.3). */
-export const STATUS_GROUPS = {
-  solicitados: { label: "Solicitados", statuses: ["submitted", "info_requested"] },
-  en_proceso: { label: "En proceso", statuses: ["in_progress", "paused"] },
-  cerrados: { label: "Cerrados", statuses: ["in_production"] },
-  rechazados: { label: "Rechazados / Cancelados", statuses: ["rejected", "cancelled"] },
-} as const satisfies Record<string, { label: string; statuses: ProjectStatus[] }>;
+/**
+ * Situación del proyecto: un único vocabulario para la tabla, el filtro y los
+ * indicadores del panel. Combina el estado con la etapa (Validación / En curso).
+ */
+export const SITUATIONS = [
+  {
+    key: "g1",
+    label: "Pendiente de G1",
+    color: "bg-natu-peach",
+    hint: "Solicitudes enviadas que esperan la aprobación G1, incluidas las que están pendientes de información del solicitante.",
+  },
+  {
+    key: "validacion",
+    label: "En validación",
+    color: "bg-natu-sage",
+    hint: "Aprobadas en G1 y en cotización o en valoración con el cliente (pendientes de G2).",
+  },
+  {
+    key: "en_curso",
+    label: "En curso",
+    color: "bg-brand-400",
+    hint: "El cliente ha aprobado el presupuesto (G2): en desarrollo, diseño y artes finales o preparación para producción.",
+  },
+  { key: "pausa", label: "En pausa", color: "bg-slate-400", hint: "Proyectos detenidos temporalmente en cualquier fase." },
+  { key: "produccion", label: "En producción", color: "bg-natu-dark", hint: "Proyectos que han completado todas las fases y han pasado a producción." },
+  { key: "descartado", label: "Rechazados / cancelados", color: "bg-slate-300", hint: "Proyectos rechazados (en G1 o por el cliente en G2) o cancelados." },
+] as const;
+export type SituationKey = (typeof SITUATIONS)[number]["key"];
 
 export const OPEN_STATUSES: ProjectStatus[] = ["submitted", "info_requested", "in_progress", "paused"];
 

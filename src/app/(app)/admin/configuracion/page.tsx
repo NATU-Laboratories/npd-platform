@@ -17,7 +17,7 @@ export default async function SettingsPage() {
           <Field label="Umbral de completitud (%)" hint="Por debajo, el asistente avisa antes de enviar (no bloquea).">
             <Input name="completeness_threshold" type="number" min={0} max={100} defaultValue={s.completeness_threshold} />
           </Field>
-          <Field label="Días para «en riesgo»" hint="Proyectos abiertos con fecha necesaria dentro de este plazo.">
+          <Field label="Días para «en riesgo»" hint="Proyectos abiertos cuya fecha de entrega requerida cae dentro de este plazo.">
             <Input name="risk_days" type="number" min={1} max={365} defaultValue={s.risk_days} />
           </Field>
           <Field label="Tamaño máximo por archivo (MB)">

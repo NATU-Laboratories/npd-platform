@@ -99,7 +99,7 @@ En curso → En producción   (tras G5; equivale a cerrado con éxito)
 | Rechazado | Denegado en una puerta |
 | Cancelado | Abandonado tras haber sido aprobado |
 
-Para el panel, agrupar: **Solicitados** (Solicitado + Pendiente de info), **En proceso** (En curso + En pausa), **Cerrados** (En producción), **Rechazados/Cancelados**.
+Para el panel, tabla y filtro se usa un único vocabulario de **situación**: *Pendiente de G1* (Solicitado + Pendiente de info), *En validación* (activo en fases 1–2), *En curso* (activo en fases 3–5, tras G2), *En pausa*, *En producción* y *Rechazados / cancelados*. La tabla muestra la situación y, debajo, la fase concreta.
 
 ### 2.4 Tareas por departamento
 
@@ -186,7 +186,7 @@ Guardado automático como **Borrador** en cada paso. Barra de progreso e **indic
 | Tipo de proyecto | PL / Marca propia | ✔ |
 | Categoría | Perfumería / Ambientación / Personal Care | ✔ |
 | Nombre provisional del proyecto | texto | ✔ |
-| Fecha necesaria | fecha | ✔ |
+| Fecha de entrega requerida | fecha | ✔ |
 | Motivo de la fecha | select: feria, lanzamiento del cliente, temporada, licitación, orientativa, otro + texto | ✔ |
 | Prioridad sugerida | baja / media / alta / urgente | ✔ |
 
@@ -292,7 +292,7 @@ Guardado automático como **Borrador** en cada paso. Barra de progreso e **indic
 **Gráficos**: evolución mensual de solicitudes (línea), distribución por estado (barras), por tipo/marca (barras), embudo por fase.
 
 **Listado de proyectos** (tabla filtrable, ordenable, con búsqueda):
-Código · Nombre · Tipo (PL / MP–Marca) · Categoría · Cliente · Solicitante · Fecha solicitud · Fecha necesaria (semáforo) · Estado · Fase · Departamentos activos · **Ver detalle**.
+Fecha solicitud · Código · Nombre · Tipo (PL / MP–Marca) · Categoría · Cliente · Solicitante · Entrega requerida (semáforo) · Situación (con la fase debajo) · Departamentos activos · **Ver detalle**.
 
 Filtros: tipo, marca, categoría, estado, fase, solicitante, departamento, rango de fechas, "solo en riesgo", "mis proyectos", "requieren mi acción".
 

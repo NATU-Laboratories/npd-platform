@@ -91,10 +91,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
 
       <DashboardKpis
         total={t.total}
-        solicitados={t.solicitados}
-        enProceso={t.enProceso}
-        cerrados={t.cerrados}
-        rechazados={t.rechazados}
+        bySituation={t.bySituation}
         atRisk={t.atRisk}
         riskDays={settings.risk_days}
         avgDaysToG1={t.avgDaysToG1}
@@ -123,19 +120,19 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
           <table className="w-full min-w-[760px] text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-xs text-slate-500">
               <tr>
+                <SortTh f={f} k="requested">Solicitud</SortTh>
                 <SortTh f={f} k="name">Proyecto</SortTh>
                 <th className="px-3 py-2 font-medium">Tipo</th>
                 <SortTh f={f} k="client">Cliente</SortTh>
-                <SortTh f={f} k="requested" className="hidden xl:table-cell">Solicitud</SortTh>
-                <SortTh f={f} k="needed">Fecha necesaria</SortTh>
-                <SortTh f={f} k="status">Estado</SortTh>
-                <SortTh f={f} k="phase">Fase</SortTh>
+                <SortTh f={f} k="needed">Entrega requerida</SortTh>
+                <SortTh f={f} k="phase">Situación</SortTh>
                 <th className="hidden px-3 py-2 font-medium lg:table-cell">Dptos.</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {list.rows.map((p) => (
                 <tr key={p.id} className="group relative hover:bg-slate-50">
+                  <td className="whitespace-nowrap px-3 py-2.5 text-slate-600">{formatDate(p.requestedAt)}</td>
                   <td className="px-3 py-2.5">
                     {/* El enlace cubre toda la fila */}
                     <Link href={`/proyectos/${p.id}`} className="font-medium text-slate-900 after:absolute after:inset-0 group-hover:underline">
@@ -154,17 +151,16 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
                     <div className="text-xs text-slate-500">{p.category ? CATEGORY_LABEL[p.category] : "—"}</div>
                   </td>
                   <td className="px-3 py-2.5">{p.clientName ?? <span className="text-slate-300">—</span>}</td>
-                  <td className="hidden whitespace-nowrap px-3 py-2.5 xl:table-cell">{formatDate(p.requestedAt)}</td>
                   <td className="px-3 py-2.5">
                     <NeededBySignal date={p.neededBy} riskDays={settings.risk_days} status={p.status} compact />
                   </td>
                   <td className="px-3 py-2.5">
                     <StatusBadge status={p.status} phase={p.phase} />
-                  </td>
-                  <td className="px-3 py-2.5 text-xs">
-                    <span className="whitespace-nowrap">
-                      {p.phase} · {PHASES[p.phase]?.short}
-                    </span>
+                    {p.status !== "in_production" && (
+                      <div className="mt-0.5 whitespace-nowrap text-xs text-slate-500">
+                        Fase {p.phase} · {PHASES[p.phase]?.short}
+                      </div>
+                    )}
                   </td>
                   <td className="hidden px-3 py-2.5 lg:table-cell">
                     {p.departments.length > 0 ? (
@@ -183,7 +179,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
               ))}
               {!list.rows.length && (
                 <tr>
-                  <td colSpan={8} className="px-3 py-10 text-center text-sm text-slate-500">
+                  <td colSpan={7} className="px-3 py-10 text-center text-sm text-slate-500">
                     No hay proyectos con estos filtros.
                   </td>
                 </tr>

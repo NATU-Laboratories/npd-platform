@@ -280,7 +280,7 @@ export function Wizard(props: WizardProps) {
               <Field label="Nombre provisional del proyecto" htmlFor="name" required error={errorFor("name")} highlight={hl("name")} className="sm:col-span-2">
                 <Input id="name" value={brief.name ?? ""} onChange={(e) => set("name", e.target.value)} placeholder="p. ej. Body mist verano cítrico" maxLength={200} />
               </Field>
-              <Field label="Fecha necesaria" htmlFor="neededBy" required error={errorFor("neededBy")} highlight={hl("neededBy")}>
+              <Field label="Fecha de entrega requerida" htmlFor="neededBy" required error={errorFor("neededBy")} highlight={hl("neededBy")}>
                 <Input id="neededBy" type="date" value={brief.neededBy ?? ""} onChange={(e) => set("neededBy", e.target.value)} />
               </Field>
               <Field label="Prioridad sugerida" htmlFor="priority" required error={errorFor("priority")} highlight={hl("priority")}>
