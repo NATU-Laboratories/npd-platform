@@ -30,15 +30,24 @@ export type KpiData = {
   atRisk: number;
   riskDays: number;
   avgDaysToG1: number | null;
-  approvedG1: number;
-  rejectedG1: number;
+  /** Días medios desde la aprobación del cliente (P2) hasta el paso a Preparación para producción. */
+  avgDaysRunning: number | null;
+  runningCount: number;
+  p2Approved: number;
+  p2Rejected: number;
 };
 
 /** Cabecera de indicadores del panel: cartera por situación, alertas y aprobación G1. */
 export function DashboardKpis(k: KpiData) {
   const segments = SITUATIONS.map((x) => ({ ...x, n: k.bySituation[x.key] ?? 0, href: `/?status=${x.key}` }));
-  const decided = k.approvedG1 + k.rejectedG1;
-  const rate = decided ? Math.round((k.approvedG1 / decided) * 100) : null;
+  const decided = k.p2Approved + k.p2Rejected;
+  const rate = decided ? Math.round((k.p2Approved / decided) * 100) : null;
+  const days = (v: number | null) => (
+    <p className="mt-1 text-3xl font-black tabular-nums">
+      {v == null ? "—" : v.toFixed(1)}
+      {v != null && <span className="ml-1 text-base font-semibold text-white/70">días</span>}
+    </p>
+  );
 
   return (
     <section className="flex flex-col gap-2" aria-label="Indicadores">
@@ -100,36 +109,42 @@ export function DashboardKpis(k: KpiData) {
           )}
         </div>
 
-        {/* Rendimiento de la aprobación G1 */}
+        {/* Tiempos y aprobación del cliente */}
         <div className="rounded-xl border border-slate-200 bg-natu-dark p-5 text-white lg:col-span-4">
           <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-white/70">
-            Aprobación de solicitudes · P1
-            <InfoTip
-              onDark
-              text="P1 (paso 1) es la primera aprobación: decide si una solicitud es viable y pasa a Cotización. Estos datos miden la agilidad y el resultado de esa decisión."
-            />
+            Tiempos y aprobación
+            <InfoTip onDark text="Agilidad del proceso (tiempo medio de P1 y de la etapa En curso) y resultado de la valoración del cliente (P2)." />
           </h2>
           <div className="mt-3 grid grid-cols-2 gap-4">
-            <div>
-              <p className="flex items-center gap-1 text-xs text-white/70">
-                Tiempo medio
-                <InfoTip
-                  onDark
-                  text="Media de días entre el envío de la solicitud y su aprobación en P1."
-                />
-              </p>
-              <p className="mt-1 text-3xl font-black tabular-nums">
-                {k.avgDaysToG1 == null ? "—" : k.avgDaysToG1.toFixed(1)}
-                {k.avgDaysToG1 != null && <span className="ml-1 text-base font-semibold text-white/70">días</span>}
-              </p>
+            <div className="flex flex-col gap-3">
+              <div>
+                <p className="flex items-center gap-1 text-xs text-white/70">
+                  Tiempo medio P1
+                  <InfoTip onDark text="Media de días entre el envío de la solicitud y su aprobación en P1." />
+                </p>
+                {days(k.avgDaysToG1)}
+              </div>
+              <div>
+                <p className="flex items-center gap-1 text-xs text-white/70">
+                  Tiempo medio En curso
+                  <InfoTip
+                    onDark
+                    text="Media de días desde que el cliente aprueba el presupuesto (P2) hasta que el proyecto pasa a Preparación para producción. Solo cuenta los proyectos que ya han llegado a esa fase."
+                  />
+                </p>
+                {days(k.avgDaysRunning)}
+                <p className="text-[11px] text-white/60">
+                  {k.runningCount} proyecto{k.runningCount === 1 ? "" : "s"} medido{k.runningCount === 1 ? "" : "s"}
+                </p>
+              </div>
             </div>
             <div>
               <p className="flex items-center gap-1 text-xs text-white/70">
-                Tasa de aprobación
+                Aprobación del cliente · P2
                 <InfoTip
                   align="end"
                   onDark
-                  text="Porcentaje de solicitudes aprobadas sobre las ya decididas en P1 (aprobadas + rechazadas). Las pendientes no cuentan."
+                  text="De los proyectos que pasaron P1 y cuyo presupuesto ya ha decidido el cliente, porcentaje aprobado (pasan a En curso). Los que siguen en cotización o valoración no cuentan."
                 />
               </p>
               <p className="mt-1 text-3xl font-black tabular-nums">{rate == null ? "—" : `${rate}%`}</p>
@@ -137,7 +152,7 @@ export function DashboardKpis(k: KpiData) {
                 <span className="block h-full rounded-full bg-natu-salmon" style={{ width: `${rate ?? 0}%` }} />
               </div>
               <p className="mt-1 text-[11px] text-white/60">
-                {k.approvedG1} de {decided} decididas
+                {k.p2Approved} de {decided} presupuesto{decided === 1 ? "" : "s"} decidido{decided === 1 ? "" : "s"} por el cliente
               </p>
             </div>
           </div>

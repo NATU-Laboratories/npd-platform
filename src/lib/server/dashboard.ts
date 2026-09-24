@@ -205,7 +205,7 @@ export async function dashboardStats(u: CurrentUser, f: ProjectFilters, riskDays
 
   const q = <T extends Record<string, unknown>>(query: SQL) => db.execute<T>(query).then((r) => r.rows);
 
-  const [totalsRows, byStatus, byPhase, monthly] = await Promise.all([
+  const [totalsRows, byStatus, byPhase, monthly, p2Rows] = await Promise.all([
     q<Record<string, string | number | null>>(sql`
       select
         count(*)::int as total,
@@ -236,7 +236,23 @@ export async function dashboardStats(u: CurrentUser, f: ProjectFilters, riskDays
         count(base.id) filter (where base.type = 'MDD')::int as mdd
       from m left join ${base} on date_trunc('month', base.requested_at at time zone 'Europe/Madrid') = m.month
       group by m.month order by m.month`),
+    // P2: decisión del cliente sobre el presupuesto y tiempo de la etapa "En curso"
+    // (aprobación del cliente → paso a Preparación para producción).
+    q<Record<string, string | number | null>>(sql`
+      select
+        count(*) filter (where g.status = 'approved')::int as p2_approved,
+        count(*) filter (where g.status = 'rejected')::int as p2_rejected,
+        avg(extract(epoch from (prep.at - g.decided_at)) / 86400) filter (where g.status = 'approved' and prep.at is not null) as avg_days_running,
+        count(prep.at) filter (where g.status = 'approved')::int as running_n
+      from gates g
+      join ${base} on base.id = g.project_id
+      left join lateral (
+        select min(al.created_at) as at from activity_log al
+        where al.project_id = g.project_id and al.action = 'phase.advanced' and al.diff->>'to' = ${String(LAST_PHASE)}
+      ) prep on true
+      where g.gate = 'G2'`),
   ]);
+  const p2 = p2Rows[0] ?? {};
   const t = totalsRows[0] ?? {};
   const n = (k: string) => Number(t[k] ?? 0);
 
@@ -249,6 +265,10 @@ export async function dashboardStats(u: CurrentUser, f: ProjectFilters, riskDays
       approvedG1: n("approved_g1"),
       rejectedG1: n("rejected_g1"),
       avgDaysToG1: t.avg_days_g1 == null ? null : Number(t.avg_days_g1),
+      p2Approved: Number(p2.p2_approved ?? 0),
+      p2Rejected: Number(p2.p2_rejected ?? 0),
+      avgDaysRunning: p2.avg_days_running == null ? null : Number(p2.avg_days_running),
+      runningCount: Number(p2.running_n ?? 0),
       atRisk: n("at_risk"),
     },
     byStatus: byStatus.map((r) => ({ key: r.key, n: Number(r.n) })),
