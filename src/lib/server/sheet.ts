@@ -10,6 +10,7 @@ import {
   requirements,
   sanitizeData,
   SHEET_SECTIONS,
+  summarize,
   sectionTitle,
   type Requirement,
   type SheetCtx,
@@ -70,6 +71,9 @@ export async function sheetContext(p: Project, tx: DbOrTx = db): Promise<SheetCt
     g2At: g2Rows[0]?.decidedAt?.toISOString() ?? null,
     prepayment: pp ? (pp.status === "received" ? "Anticipo recibido" : `Sin anticipo (responsable: ${pp.responsible})`) : null,
     brief: {
+      name: p.brief.name ?? p.name ?? null,
+      format: p.brief.format ?? null,
+      markets: p.brief.markets ?? [],
       targetPrice: p.brief.targetPrice ?? null,
       rrp: p.brief.rrp ?? null,
       unitsFirstOrder: p.unitsFirstOrder ?? null,
@@ -284,18 +288,28 @@ export async function notifyPhaseSections(projectId: string, phase: number) {
   if (!p) return;
   const starting = await sectionsStartingAt(phase);
   if (!starting.length) return;
-  const { entries } = await loadSheet(p);
+  const { entries, ctx } = await loadSheet(p);
   const available = entries.filter((e) => e.status === "done").map((e) => `${e.title} (${e.dept.name})`);
   const byDept = new Map<string, string[]>();
+  const inputsByDept = new Map<string, Set<string>>();
   for (const s of starting) {
-    const title = entries.find((e) => e.section.key === s.key)?.title ?? s.title;
-    byDept.set(s.dept, [...(byDept.get(s.dept) ?? []), title]);
+    const entry = entries.find((e) => e.section.key === s.key);
+    byDept.set(s.dept, [...(byDept.get(s.dept) ?? []), entry?.title ?? s.title]);
+    for (const dep of entry?.section.dependsOn ?? []) inputsByDept.set(s.dept, (inputsByDept.get(s.dept) ?? new Set()).add(dep));
   }
   for (const [dept, titles] of byDept) {
+    // Lo que necesita el departamento para su apartado (p. ej. Diseño: datos legales, naming, pirámide, envase)
+    const inputRows: [string, string][] = [...(inputsByDept.get(dept) ?? [])].flatMap((key) => {
+      const e = entries.find((x) => x.section.key === key);
+      if (!e || e.status === "na") return [];
+      const lines = summarize(e.section, ctx, e.data);
+      const state = e.status === "done" ? "terminado" : `PENDIENTE (faltan ${e.total - e.done})`;
+      return [[`${e.title} · ${e.dept.name} · ${state}`, lines.length ? lines.join("\n") : "Sin datos todavía"] as [string, string]];
+    });
     await notifyProjectEvent(projectId, "sheet.phase_opened", {
       title: `Fase «${PHASES[phase]?.name}»: tu departamento tiene trabajo`,
       intro: `El proyecto entra en «${PHASES[phase]?.name}». Tu departamento debe completar en la ficha técnica: ${titles.map((t) => `«${t}»`).join(", ")}. Al terminar, márcalo como terminado en la ficha del proyecto.`,
-      extraRows: [["Ya disponible en la ficha", available.length ? available.join(" · ") : "—"]],
+      extraRows: [["Ya disponible en la ficha", available.length ? available.join(" · ") : "—"], ...inputRows],
       to: { departmentKeys: [dept] },
     });
   }

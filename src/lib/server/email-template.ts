@@ -49,7 +49,7 @@ export function renderEmail(opts: {
 ${rows
   .map(
     ([k, v]) =>
-      `<tr><td style="padding:6px 12px 6px 0;color:#64748b;white-space:nowrap;vertical-align:top;border-bottom:1px solid #eef2f2">${escapeHtml(k)}</td><td style="padding:6px 0;color:#0f172a;border-bottom:1px solid #eef2f2">${escapeHtml(v)}</td></tr>`,
+      `<tr><td style="padding:6px 12px 6px 0;color:#64748b;white-space:nowrap;vertical-align:top;border-bottom:1px solid #eef2f2">${escapeHtml(k)}</td><td style="padding:6px 0;color:#0f172a;border-bottom:1px solid #eef2f2;white-space:pre-line">${escapeHtml(v)}</td></tr>`,
   )
   .join("\n")}
 </table>`
