@@ -50,7 +50,8 @@ export function Wizard(props: WizardProps) {
   const [serverErrors, setServerErrors] = React.useState<Record<string, string>>({});
   const [submitting, setSubmitting] = React.useState(false);
   const [answer, setAnswer] = React.useState("");
-  const [files, setFiles] = React.useState(props.files);
+  const [files, setFiles] = React.useState(() => props.files.filter((f) => f.tag !== "blacklist"));
+  const [blacklistFiles, setBlacklistFiles] = React.useState(() => props.files.filter((f) => f.tag === "blacklist"));
   const [clients, setClients] = React.useState<Record<number, ClientLite>>(() => Object.fromEntries(props.clients.map((c) => [c.id, c])));
   const topRef = React.useRef<HTMLDivElement>(null);
 
@@ -207,7 +208,7 @@ export function Wizard(props: WizardProps) {
           <nav className="-mx-1 mt-3 flex gap-1 overflow-x-auto pb-2" aria-label="Pasos">
             {STEP_TITLES.map((t, i) => {
               const n = i + 1;
-              const label = n === 2 && briefType ? (briefType === "PL" ? "Marca privada" : "Marca propia") : t;
+              const label = n === 2 && briefType ? TYPE_LABEL[briefType] : t;
               return (
                 <button
                   key={t}
@@ -258,9 +259,10 @@ export function Wizard(props: WizardProps) {
                   options={[
                     { value: "PL", label: `${TYPE_LABEL.PL} (PL)` },
                     { value: "MP", label: `${TYPE_LABEL.MP} (MP)` },
+                    { value: "MDD", label: `${TYPE_LABEL.MDD} (MDD)` },
                   ]}
                   value={brief.type ? [brief.type] : []}
-                  onChange={(v) => isDraft && set("type", (v[0] as "PL" | "MP") || undefined)}
+                  onChange={(v) => isDraft && set("type", (v[0] as BriefInput["type"]) || undefined)}
                   ariaLabel="Tipo de proyecto"
                 />
                 {!isDraft && <p className="text-xs text-slate-500">El tipo no se puede cambiar tras el envío.</p>}
@@ -308,7 +310,7 @@ export function Wizard(props: WizardProps) {
 
           {step === 2 && !briefType && <EmptyStep onBack={() => go(1)} text="Elige primero el tipo de proyecto (paso 1)." />}
 
-          {step === 2 && briefType === "PL" && (
+          {step === 2 && (briefType === "PL" || briefType === "MDD") && (
             <section className="grid gap-5 sm:grid-cols-2">
               <Field label="Cliente" htmlFor="client" required error={errorFor("clientId")} highlight={hl("clientId")} className="sm:col-span-2">
                 <ClientPicker
@@ -508,15 +510,25 @@ export function Wizard(props: WizardProps) {
 
               {needsOlfactory(parsed) && (
                 <>
-                  {errorFor("olfactory.families") && <p className="text-sm text-rose-600">{errorFor("olfactory.families")}</p>}
                   <OlfactoryFields
                     value={(brief.olfactory ?? {}) as OlfactoryState}
                     onChange={(v) => set("olfactory", v as BriefInput["olfactory"])}
                     families={opts("olfactory_family")}
                     notes={opts("note")}
-                    seasonality={opts("seasonality")}
-                    certifications={opts("certification")}
                     highlight={hl}
+                    errorFor={errorFor}
+                    blacklistUpload={
+                      <Uploader
+                        projectId={project.id}
+                        phase={0}
+                        initial={blacklistFiles}
+                        maxMb={props.settings.max_file_mb}
+                        onChange={setBlacklistFiles}
+                        defaultTag="blacklist"
+                        showTags={false}
+                        compact
+                      />
+                    }
                   />
                 </>
               )}
@@ -588,7 +600,7 @@ export function Wizard(props: WizardProps) {
               ))}
               <div className="rounded-lg border border-slate-200 px-4 py-3 text-sm">
                 <p className="text-xs text-slate-500">Adjuntos</p>
-                <p>{files.length ? files.map((f) => f.name).join(", ") : "—"}</p>
+                <p>{files.length || blacklistFiles.length ? [...files, ...blacklistFiles].map((f) => f.name).join(", ") : "—"}</p>
               </div>
               {props.canAnswer && (
                 <Field label="Respuesta a la petición de información" htmlFor="answer" required error={serverErrors.answer}>

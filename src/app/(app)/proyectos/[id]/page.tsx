@@ -6,6 +6,7 @@ import { CommentComposer } from "@/components/project/comment-composer";
 import { GateDialog } from "@/components/project/gate-dialog";
 import { OlfactoryPyramid } from "@/components/project/olfactory-pyramid";
 import { ProjectAction } from "@/components/project/project-actions";
+import { AdvanceDialog, BudgetDialog, PrepaymentReceivedDialog, QuoteDialog } from "@/components/project/phase-dialogs";
 import { NeededBySignal } from "@/components/needed-by";
 import { Uploader } from "@/components/uploader";
 import { Badge, DeptChip, StatusBadge } from "@/components/ui/badge";
@@ -14,8 +15,9 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { briefSections, formatFormat, type Lookups } from "@/lib/brief/display";
 import { applicableFields, FIELD_BY_KEY, isFieldFilled } from "@/lib/brief/fields";
 import { needsOlfactory } from "@/lib/brief/schema";
-import { ACTION_LABEL, CATEGORY_LABEL, FILE_TAGS, PHASE_FOLDERS, PHASES, PRIORITY_COLOR, PRIORITY_LABEL, TYPE_LABEL } from "@/lib/labels";
-import { canDecideGate, canEditBrief, canManageProject, canViewProject, requireUser } from "@/lib/server/authz";
+import { ACTION_LABEL, CATEGORY_LABEL, FILE_TAGS, LAST_PHASE, PHASE_FOLDERS, PHASES, PREPAYMENT_TYPES, PRIORITY_COLOR, PRIORITY_LABEL, TYPE_LABEL } from "@/lib/labels";
+import { GENDER_LABEL } from "@/lib/brief/display";
+import { canDecideGate, canEditBrief, canManageProject, canSendQuote, canViewProject, requireUser } from "@/lib/server/authz";
 import { getActiveUsers, getAllCatalogs, getBrands, getDepartments } from "@/lib/server/catalogs";
 import { loadProjectDetail, templatesWithDepartments, templateScore } from "@/lib/server/project-detail";
 import { getSettings } from "@/lib/server/settings";
@@ -69,12 +71,37 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
   };
   const c = lookups.catalog;
 
-  const canDecide = canDecideGate(u, p, "G1") && p.phase === 0 && canTransition(p.status, "approve");
+  const canDecide = canDecideGate(u, p, "G1") && canTransition(p.status, "approve", p.phase);
+  const canQuote = canSendQuote(u, p) && canTransition(p.status, "send_quote", p.phase);
+  const canBudget = canDecideGate(u, p, "G2") && canTransition(p.status, "budget_decision", p.phase);
+  const canAdvance = canManageProject(u, p) && canTransition(p.status, "advance", p.phase);
+  const needsPrepayment = PREPAYMENT_TYPES.includes(p.type ?? "");
+  const pp = p.prepayment;
   const canEdit = canEditBrief(u, p);
   const canManage = canManageProject(u, p);
   const openIr = d.infoRequests.find((r) => !r.ir.answeredAt);
   const isRequester = p.requesterId === u.id || p.accountManagerId === u.id;
-  const g1 = d.gates.find((g) => g.g.gate === "G1");
+  const rejectedGate = d.gates.find((g) => g.g.status === "rejected");
+
+  // Fecha de entrada en cada fase (a partir del historial)
+  const entered: Record<number, Date> = {};
+  if (p.requestedAt) entered[0] = p.requestedAt;
+  for (const { a } of [...d.activity].reverse()) {
+    const diff = (a.diff ?? {}) as Record<string, unknown>;
+    const to =
+      a.action === "gate.approved" && diff.gate === "G1"
+        ? 1
+        : a.action === "quote.sent"
+          ? 2
+          : a.action === "gate.approved" && diff.gate === "G2"
+            ? 3
+            : a.action === "gate.recycled"
+              ? 1
+              : a.action === "phase.advanced"
+                ? Number(diff.to)
+                : null;
+    if (to != null && Number.isFinite(to)) entered[to] = a.createdAt;
+  }
 
   const activity: ActivityItem[] = d.activity.map(({ a, actor }) => {
     const diff = (a.diff ?? {}) as Record<string, unknown>;
@@ -83,9 +110,34 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
       case "comment.created":
         return { ...base, group: "comentarios", text: "comentó", detail: String(diff.body ?? "") };
       case "gate.approved": {
+        if (diff.gate === "G2") {
+          const ppd = diff.prepayment as { status?: string; responsible?: string; note?: string } | null | undefined;
+          const ppText = ppd?.status === "received" ? "Anticipo del 30 % recibido." : ppd?.status === "waived" ? `Inicio SIN anticipo bajo la responsabilidad de ${ppd.responsible}.` : null;
+          return {
+            ...base,
+            group: "decisiones",
+            text: "registró la aprobación del presupuesto por el cliente (G2)",
+            detail: [ppText, ppd?.note, diff.comment as string].filter(Boolean).join("\n") || null,
+          };
+        }
         const names = (diff.departmentIds as number[] | undefined)?.map((x) => departments.find((dd) => dd.id === x)?.name).filter(Boolean);
-        return { ...base, group: "decisiones", text: `aprobó ${diff.gate ?? "la puerta"} · departamentos: ${names?.join(", ") ?? "—"}`, detail: (diff.comment as string) || null };
+        return { ...base, group: "decisiones", text: `aprobó la solicitud (G1) · departamentos: ${names?.join(", ") ?? "—"}`, detail: (diff.comment as string) || null };
       }
+      case "gate.recycled":
+        return { ...base, group: "decisiones", text: "registró que el cliente pide cambios · vuelve a Cotización", detail: (diff.reason as string) || null };
+      case "quote.sent":
+        return {
+          ...base,
+          group: "decisiones",
+          text: `envió la cotización al cliente${diff.amount != null ? ` (${Number(diff.amount).toLocaleString("es-ES", { style: "currency", currency: "EUR" })})` : ""}`,
+          detail: (diff.comment as string) || null,
+        };
+      case "phase.advanced":
+        return { ...base, group: "decisiones", text: `avanzó a la fase «${PHASES[Number(diff.to)]?.name ?? diff.to}»`, detail: (diff.comment as string) || null };
+      case "project.in_production":
+        return { ...base, group: "decisiones", text: "pasó el proyecto a producción", detail: (diff.comment as string) || null };
+      case "prepayment.received":
+        return { ...base, group: "decisiones", text: "registró el anticipo del 30 %", detail: (diff.note as string) || null };
       case "gate.rejected": {
         const reason = c.rejection_reason?.[String(diff.reasonCode)] ?? String(diff.reasonCode ?? "");
         return { ...base, group: "decisiones", text: `rechazó el proyecto en ${diff.gate ?? "G1"}`, detail: [reason, diff.reasonText].filter(Boolean).join(" — ") };
@@ -118,7 +170,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
   });
 
   const images = d.files.filter((f) => f.f.mime?.startsWith("image/"));
-  const inspirations = b.olfactory?.inspirations?.filter((i) => i.product || i.brand) ?? [];
+  const inspirations = b.olfactory?.inspirations?.filter((i) => i.product || i.brand || i.url) ?? [];
   const sortedTemplates = templates
     .map((t) => ({ ...t, score: templateScore(t, p) }))
     .sort((a, z) => z.score - a.score);
@@ -154,7 +206,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
             {canDecide && (
               <GateDialog
                 projectId={p.id}
-                gateLabel="G1 – Viabilidad"
+                gateLabel="G1 · Aprobación de la solicitud"
                 summary={{ completeness: p.completenessPct, requester: d.requesterName, requestedAt: formatDate(p.requestedAt) }}
                 templates={sortedTemplates.map((t) => ({ id: t.id, name: t.name, departmentIds: t.departmentIds, score: t.score }))}
                 departments={departments.map((x) => ({ id: x.id, name: x.name, color: x.color }))}
@@ -163,6 +215,23 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
                   .map((f) => ({ key: f.key, label: f.label, level: f.level, missing: !isFieldFilled(f, b) }))}
                 rejectionReasons={catalogs.rejection_reason}
               />
+            )}
+            {canQuote && <QuoteDialog projectId={p.id} />}
+            {canBudget && (
+              <BudgetDialog
+                projectId={p.id}
+                requiresPrepayment={needsPrepayment}
+                currentUserName={u.name}
+                quoteInfo={
+                  p.quotedAt
+                    ? `Cotización enviada el ${formatDate(p.quotedAt)}${p.quoteAmount ? ` por ${formatEuro(p.quoteAmount)}` : ""}.`
+                    : null
+                }
+                rejectionReasons={catalogs.rejection_reason}
+              />
+            )}
+            {canAdvance && (
+              <AdvanceDialog projectId={p.id} nextLabel={PHASES[p.phase + 1]?.name ?? ""} toProduction={p.phase === LAST_PHASE} />
             )}
             {p.status === "info_requested" && isRequester && (
               <Button asChild variant="warning">
@@ -191,15 +260,40 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
             {openIr.ir.fieldsMissing.length > 0 && <p className="mt-1">Campos: {openIr.ir.fieldsMissing.map(fieldLabel).join(", ")}</p>}
           </div>
         )}
-        {p.status === "rejected" && g1 && (
+        {p.status === "rejected" && rejectedGate && (
           <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
             <p className="font-semibold">
-              Rechazado por {g1.by} el {formatDate(g1.g.decidedAt, true)}
+              {rejectedGate.g.gate === "G2" ? "El cliente rechazó el presupuesto" : "Solicitud rechazada"} · registrado por {rejectedGate.by} el{" "}
+              {formatDate(rejectedGate.g.decidedAt, true)}
             </p>
             <p className="mt-1">
-              Motivo: {c.rejection_reason?.[g1.g.reasonCode ?? ""] ?? g1.g.reasonCode}
-              {g1.g.comment ? ` — ${g1.g.comment}` : ""}
+              Motivo: {c.rejection_reason?.[rejectedGate.g.reasonCode ?? ""] ?? rejectedGate.g.reasonCode}
+              {rejectedGate.g.comment ? ` — ${rejectedGate.g.comment}` : ""}
             </p>
+          </div>
+        )}
+        {needsPrepayment && pp && (
+          <div
+            className={cn(
+              "flex flex-wrap items-center gap-3 rounded-lg border p-3 text-sm",
+              pp.status === "received" ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-amber-300 bg-amber-50 text-amber-900",
+            )}
+          >
+            <span className="font-semibold">Anticipo del 30 %:</span>
+            {pp.status === "received" ? (
+              <span>recibido{pp.receivedAt ? ` (${formatDate(pp.receivedAt)})` : ""}.</span>
+            ) : (
+              <span>
+                <strong>pendiente</strong>. Se inició sin anticipo bajo la responsabilidad de <strong>{pp.responsible}</strong> (registrado por {pp.recordedBy} el{" "}
+                {formatDate(pp.recordedAt)}).
+              </span>
+            )}
+            {pp.note && <span className="text-xs opacity-80">· {pp.note}</span>}
+            {pp.status === "waived" && (canManage || canDecideGate(u, p, "G2")) && (
+              <span className="ml-auto">
+                <PrepaymentReceivedDialog projectId={p.id} />
+              </span>
+            )}
           </div>
         )}
       </section>
@@ -207,28 +301,39 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
       {/* 2. Línea de fases */}
       <Card>
         <CardBody>
-          <ol className="grid grid-cols-5 gap-1" aria-label="Fases del proyecto">
+          <ol className="grid grid-cols-7 gap-1" aria-label="Fases del proyecto">
             {PHASES.map((ph) => {
-              const g = d.gates.find((x) => x.g.gate === ph.gate);
+              const g = ph.gate ? d.gates.find((x) => x.g.gate === ph.gate) : undefined;
               const done = ph.n < p.phase || (ph.n === p.phase && p.status === "in_production");
               const current = ph.n === p.phase && !["rejected", "cancelled", "in_production"].includes(p.status);
-              const entered = ph.n === 0 ? p.requestedAt : d.gates.find((x) => x.g.gate === PHASES[ph.n - 1]!.gate && x.g.status === "approved")?.g.decidedAt;
+              const inDate = entered[ph.n];
               return (
-                <li key={ph.n} className="flex flex-col gap-1">
+                <li key={ph.n} className="flex min-w-0 flex-col gap-1" aria-current={current ? "step" : undefined}>
                   <div className={cn("h-2 rounded-full", done ? "bg-brand-600" : current ? "bg-brand-300" : "bg-slate-200")} />
-                  <p className={cn("text-xs font-medium sm:text-sm", current ? "text-brand-800" : done ? "text-slate-700" : "text-slate-400")}>
-                    <span className="hidden sm:inline">{ph.n} · </span>
-                    {ph.name}
+                  <p className={cn("text-[11px] font-medium leading-tight sm:text-xs lg:text-sm", current ? "text-brand-800" : done ? "text-slate-700" : "text-slate-400")}>
+                    <span className="hidden lg:inline">{ph.n} · </span>
+                    <span className="lg:hidden">{ph.short}</span>
+                    <span className="hidden lg:inline">{ph.name}</span>
                   </p>
-                  <p className="hidden text-[11px] text-slate-500 sm:block">
-                    {entered ? `Entrada ${formatDate(entered)}` : "—"}
-                    {g?.g.decidedAt && g.g.status === "approved" ? ` · Salida ${formatDate(g.g.decidedAt)}` : ""}
-                  </p>
-                  <p className="text-[11px] text-slate-500">
-                    <Badge className={cn("ring-slate-200", g?.g.status === "approved" ? "bg-emerald-50 text-emerald-800" : current ? "bg-amber-50 text-amber-800" : "bg-white text-slate-500")}>
-                      {ph.gate} · {ph.gateName}
-                    </Badge>
-                  </p>
+                  <p className="hidden text-[11px] text-slate-500 md:block">{inDate && (done || current) ? `Desde ${formatDate(inDate)}` : " "}</p>
+                  {ph.gate && (
+                    <p className="hidden text-[11px] md:block">
+                      <Badge
+                        className={cn(
+                          "whitespace-normal ring-slate-200",
+                          g?.g.status === "approved"
+                            ? "bg-emerald-50 text-emerald-800"
+                            : g?.g.status === "rejected"
+                              ? "bg-rose-50 text-rose-800"
+                              : current
+                                ? "bg-amber-50 text-amber-800"
+                                : "bg-white text-slate-500",
+                        )}
+                      >
+                        {ph.gate} · {ph.gateName}
+                      </Badge>
+                    </p>
+                  )}
                 </li>
               );
             })}
@@ -261,6 +366,9 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
                       </span>
                     ))}
                   </div>
+                  {!!b.olfactory?.genders?.length && (
+                    <p className="text-center text-xs text-slate-500">Género: {b.olfactory.genders.map((g) => GENDER_LABEL[g]).join(" · ")}</p>
+                  )}
                   {b.olfactory?.intensity && (
                     <p className="text-center text-xs text-slate-500">
                       Intensidad{" "}
@@ -306,6 +414,11 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
                         <p className="font-medium text-slate-900">{i.product || "—"}</p>
                         <p className="text-xs text-slate-500">{i.brand}</p>
                         {i.likes && <p className="mt-1 text-xs text-slate-700">“{i.likes}”</p>}
+                        {i.url && (
+                          <a href={i.url} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-brand-700 hover:underline">
+                            <ExternalLink className="size-3" /> {/fragrantica/i.test(i.url) ? "Fragrantica" : "Ver referencia"}
+                          </a>
+                        )}
                       </div>
                     ))}
                     {images.map(({ f }) => (
@@ -404,7 +517,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
               {!d.files.length && <p className="text-sm text-slate-400">Sin archivos.</p>}
               {!["rejected", "cancelled"].includes(p.status) && (
                 <div className="border-t border-slate-100 pt-3">
-                  <p className="mb-2 text-xs text-slate-500">Subir a «{PHASE_FOLDERS[Math.min(p.phase, 4)]}»</p>
+                  <p className="mb-2 text-xs text-slate-500">Subir a «{PHASE_FOLDERS[Math.min(p.phase, PHASE_FOLDERS.length - 1)]}»</p>
                   <Uploader projectId={p.id} phase={p.phase} maxMb={settings.max_file_mb} showTags={false} canDelete={false} compact refreshOnUpload />
                 </div>
               )}

@@ -9,8 +9,13 @@ import {
   cancelProject,
   createDraft,
   decideGate,
+  advancePhase,
+  decideBudget,
   deleteDraft,
+  markPrepaymentReceived,
   pauseProject,
+  sendQuote,
+  type BudgetDecision,
   resumeProject,
   saveBrief,
   submitProject,
@@ -102,6 +107,41 @@ export async function pauseAction(projectId: string, reason: string) {
   return run("pause", async () => {
     const u = await requireActionUser();
     await pauseProject(u, projectId, reason);
+    revalidatePath(`/proyectos/${projectId}`);
+  });
+}
+
+export async function sendQuoteAction(projectId: string, input: { amount?: number | null; comment?: string | null }) {
+  return run("sendQuote", async () => {
+    const u = await requireActionUser();
+    await sendQuote(u, projectId, input);
+    revalidatePath(`/proyectos/${projectId}`);
+    revalidatePath("/");
+  });
+}
+
+export async function decideBudgetAction(projectId: string, decision: BudgetDecision) {
+  return run("decideBudget", async () => {
+    const u = await requireActionUser();
+    await decideBudget(u, projectId, decision);
+    revalidatePath(`/proyectos/${projectId}`);
+    revalidatePath("/");
+  });
+}
+
+export async function advancePhaseAction(projectId: string, comment: string) {
+  return run("advancePhase", async () => {
+    const u = await requireActionUser();
+    await advancePhase(u, projectId, comment);
+    revalidatePath(`/proyectos/${projectId}`);
+    revalidatePath("/");
+  });
+}
+
+export async function markPrepaymentAction(projectId: string, note: string) {
+  return run("markPrepayment", async () => {
+    const u = await requireActionUser();
+    await markPrepaymentReceived(u, projectId, note);
     revalidatePath(`/proyectos/${projectId}`);
   });
 }

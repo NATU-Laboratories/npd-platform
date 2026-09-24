@@ -80,6 +80,7 @@ export function Filters({ brands, departments, requesters }: { brands: Opt[]; de
         {sel("type", "Tipo", [
           ["PL", "Marca privada"],
           ["MP", "Marca propia"],
+          ["MDD", "Marca de distribuidor"],
         ])}
         {sel("brand", "Marca", brands.map((b) => [String(b.id), b.name]))}
         {sel("category", "Categoría", Object.entries(CATEGORY_LABEL))}

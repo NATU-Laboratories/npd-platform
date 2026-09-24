@@ -19,7 +19,7 @@ const plBase: BriefData = {
   designBy: "natu",
   packagingBy: "cliente",
   format: "body_mist",
-  olfactory: { families: ["Cítrico"] },
+  olfactory: { families: ["Cítrico"], genders: ["unisex"] },
 };
 
 describe("submitErrors", () => {
@@ -27,9 +27,15 @@ describe("submitErrors", () => {
     expect(submitErrors(plBase)).toEqual({});
   });
 
-  it("exige el bloque olfativo en perfumería", () => {
+  it("exige el bloque olfativo en perfumería (familias y género)", () => {
     const errs = submitErrors({ ...plBase, olfactory: {} });
     expect(errs["olfactory.families"]).toBeDefined();
+    expect(errs["olfactory.genders"]).toBeDefined();
+  });
+
+  it("MDD usa los obligatorios de cliente como PL", () => {
+    expect(submitErrors({ ...plBase, type: "MDD" })).toEqual({});
+    expect(submitErrors({ ...plBase, type: "MDD", clientId: undefined }).clientId).toBeDefined();
   });
 
   it("no exige olfativo en cosmética sin perfume", () => {
@@ -61,7 +67,7 @@ describe("computeCompleteness", () => {
       rrp: 4.99,
       languages: ["es"],
       capacityMl: 250,
-      olfactory: { families: ["Cítrico"], top: ["Limón"], intensity: 3, inspirations: [{ product: "X", brand: "Y", likes: "" }], gender: "unisex" },
+      olfactory: { families: ["Cítrico"], top: ["Limón"], intensity: 3, inspirations: [{ product: "X", brand: "Y", likes: "", url: "" }], genders: ["mujer", "hombre"] },
     };
     expect(computeCompleteness(full)).toBe(100);
     expect(missingFields(full, "recommended")).toEqual([]);
@@ -82,5 +88,18 @@ describe("parseBriefLenient", () => {
     expect(data.priority).toBeUndefined();
     expect(data.firstOrderUnits).toBe(12000);
     expect(data.rrp).toBe(4.99);
+  });
+});
+
+describe("olfactorySchema", () => {
+  it("convierte el género antiguo (único) al nuevo formato múltiple", () => {
+    const { data } = parseBriefLenient({ olfactory: { gender: "femenino", families: ["Floral"] } });
+    expect(data.olfactory?.genders).toEqual(["mujer"]);
+  });
+  it("valida el enlace de Fragrantica", () => {
+    const ok = parseBriefLenient({ olfactory: { inspirations: [{ product: "X", url: "https://www.fragrantica.es/perfume/x.html" }] } });
+    expect(ok.data.olfactory?.inspirations?.[0]?.url).toContain("fragrantica");
+    const bad = parseBriefLenient({ olfactory: { inspirations: [{ product: "X", url: "fragrantica" }] } });
+    expect(Object.keys(bad.errors)[0]).toContain("url");
   });
 });

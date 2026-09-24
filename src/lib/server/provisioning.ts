@@ -74,7 +74,7 @@ export async function uploadTargetFolder(projectId: string, phase: number) {
   const [p] = await db.select().from(projects).where(eq(projects.id, projectId));
   if (!p) throw new Error("Proyecto no encontrado");
   if (p.sharepointSubfolders) {
-    const key = String(Math.min(Math.max(phase, 0), 4)).padStart(2, "0");
+    const key = String(Math.min(Math.max(phase, 0), PHASE_FOLDERS.length - 1)).padStart(2, "0");
     const id = p.sharepointSubfolders[key];
     if (id) return id;
   }

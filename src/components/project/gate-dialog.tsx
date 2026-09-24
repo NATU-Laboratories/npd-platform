@@ -82,7 +82,7 @@ export function GateDialog(props: GateDialogProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>Decidir {props.gateLabel}</Button>
+        <Button>Decidir solicitud (G1)</Button>
       </DialogTrigger>
       <DialogContent title={`Decisión · ${props.gateLabel}`} description={`Solicitado por ${props.summary.requester} el ${props.summary.requestedAt} · brief completo al ${props.summary.completeness}%`} wide>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="tablist">

@@ -35,7 +35,8 @@ const emptyToUndef = <T extends z.ZodType>(schema: T) =>
     .transform((v) => (v === "" ? undefined : (v as z.output<T>)))
     .optional();
 
-export const PROJECT_TYPES = ["PL", "MP"] as const;
+export const PROJECT_TYPES = ["PL", "MP", "MDD"] as const;
+export const GENDERS = ["mujer", "hombre", "unisex"] as const;
 export const CATEGORIES = ["perfume", "ambient", "cosmetic"] as const;
 export const PRIORITIES = ["low", "medium", "high", "urgent"] as const;
 export const SUPPLIER = ["cliente", "natu", "mixto"] as const;
@@ -44,25 +45,43 @@ export const inspirationSchema = z.object({
   product: z.string().trim().max(200).default(""),
   brand: z.string().trim().max(200).default(""),
   likes: z.string().trim().max(1000).default(""),
+  /** Enlace a la ficha en Fragrantica u otra web de referencia. */
+  url: z
+    .string()
+    .trim()
+    .max(500)
+    .refine((v) => v === "" || /^https?:\/\/\S+$/i.test(v), "Enlace no válido (debe empezar por http)")
+    .default(""),
 });
 
-export const olfactorySchema = z.object({
-  families: strList,
-  top: strList,
-  heart: strList,
-  base: strList,
-  intensity: toNum.refine((v) => v === undefined || (Number.isInteger(v) && v >= 1 && v <= 5), "Entre 1 y 5").optional(),
-  duration: optStr,
-  inspirations: z.array(inspirationSchema).max(20).optional(),
-  gender: emptyToUndef(z.enum(["femenino", "masculino", "unisex"])),
-  ageRange: optStr,
-  style: optStr,
-  seasonality: strList,
-  allergenFree: optStr,
-  vegan: z.boolean().optional(),
-  naturalPct: toNum.refine((v) => v === undefined || v <= 100, "Máximo 100").optional(),
-  certifications: strList,
-});
+/** Compatibilidad: briefs antiguos con un único "gender" (femenino/masculino/unisex). */
+const LEGACY_GENDER: Record<string, (typeof GENDERS)[number]> = { femenino: "mujer", masculino: "hombre", unisex: "unisex" };
+
+export const olfactorySchema = z.preprocess(
+  (raw) => {
+    if (!raw || typeof raw !== "object") return raw;
+    const o = { ...(raw as Record<string, unknown>) };
+    if (!o.genders && typeof o.gender === "string" && LEGACY_GENDER[o.gender]) o.genders = [LEGACY_GENDER[o.gender]];
+    return o;
+  },
+  z.object({
+    families: strList,
+    top: strList,
+    heart: strList,
+    base: strList,
+    intensity: toNum.refine((v) => v === undefined || (Number.isInteger(v) && v >= 1 && v <= 5), "Entre 1 y 5").optional(),
+    duration: optStr,
+    inspirations: z.array(inspirationSchema).max(20).optional(),
+    genders: z.array(z.enum(GENDERS)).max(3).optional(),
+    /** Ingredientes / materias primas que no pueden usarse (texto pegado; también admite adjunto). */
+    blacklist: z
+      .string()
+      .trim()
+      .max(20000)
+      .transform((v) => (v === "" ? undefined : v))
+      .optional(),
+  }),
+);
 
 export const newClientSchema = z.object({
   name: z.string().trim().min(1, "Nombre obligatorio").max(200),
@@ -80,7 +99,7 @@ export const briefSchema = z.object({
   neededByReasonText: optStr,
   priority: emptyToUndef(z.enum(PRIORITIES)),
 
-  // Paso 2A (PL)
+  // Paso 2A (PL y MDD: proyectos con cliente)
   clientId: optInt,
   newClient: newClientSchema.optional(),
   accountManagerId: emptyToUndef(z.string().uuid()),
@@ -92,7 +111,7 @@ export const briefSchema = z.object({
   packagingBy: emptyToUndef(z.enum(SUPPLIER)),
   languages: strList,
 
-  // Comunes PL/MP
+  // Comunes a todos los tipos
   markets: strList,
   channels: strList,
   annualUnits: optInt,

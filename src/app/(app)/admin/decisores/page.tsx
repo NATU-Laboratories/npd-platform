@@ -1,19 +1,17 @@
 import { db } from "@/db";
 import { gateDeciders } from "@/db/schema";
-import { PageTitle, Table, Td, Th } from "@/components/admin";
+import { PageTitle } from "@/components/admin";
 import { Button } from "@/components/ui/button";
+import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { saveDecidersAction } from "@/app/actions/admin";
 import { getActiveUsers } from "@/lib/server/catalogs";
-import { PHASES } from "@/lib/labels";
+import { APPROVAL_GATES, PROJECT_TYPE_KEYS, TYPE_LABEL } from "@/lib/labels";
 
-export const metadata = { title: "Decisores por puerta" };
+export const metadata = { title: "Aprobadores" };
 
-const PROPOSAL: Record<string, string> = {
-  G1: "Responsable de Marketing",
-  G2: "MP: Comité de Dirección · PL: Marketing registra aceptación del cliente",
-  G3: "PL: Marketing registra ok del cliente · MP: Marketing (propuesta)",
-  G4: "PL: Marketing registra ok del cliente · MP: Marketing (propuesta)",
-  G5: "Operaciones / Project Manager (propuesta)",
+const HINT: Record<string, string> = {
+  G1: "Habitualmente Marketing / NPD.",
+  G2: "Habitualmente Comercial: registra que el cliente ha aprobado el presupuesto. En PL exige el anticipo del 30 % o un responsable que asuma iniciar sin él.",
 };
 
 export default async function DecidersPage() {
@@ -21,51 +19,41 @@ export default async function DecidersPage() {
   return (
     <>
       <PageTitle
-        title="Decisores por puerta"
-        description="Matriz puerta × tipo de proyecto. Los usuarios seleccionados reciben el rol Decisor automáticamente. En V1 solo se decide G1; G2–G5 quedan configurados para V2."
+        title="Aprobadores por fase"
+        description="Quién puede aprobar en cada una de las dos puertas del proceso, por tipo de proyecto. Los usuarios seleccionados reciben el rol Aprobador automáticamente."
       />
-      <form action={saveDecidersAction}>
-        <Table>
-          <thead>
-            <tr>
-              <Th>Puerta</Th>
-              <Th>Marca privada (PL)</Th>
-              <Th>Marca propia (MP)</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {PHASES.map((ph) => (
-              <tr key={ph.gate}>
-                <Td className="w-64">
-                  <p className="font-medium">
-                    {ph.gate} – {ph.gateName}
-                  </p>
-                  <p className="text-xs text-slate-500">{PROPOSAL[ph.gate]}</p>
-                </Td>
-                {(["PL", "MP"] as const).map((t) => (
-                  <Td key={t}>
-                    <div className="grid max-h-40 gap-0.5 overflow-y-auto">
-                      {people.map((p) => (
-                        <label key={p.id} className="flex items-center gap-1.5 text-xs">
-                          <input
-                            type="checkbox"
-                            name={`${ph.gate}_${t}`}
-                            value={p.id}
-                            defaultChecked={rows.some((r) => r.gate === ph.gate && r.projectType === t && r.userId === p.id)}
-                            className="accent-brand-600"
-                          />
-                          {p.name}
-                        </label>
-                      ))}
-                    </div>
-                  </Td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-        <div className="mt-4 flex justify-end">
-          <Button type="submit">Guardar matriz</Button>
+      <form action={saveDecidersAction} className="flex flex-col gap-6">
+        {APPROVAL_GATES.map((g) => (
+          <Card key={g.gate}>
+            <CardHeader title={`${g.gate} · ${g.name}`} description={`${g.description} ${HINT[g.gate] ?? ""}`} />
+            <CardBody className="grid gap-4 md:grid-cols-3">
+              {PROJECT_TYPE_KEYS.map((t) => (
+                <fieldset key={t} className="rounded-lg border border-slate-200 p-3">
+                  <legend className="px-1 text-xs font-semibold text-slate-600">
+                    {TYPE_LABEL[t]} ({t})
+                  </legend>
+                  <div className="grid max-h-48 gap-1 overflow-y-auto">
+                    {people.map((p) => (
+                      <label key={p.id} className="flex items-center gap-1.5 text-sm">
+                        <input
+                          type="checkbox"
+                          name={`${g.gate}_${t}`}
+                          value={p.id}
+                          defaultChecked={rows.some((r) => r.gate === g.gate && r.projectType === t && r.userId === p.id)}
+                          className="accent-brand-600"
+                        />
+                        {p.name}
+                      </label>
+                    ))}
+                    {!people.length && <p className="text-xs text-slate-400">No hay usuarios activos.</p>}
+                  </div>
+                </fieldset>
+              ))}
+            </CardBody>
+          </Card>
+        ))}
+        <div className="flex justify-end">
+          <Button type="submit">Guardar aprobadores</Button>
         </div>
       </form>
     </>

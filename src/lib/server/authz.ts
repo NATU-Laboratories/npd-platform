@@ -27,7 +27,7 @@ export type CurrentUser = {
   roles: RoleKey[];
   departmentIds: number[];
   departmentKeys: string[];
-  deciderFor: { gate: GateKey; projectType: "PL" | "MP" }[];
+  deciderFor: { gate: GateKey; projectType: "PL" | "MP" | "MDD" }[];
 };
 
 export class AuthzError extends Error {
@@ -162,8 +162,17 @@ export function canDecideGate(u: CurrentUser, p: Pick<Project, "type">, gate: Ga
   return u.deciderFor.some((d) => d.gate === gate && d.projectType === p.type);
 }
 
-/** Pausar/reanudar/cancelar: decisores de la puerta actual, Marketing y Admin. */
+/** Pausar/reanudar/cancelar/avanzar fase: Admin, Marketing y aprobadores (G1/G2) del tipo de proyecto. */
 export function canManageProject(u: CurrentUser, p: Pick<Project, "type" | "phase">) {
-  const gate = (["G1", "G2", "G3", "G4", "G5"] as const)[p.phase] ?? "G1";
-  return isAdmin(u) || isMarketing(u) || canDecideGate(u, p, gate);
+  return isAdmin(u) || isMarketing(u) || canDecideGate(u, p, "G1") || canDecideGate(u, p, "G2");
+}
+
+/** Enviar la cotización al cliente (fase Cotización): gestores, comercial de la cuenta, Operaciones y Comercial. */
+export function canSendQuote(u: CurrentUser, p: Pick<Project, "type" | "phase" | "accountManagerId" | "requesterId">) {
+  return (
+    canManageProject(u, p) ||
+    p.accountManagerId === u.id ||
+    u.departmentKeys.includes("operaciones") ||
+    u.departmentKeys.includes("comercial")
+  );
 }
