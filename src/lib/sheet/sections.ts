@@ -10,7 +10,18 @@
 
 export type Opt = { value: string; label: string };
 
-type Base = { key: string; label: string; required?: boolean; hint?: string; when?: (c: SheetCtx) => boolean };
+type Base = {
+  key: string;
+  label: string;
+  required?: boolean;
+  /** Obligatorio solo si se cumple la condición sobre los datos del apartado (p. ej. "Otro" → especificar). */
+  requiredIf?: (d: SheetData) => boolean;
+  /** Validación adicional del valor (p. ej. longitud del código de barras). */
+  valid?: (v: unknown, d: SheetData) => boolean;
+  invalidLabel?: string;
+  hint?: string;
+  when?: (c: SheetCtx) => boolean;
+};
 export type ScalarField =
   | (Base & { type: "text" | "textarea"; placeholder?: string })
   | (Base & { type: "money" | "number"; unit?: string })
@@ -46,6 +57,8 @@ export type SheetSection = {
   checks?: SheetCheck[];
   groups: SheetGroup[];
   prefill?: (c: SheetCtx) => Record<string, unknown>;
+  /** Apartados cuya información necesita este (se le envía al abrirse su fase). */
+  dependsOn?: string[];
 };
 
 /** Contexto del proyecto necesario para evaluar la ficha. */
@@ -55,7 +68,16 @@ export type SheetCtx = {
   quoteAmount: number | null;
   g2At: string | null;
   prepayment: string | null;
-  brief: { targetPrice?: number | null; rrp?: number | null; unitsFirstOrder?: number | null; capacityMl?: number | null; references?: number | null };
+  brief: {
+    name?: string | null;
+    format?: string | null;
+    markets?: string[];
+    targetPrice?: number | null;
+    rrp?: number | null;
+    unitsFirstOrder?: number | null;
+    capacityMl?: number | null;
+    references?: number | null;
+  };
   filesByTag: Record<string, number>;
 };
 
@@ -65,33 +87,94 @@ export type SheetStatus = "pending" | "done" | "na";
 const euro = (n: number) => n.toLocaleString("es-ES", { style: "currency", currency: "EUR" });
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString("es-ES", { timeZone: "Europe/Madrid" });
 
-export const PICTOGRAMS: Opt[] = [
-  { value: "GHS02", label: "GHS02 · Inflamable" },
-  { value: "GHS05", label: "GHS05 · Corrosivo" },
-  { value: "GHS07", label: "GHS07 · Irritante / nocivo" },
-  { value: "GHS08", label: "GHS08 · Peligro para la salud" },
-  { value: "GHS09", label: "GHS09 · Peligro para el medio ambiente" },
-  { value: "pao", label: "PAO (periodo tras la apertura)" },
-  { value: "reloj", label: "Reloj de arena (consumo preferente)" },
-  { value: "libro", label: "Mano con libro (ver información adjunta)" },
-  { value: "e", label: "℮ (cantidad estimada)" },
-  { value: "triman", label: "Triman / info de reciclaje" },
-  { value: "punto_verde", label: "Punto verde" },
-];
+const opts = (xs: [string, string][]): Opt[] => xs.map(([value, label]) => ({ value, label }));
 
-export const LANGUAGES: Opt[] = [
-  { value: "es", label: "Español" },
-  { value: "en", label: "Inglés" },
-  { value: "fr", label: "Francés" },
-  { value: "it", label: "Italiano" },
-  { value: "pt", label: "Portugués" },
-  { value: "de", label: "Alemán" },
-  { value: "ro", label: "Rumano" },
-  { value: "nl", label: "Neerlandés" },
-  { value: "pl", label: "Polaco" },
-  { value: "el", label: "Griego" },
-  { value: "ar", label: "Árabe" },
-];
+export const DENOMINATIONS = opts([
+  ["agua_colonia", "Agua de colonia"],
+  ["agua_tocador", "Agua de tocador (EDT)"],
+  ["agua_perfume", "Agua de perfume"],
+  ["perfume", "Perfume"],
+  ["ambientador_mikado", "Ambientador mikado"],
+  ["home_spray", "Home spray"],
+  ["sobre_percha", "Sobre / percha perfumada"],
+  ["bruma_textil", "Bruma textil"],
+  ["mikado", "Mikado"],
+  ["otro", "Otro"],
+]);
+/** Formato del brief → denominación legal (precarga). */
+const DENOMINATION_FROM_FORMAT: Record<string, string> = {
+  edt: "agua_tocador",
+  edp: "agua_perfume",
+  colonia: "agua_colonia",
+  colonia_infantil: "agua_colonia",
+  extracto: "perfume",
+  mikado: "ambientador_mikado",
+  spray: "home_spray",
+  sachet: "sobre_percha",
+  textil: "bruma_textil",
+};
+
+export const LANGUAGES = opts([
+  ["es", "Español"],
+  ["en", "Inglés"],
+  ["fr", "Francés"],
+  ["it", "Italiano"],
+  ["de", "Alemán"],
+  ["pt", "Portugués"],
+  ["ro", "Rumano"],
+  ["pl", "Polaco"],
+  ["nl", "Neerlandés"],
+  ["el", "Griego"],
+  ["ar", "Árabe"],
+]);
+/** Mercados del brief → idiomas de la etiqueta (precarga). */
+const LANGUAGES_FROM_MARKET: Record<string, string[]> = {
+  ES: ["es"],
+  MX: ["es"],
+  PT: ["pt"],
+  FR: ["fr"],
+  IT: ["it"],
+  DE: ["de"],
+  RO: ["ro"],
+  PL: ["pl"],
+  GB: ["en"],
+  US: ["en"],
+  NL: ["nl"],
+  BE: ["fr", "nl"],
+  GR: ["el"],
+  MA: ["ar", "fr"],
+  AE: ["ar", "en"],
+  SA: ["ar"],
+};
+
+export const RECYCLING_ICONS = opts([
+  ["reciclable", "Envase reciclable"],
+  ["material", "Material del envase"],
+  ["separacion", "Separación de componentes"],
+  ["tidyman", "Tidyman"],
+  ["triman", "Triman (Francia)"],
+  ["punto_verde", "Punto verde"],
+  ["otros", "Otros"],
+]);
+export const HAZARD_ICONS = opts([
+  ["ninguno", "No lleva iconos de peligro"],
+  ["GHS02", "Inflamable (GHS02)"],
+  ["GHS07", "Irritante (GHS07)"],
+  ["GHS09", "Medio ambiente (GHS09)"],
+  ["GHS05", "Corrosivo (GHS05)"],
+  ["GHS08", "Peligro para la salud (GHS08)"],
+  ["otros", "Otros"],
+]);
+export const OTHER_ICONS = opts([
+  ["pao", "PAO / duración tras apertura"],
+  ["reloj", "Reloj de arena (consumo preferente)"],
+  ["libro", "Mano con libro (ver información adjunta)"],
+  ["otros", "Otros"],
+]);
+
+const has = (key: string, value: string) => (d: SheetData) => Array.isArray(d[key]) && (d[key] as string[]).includes(value);
+const is = (key: string, value: string) => (d: SheetData) => d[key] === value;
+const digits = (n: number) => (v: unknown) => typeof v === "string" && new RegExp(`^\\d{${n}}$`).test(v.replace(/\s/g, ""));
 
 export const SHEET_SECTIONS: SheetSection[] = [
   {
@@ -215,37 +298,196 @@ export const SHEET_SECTIONS: SheetSection[] = [
     prefill: (c) => ({ bottleCapacity: c.brief.capacityMl ?? undefined }),
   },
   {
-    key: "regulatorio",
-    title: "Calidad y regulatorio · requisitos de etiqueta",
-    description: "Pictogramas, INCI, idiomas y advertencias que debe llevar la etiqueta.",
-    dept: "calidad",
+    key: "identificacion",
+    title: "Identificación del producto",
+    description: "Nombre comercial, código de barras y QR que llevará el producto.",
+    dept: "marketing",
     phase: 3,
     groups: [
       {
         fields: [
-          { key: "pictograms", label: "Pictogramas y símbolos", type: "multi", options: PICTOGRAMS, required: true },
-          { key: "languages", label: "Idiomas de la etiqueta", type: "multi", options: LANGUAGES, required: true },
-          { key: "inci", label: "Lista INCI", type: "textarea", required: true, placeholder: "ALCOHOL DENAT., PARFUM (FRAGRANCE), AQUA (WATER)…" },
+          { key: "productName", label: "Nombre comercial (naming)", type: "text", required: true, hint: "Precargado con el nombre del proyecto: confirma el definitivo." },
+          { key: "fragranceName", label: "Nombre de la fragancia", type: "text", hint: "Si es distinto del nombre comercial." },
+        ],
+      },
+      {
+        title: "Código de barras",
+        fields: [
+          {
+            key: "barcodeType",
+            label: "Tipo",
+            type: "select",
+            required: true,
+            options: opts([
+              ["ean13", "EAN-13"],
+              ["ean8", "EAN-8"],
+              ["no", "No lleva"],
+            ]),
+          },
+          {
+            key: "barcode",
+            label: "Código",
+            type: "text",
+            requiredIf: (d) => d.barcodeType === "ean13" || d.barcodeType === "ean8",
+            valid: (v, d) => (d.barcodeType === "ean8" ? digits(8)(v) : d.barcodeType === "ean13" ? digits(13)(v) : true),
+            invalidLabel: "Código de barras: 13 dígitos (EAN-13) u 8 (EAN-8)",
+          },
+        ],
+      },
+      {
+        title: "QR",
+        fields: [
+          {
+            key: "qr",
+            label: "¿Lleva QR?",
+            type: "select",
+            required: true,
+            options: opts([
+              ["no", "No"],
+              ["si", "Sí"],
+            ]),
+          },
+          { key: "qrContent", label: "Destino del QR (URL o contenido)", type: "text", requiredIf: is("qr", "si") },
+        ],
+      },
+    ],
+    prefill: (c) => ({ productName: c.brief.name ?? undefined }),
+  },
+  {
+    key: "regulatorio",
+    title: "Calidad y regulatorio · requisitos de etiqueta",
+    description: "Todo lo legal que debe llevar la etiqueta: denominación, contenido, idiomas, iconos, INCI, modo de uso, precauciones, responsable, UFI y lote.",
+    dept: "calidad",
+    phase: 3,
+    groups: [
+      {
+        title: "Denominación y contenido",
+        fields: [
+          { key: "denomination", label: "Denominación del producto", type: "select", options: DENOMINATIONS, required: true },
+          { key: "denominationOther", label: "Otra denominación", type: "text", requiredIf: is("denomination", "otro") },
+          { key: "nominalMl", label: "Cantidad", type: "number", unit: "ml", required: true },
+          { key: "nominalFlOz", label: "Cantidad en fl oz", type: "number", unit: "fl oz", hint: "Precalculado desde los ml (1 fl oz = 29,57 ml)." },
+          { key: "estimated", label: "Lleva el símbolo ℮ (cantidad estimada)", type: "bool" },
+        ],
+      },
+      {
+        title: "Idiomas",
+        fields: [
+          { key: "languages", label: "Idiomas de la etiqueta", type: "multi", options: LANGUAGES, required: true, hint: "Precargados según los mercados del brief." },
+          { key: "languagesOther", label: "Otros idiomas", type: "text" },
+        ],
+      },
+      {
+        title: "Iconos",
+        fields: [
+          { key: "recyclingIcons", label: "Iconos de reciclaje", type: "multi", options: RECYCLING_ICONS, required: true },
+          { key: "recyclingOther", label: "Otros iconos de reciclaje", type: "text", requiredIf: has("recyclingIcons", "otros") },
+          { key: "hazardIcons", label: "Iconos de peligro", type: "multi", options: HAZARD_ICONS, required: true },
+          { key: "hazardOther", label: "Otros iconos de peligro", type: "text", requiredIf: has("hazardIcons", "otros") },
+          { key: "otherIcons", label: "Otros iconos / símbolos", type: "multi", options: OTHER_ICONS },
+          { key: "otherIconsText", label: "Otros símbolos", type: "text", requiredIf: has("otherIcons", "otros") },
+          { key: "pao", label: "PAO / duración", type: "text", placeholder: "p. ej. 24M", requiredIf: has("otherIcons", "pao") },
+        ],
+      },
+      {
+        title: "Composición y textos",
+        fields: [
+          { key: "inci", label: "INCI / ingredientes", type: "textarea", required: true, placeholder: "ALCOHOL DENAT., PARFUM (FRAGRANCE), AQUA (WATER)…" },
           { key: "allergens", label: "Alérgenos a declarar", type: "textarea" },
-          { key: "warnings", label: "Advertencias y frases (H/P, precauciones de uso)", type: "textarea" },
-          { key: "nominal", label: "Contenido nominal", type: "text", placeholder: "p. ej. 100 ml ℮" },
-          { key: "pao", label: "PAO / caducidad", type: "text", placeholder: "p. ej. 24M" },
-          { key: "responsible", label: "Persona responsable (UE)", type: "text" },
-          { key: "ufi", label: "Código UFI", type: "text" },
+          { key: "usage", label: "Modo de uso", type: "textarea", required: true },
+          { key: "warnings", label: "Precauciones", type: "textarea", required: true, placeholder: "Advertencias y frases H/P que deben figurar" },
+        ],
+      },
+      {
+        title: "Responsable",
+        fields: [
+          {
+            key: "responsibleRole",
+            label: "Figura",
+            type: "select",
+            required: true,
+            options: opts([
+              ["fabricante", "Fabricante"],
+              ["distribuidor", "Distribuidor"],
+              ["importador", "Importador"],
+              ["responsable", "Responsable del producto"],
+            ]),
+          },
+          { key: "responsibleName", label: "Nombre", type: "text", required: true },
+          { key: "responsibleAddress", label: "Dirección", type: "text", required: true },
+          { key: "responsibleCountry", label: "País", type: "text", required: true },
+          { key: "responsibleContact", label: "Web o teléfono", type: "text" },
+        ],
+      },
+      {
+        title: "Códigos",
+        fields: [
+          {
+            key: "ufiStatus",
+            label: "UFI",
+            type: "select",
+            required: true,
+            options: opts([
+              ["na", "No aplica"],
+              ["pendiente", "Pendiente"],
+              ["disponible", "Disponible"],
+            ]),
+          },
+          { key: "ufi", label: "Código UFI", type: "text", requiredIf: is("ufiStatus", "disponible") },
+          { key: "lot", label: "Lote (formato y ubicación del marcaje)", type: "text", required: true, placeholder: "p. ej. «L» + 6 dígitos, en la base" },
           { key: "cpnp", label: "Nº de notificación CPNP", type: "text" },
         ],
       },
       { fields: [{ key: "regFiles", label: "Documentación (IFRA, FDS, CPSR, certificados)", type: "files", tag: "regulatorio" }] },
     ],
+    prefill: (c) => {
+      const ml = c.brief.capacityMl ?? undefined;
+      const languages = [...new Set((c.brief.markets ?? []).flatMap((m) => LANGUAGES_FROM_MARKET[m] ?? []))];
+      return {
+        denomination: c.brief.format ? DENOMINATION_FROM_FORMAT[c.brief.format] : undefined,
+        nominalMl: ml,
+        nominalFlOz: ml ? Math.round((ml / 29.5735) * 10) / 10 : undefined,
+        languages: languages.length ? languages : undefined,
+      };
+    },
   },
   {
     key: "etiqueta",
     title: "Etiqueta y artes finales",
-    description: "Detalles de la etiqueta y artes finales aprobados por el cliente.",
+    description: "Troquel, detalles de la etiqueta y artes finales aprobados por el cliente.",
     dept: "diseno",
     phase: 4,
+    dependsOn: ["identificacion", "regulatorio", "formula", "packaging"],
     groups: [
       {
+        title: "Troquel",
+        fields: [
+          {
+            key: "dieType",
+            label: "Troquel",
+            type: "select",
+            required: true,
+            options: opts([
+              ["existente", "Troquel existente"],
+              ["nuevo", "Nuevo troquel"],
+            ]),
+          },
+          { key: "dieRef", label: "Referencia / código de troquel", type: "text", requiredIf: is("dieType", "existente") },
+          { key: "dieSize", label: "Medidas", type: "text", requiredIf: is("dieType", "nuevo") },
+          { key: "dieSupplier", label: "Proveedor", type: "text" },
+          {
+            key: "dieFile",
+            label: "Archivo del troquel disponible",
+            type: "select",
+            options: opts([
+              ["si", "Sí"],
+              ["no", "No"],
+            ]),
+          },
+        ],
+      },
+      {
+        title: "Etiqueta",
         fields: [
           {
             key: "labelType",
@@ -275,10 +517,11 @@ export const SHEET_SECTIONS: SheetSection[] = [
           { key: "size", label: "Dimensiones", type: "text", placeholder: "p. ej. 40 × 60 mm" },
           { key: "material", label: "Material y acabado", type: "text" },
           { key: "inks", label: "Colores / tintas", type: "text" },
-          { key: "texts", label: "Textos principales", type: "textarea", placeholder: "Nombre, denominación, contenido nominal…" },
+          { key: "texts", label: "Textos adicionales", type: "textarea", placeholder: "Claims, textos de marketing… (los legales vienen de Calidad y regulatorio)" },
         ],
       },
       {
+        title: "Artes finales",
         fields: [
           { key: "artworkFiles", label: "Artes finales", type: "files", tag: "arte_final", required: true },
           { key: "clientApproved", label: "Artes finales aprobados por el cliente", type: "bool", required: true },
@@ -366,7 +609,11 @@ export function requirements(s: SheetSection, c: SheetCtx, data: SheetData): Req
       if (f.requireSome) out.push({ label: f.requireSome.label, ok: items.some((it) => it[f.requireSome!.key] === true) });
       continue;
     }
-    if (f.required) out.push({ label: f.label, ok: isScalarFilled(f, data[f.key]) });
+    if (f.required || f.requiredIf?.(data)) {
+      const filled = isScalarFilled(f, data[f.key]);
+      const valid = !filled || !f.valid || f.valid(data[f.key], data);
+      out.push({ label: valid ? f.label : (f.invalidLabel ?? `${f.label} (no válido)`), ok: filled && valid });
+    }
   }
   return out;
 }
@@ -447,4 +694,33 @@ export function formatValue(f: ScalarField, v: unknown): string | null {
     default:
       return String(v);
   }
+}
+
+/** Resumen legible de lo rellenado en un apartado (emails a los departamentos siguientes). */
+export function summarize(s: SheetSection, c: SheetCtx, data: SheetData): string[] {
+  const out: string[] = [];
+  for (const f of allFields(s, c)) {
+    if (f.type === "files") {
+      const n = c.filesByTag[f.tag] ?? 0;
+      if (n) out.push(`${f.label}: ${n} archivo${n === 1 ? "" : "s"}`);
+      continue;
+    }
+    if (f.type === "list") {
+      const items = (Array.isArray(data[f.key]) ? data[f.key] : []) as SheetData[];
+      for (const it of items) {
+        const parts = applicable(f.item, c)
+          .filter((x) => x.key !== "name")
+          .map((x) => {
+            const v = formatValue(x, it[x.key]);
+            return v ? `${x.label}: ${v}` : null;
+          })
+          .filter(Boolean);
+        out.push(`${String(it.name ?? f.itemLabel)} — ${parts.join("; ")}`);
+      }
+      continue;
+    }
+    const v = formatValue(f, data[f.key]);
+    if (v && !(f.type === "bool" && v === "No")) out.push(`${f.label}: ${v}`);
+  }
+  return out;
 }

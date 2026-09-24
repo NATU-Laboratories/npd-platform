@@ -235,6 +235,27 @@ export function SheetPanel({
                   )}
                 </div>
 
+                {!!e.section.dependsOn?.length && (
+                  <div className="rounded-lg border border-slate-200 bg-white p-3">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Información de partida</p>
+                    <ul className="flex flex-col gap-1.5">
+                      {e.section.dependsOn.map((key) => {
+                        const dep = entries.find((x) => x.section.key === key);
+                        if (!dep) return null;
+                        return (
+                          <li key={key} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                            <a href={`#ficha-${key}`} className="hover:underline">
+                              <span className="mr-1.5 inline-block size-2 rounded-full align-middle" style={{ background: dep.dept.color }} aria-hidden />
+                              {dep.title} <span className="text-xs text-slate-500">· {dep.dept.name}</span>
+                            </a>
+                            <Pill e={dep} />
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+
                 {e.status === "na" && (
                   <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-600">
                     No aplica · {e.statusBy} el {formatDate(e.statusAt)}

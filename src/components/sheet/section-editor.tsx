@@ -131,7 +131,7 @@ export function SectionEditor({
                     const id = `sheet-${sectionKey}-${f.key}`;
                     if (f.type === "files") {
                       return (
-                        <Field key={f.key} label={f.label} required={f.required} hint={f.hint} className="sm:col-span-2">
+                        <Field key={f.key} label={f.label} required={f.required || f.requiredIf?.(data)} hint={f.hint} className="sm:col-span-2">
                           <Uploader
                             projectId={projectId}
                             phase={section.phase}
@@ -168,7 +168,7 @@ export function SectionEditor({
                                   <Field
                                     key={x.key}
                                     label={x.label}
-                                    required={x.required}
+                                    required={x.required || x.requiredIf?.(it)}
                                     htmlFor={`${id}-${i}-${x.key}`}
                                     className={cn((x.type === "textarea" || x.type === "tags") && "sm:col-span-2")}
                                   >
@@ -189,7 +189,7 @@ export function SectionEditor({
                       <Field
                         key={f.key}
                         label={f.label}
-                        required={f.required}
+                        required={f.required || f.requiredIf?.(data)}
                         hint={f.hint}
                         htmlFor={id}
                         className={cn((f.type === "textarea" || f.type === "multi") && "sm:col-span-2")}

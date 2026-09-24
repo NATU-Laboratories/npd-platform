@@ -58,8 +58,9 @@ Cada proyecto tiene una **ficha técnica** con un apartado por departamento, que
 | Cotización y condiciones comerciales | Comercial | 1 Cotización | Cotización enviada y P2 aprobado (automático), precio unitario, precio objetivo y PVP recomendado (los documentos de cotización y aprobación son opcionales) |
 | Fórmula y pirámide olfativa | Laboratorio / I+D | 3 Desarrollo | Al menos una referencia, con su pirámide (perfumería/ambientación), y al menos una aprobada por el cliente |
 | Envase y packaging | Marketing / NPD | 3 Desarrollo | Frasco, tapón y tipo de packaging secundario |
-| Calidad y regulatorio · requisitos de etiqueta | Calidad y Regulatory | 3 Desarrollo | Pictogramas, idiomas e INCI |
-| Etiqueta y artes finales | Diseño | 4 Diseño y AAFF | Tipo y ubicación de etiqueta, artes finales y aprobación del cliente |
+| Identificación del producto | Marketing / NPD | 3 Desarrollo | Nombre comercial (naming, precargado del brief), tipo y código de barras (EAN-13/EAN-8 validado) y QR (sí/no + destino) |
+| Calidad y regulatorio · requisitos de etiqueta | Calidad y Regulatory | 3 Desarrollo | Denominación legal (precargada del formato), cantidad en ml (fl oz y ℮ opcionales), idiomas (precargados de los mercados), iconos de reciclaje, de peligro y otros (PAO…), INCI, modo de uso, precauciones, responsable (figura, nombre, dirección, país), UFI (no aplica / pendiente / disponible + código) y lote |
+| Etiqueta y artes finales | Diseño | 4 Diseño y AAFF | Troquel (existente con referencia / nuevo con medidas), tipo y ubicación de etiqueta, artes finales y aprobación del cliente. Parte de la información de Identificación, Calidad y regulatorio, Fórmula y Envase: al abrirse su fase, Diseño recibe por email todo lo rellenado en esos apartados |
 | Preparación para producción | Operaciones | 5 Preparación | Fecha prevista, materiales pedidos y escandallo final |
 
 - Solo los **miembros** del departamento del apartado, el **decisor global** y los administradores editan el apartado; el resto de usuarios solo lo ve. Pueden adjuntar documentos y marcarlo como **terminado** (exige que no falte nada obligatorio) o **no aplica** (con motivo). La asignación apartado → departamento es configurable.
