@@ -78,14 +78,6 @@ export const FIELDS: FieldDef[] = [
 
   // Bloque olfativo
   { key: "olfactory.families", label: "Familias olfativas", step: 3, level: "required", when: needsOlfactory },
-  {
-    key: "olfactory.notes",
-    label: "Notas (salida / corazón / fondo)",
-    step: 3,
-    level: "recommended",
-    when: needsOlfactory,
-    filled: (d) => !!(d.olfactory?.top?.length || d.olfactory?.heart?.length || d.olfactory?.base?.length),
-  },
   { key: "olfactory.intensity", label: "Intensidad", step: 3, level: "recommended", when: needsOlfactory },
   {
     key: "olfactory.inspirations",

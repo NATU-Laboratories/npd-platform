@@ -110,10 +110,16 @@ export const ROLE_LABEL = {
 export const FILE_TAGS = {
   moodboard: "Moodboard",
   referencia: "Referencia",
+  inspiracion: "Inspiración",
   brief_cliente: "Brief del cliente",
   packaging: "Packaging",
   evidencia_cliente: "Evidencia del cliente",
   cotizacion: "Cotización",
+  aprobacion_cliente: "Aprobación del cliente",
+  formula: "Fórmula / pruebas",
+  arte_final: "Arte final",
+  regulatorio: "Documentación regulatoria",
+  escandallo: "Escandallo",
   blacklist: "Blacklist",
   otro: "Otro",
 } as const;
@@ -136,6 +142,10 @@ export const ACTION_LABEL: Record<string, string> = {
   "info.answered": "respondió a la petición de información",
   "comment.created": "comentó",
   "file.uploaded": "subió un archivo",
+  "sheet.updated": "actualizó la ficha técnica",
+  "sheet.done": "terminó un apartado de la ficha técnica",
+  "sheet.na": "marcó un apartado como no aplicable",
+  "sheet.reopened": "reabrió un apartado de la ficha técnica",
   "file.deleted": "eliminó un archivo",
   "sharepoint.provisioned": "creó la carpeta en SharePoint",
 };

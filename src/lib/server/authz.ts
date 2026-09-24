@@ -27,6 +27,8 @@ export type CurrentUser = {
   roles: RoleKey[];
   departmentIds: number[];
   departmentKeys: string[];
+  /** Departamentos de los que es responsable (edita su apartado de la ficha técnica). */
+  leadDepartmentKeys: string[];
   deciderFor: { gate: GateKey; projectType: "PL" | "MP" | "MDD" }[];
 };
 
@@ -47,7 +49,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const [roleRows, deptRows, deciderRows] = await Promise.all([
     db.select({ key: roles.key }).from(userRoles).innerJoin(roles, eq(roles.id, userRoles.roleId)).where(eq(userRoles.userId, id)),
     db
-      .select({ id: departments.id, key: departments.key })
+      .select({ id: departments.id, key: departments.key, isLead: departmentMembers.isLead })
       .from(departmentMembers)
       .innerJoin(departments, eq(departments.id, departmentMembers.departmentId))
       .where(eq(departmentMembers.userId, id)),
@@ -61,6 +63,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     roles: roleRows.map((r) => r.key),
     departmentIds: deptRows.map((d) => d.id),
     departmentKeys: deptRows.map((d) => d.key ?? ""),
+    leadDepartmentKeys: deptRows.filter((d) => d.isLead && d.key).map((d) => d.key!),
     deciderFor: deciderRows,
   };
 });

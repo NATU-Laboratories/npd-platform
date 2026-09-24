@@ -45,7 +45,26 @@ Tipos de proyecto: **PL** (marca privada), **MP** (marca propia) y **MDD** (marc
 
 Subcarpetas SharePoint: `00 Solicitud`, `01 Cotización`, `02 Valoración cliente`, `03 Desarrollo`, `04 Diseño-AAFF`, `05 Preparación producción`.
 
-Brief (revisión): género obligatorio con selección múltiple (mujer / hombre / unisex); se eliminan estilo, rango de edad, estacionalidad, alérgenos, % natural, vegano y certificaciones; se añade **Blacklist** (texto pegado y/o adjunto, opcional) y enlace a **Fragrantica** en cada referencia de inspiración.
+Brief (revisión): género obligatorio con selección múltiple (mujer / hombre / unisex); se eliminan estilo, rango de edad, estacionalidad, alérgenos, % natural, vegano y certificaciones; se añade **Blacklist** (texto pegado y/o adjunto, opcional) y enlace a **Fragrantica** en cada referencia de inspiración. Revisión posterior: se quitan las notas de salida/corazón/fondo del brief (la pirámide la define I+D en la ficha técnica), se permite subir varios archivos de inspiración y se elimina el canal Horeca.
+
+### 2.1 bis Ficha técnica por departamento (revisión 24/09/2026)
+
+Cada proyecto tiene una **ficha técnica** con un apartado por departamento, que se completa conforme avanza el proyecto y queda a la vista de todos los departamentos implicados:
+
+| Apartado | Departamento (por defecto) | Fase | Obligatorio para terminar |
+|---|---|---|---|
+| Cotización y condiciones comerciales | Comercial | 1 Cotización | Cotización enviada y G2 aprobado (automático), precio unitario, precio objetivo, PVP recomendado, PDF de cotización y aprobación del cliente |
+| Fórmula y pirámide olfativa | Laboratorio / I+D | 3 Desarrollo | Al menos una referencia, con su pirámide (perfumería/ambientación), y al menos una aprobada por el cliente |
+| Envase y packaging | Marketing / NPD | 3 Desarrollo | Frasco, tapón y tipo de packaging secundario |
+| Calidad y regulatorio · requisitos de etiqueta | Calidad y Regulatory | 3 Desarrollo | Pictogramas, idiomas e INCI |
+| Etiqueta y artes finales | Diseño | 4 Diseño y AAFF | Tipo y ubicación de etiqueta, artes finales y aprobación del cliente |
+| Preparación para producción | Operaciones | 5 Preparación | Fecha prevista, materiales pedidos y escandallo final |
+
+- Solo los **responsables** del departamento (varios por departamento, en el backoffice) y los administradores editan su apartado, adjuntan documentos y lo marcan como **terminado** (exige que no falte nada obligatorio) o **no aplica** (con motivo). La asignación apartado → departamento es configurable.
+- La ficha muestra un resumen de lo hecho y lo que falta por departamento. Al avanzar de fase se avisa si quedan apartados sin terminar (se puede avanzar igualmente confirmándolo).
+- Al entrar en una fase se notifica a los departamentos con apartados en ella, con lo ya disponible en la ficha. Al terminar un apartado se notifica al solicitante, al comercial de la cuenta y a Marketing.
+- Los apartados pendientes de los que un usuario es responsable aparecen en "Requieren mi acción".
+- Calidad y Regulatory pasan a ser un único departamento.
 
 ### 2.2 Resultados posibles de una puerta
 

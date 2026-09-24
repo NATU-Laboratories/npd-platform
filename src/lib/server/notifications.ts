@@ -272,7 +272,7 @@ export function notifyProjectEvent(
     intro: string;
     message?: { label: string; body: string } | null;
     extraRows?: [string, string][];
-    to: { requester?: boolean; accountManager?: boolean; departments?: boolean; deciders?: GateKey };
+    to: { requester?: boolean; accountManager?: boolean; departments?: boolean; departmentKeys?: string[]; deciders?: GateKey };
   },
 ) {
   return safely(event, async () => {
@@ -284,6 +284,7 @@ export function notifyProjectEvent(
       const ids = (await db.execute<{ department_id: number }>(sql`select department_id from project_departments where project_id = ${p.id}`)).rows.map((r) => r.department_id);
       recipients.push(...(await departmentEmails({ ids })));
     }
+    if (opts.to.departmentKeys?.length) recipients.push(...(await departmentEmails({ keys: opts.to.departmentKeys })));
     if (opts.to.deciders && p.type) recipients.push(...(await deciderEmails(opts.to.deciders, p.type)));
     await queueNotification({
       event,

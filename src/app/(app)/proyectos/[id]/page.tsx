@@ -4,10 +4,10 @@ import { AlertTriangle, ExternalLink, FileText, FolderOpen, Pencil } from "lucid
 import { ActivityTimeline, type ActivityItem } from "@/components/project/activity-timeline";
 import { CommentComposer } from "@/components/project/comment-composer";
 import { GateDialog } from "@/components/project/gate-dialog";
-import { OlfactoryPyramid } from "@/components/project/olfactory-pyramid";
 import { ProjectAction } from "@/components/project/project-actions";
 import { AdvanceDialog, BudgetDialog, PrepaymentReceivedDialog, QuoteDialog } from "@/components/project/phase-dialogs";
 import { NeededBySignal } from "@/components/needed-by";
+import { SheetPanel } from "@/components/sheet/sheet-panel";
 import { Uploader } from "@/components/uploader";
 import { Badge, DeptChip, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import { canDecideGate, canEditBrief, canManageProject, canSendQuote, canViewPro
 import { getActiveUsers, getAllCatalogs, getBrands, getDepartments } from "@/lib/server/catalogs";
 import { loadProjectDetail, templatesWithDepartments, templateScore } from "@/lib/server/project-detail";
 import { getSettings } from "@/lib/server/settings";
+import { canEditSection, loadSheet, pendingUpTo } from "@/lib/server/sheet";
 import { canTransition } from "@/lib/server/state-machine";
 import { cn, formatBytes, formatDate, formatEuro, formatNumber } from "@/lib/utils";
 
@@ -55,14 +56,17 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
   const p = d.p;
   const b = p.brief;
 
-  const [settings, catalogs, brands, users, departments, templates] = await Promise.all([
+  const [settings, catalogs, brands, users, departments, templates, sheet] = await Promise.all([
     getSettings(),
     getAllCatalogs(),
     getBrands(false),
     getActiveUsers(),
     getDepartments(),
     templatesWithDepartments(),
+    loadSheet(p),
   ]);
+  const showSheet = p.phase >= 1 || p.status === "in_production";
+  const sheetPending = pendingUpTo(sheet.entries, p.phase).map((e) => `${e.title} (${e.dept.name})`);
   const lookups: Lookups = {
     catalog: Object.fromEntries(Object.entries(catalogs).map(([k, v]) => [k, Object.fromEntries(v.map((o) => [o.value, o.label]))])),
     brands: Object.fromEntries(brands.map((x) => [x.id, x.name])),
@@ -159,6 +163,21 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
           text: "editó el brief",
           changes: Object.entries(diff as Record<string, { from: unknown; to: unknown }>).map(([k, v]) => ({ field: fieldLabel(k), from: fmt(v?.from), to: fmt(v?.to) })),
         };
+      case "sheet.updated": {
+        const fields = (diff.fields as string[] | undefined) ?? [];
+        return {
+          ...base,
+          group: "ficha",
+          text: `actualizó «${diff.title ?? diff.section}» en la ficha técnica`,
+          detail: [fields.length ? `Campos: ${fields.join(", ")}` : null, diff.reopened ? "Vuelve a pendiente: falta información obligatoria." : null].filter(Boolean).join("\n") || null,
+        };
+      }
+      case "sheet.done":
+        return { ...base, group: "ficha", text: `marcó como terminado «${diff.title ?? diff.section}»` };
+      case "sheet.na":
+        return { ...base, group: "ficha", text: `marcó «${diff.title ?? diff.section}» como no aplicable`, detail: (diff.note as string) || null };
+      case "sheet.reopened":
+        return { ...base, group: "ficha", text: `reabrió «${diff.title ?? diff.section}»` };
       case "file.uploaded":
       case "file.deleted":
         return { ...base, group: "archivos", text: `${ACTION_LABEL[a.action]}: ${diff.name ?? ""}` };
@@ -231,7 +250,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
               />
             )}
             {canAdvance && (
-              <AdvanceDialog projectId={p.id} nextLabel={PHASES[p.phase + 1]?.name ?? ""} toProduction={p.phase === LAST_PHASE} />
+              <AdvanceDialog projectId={p.id} nextLabel={PHASES[p.phase + 1]?.name ?? ""} toProduction={p.phase === LAST_PHASE} pendingSections={sheetPending} />
             )}
             {p.status === "info_requested" && isRequester && (
               <Button asChild variant="warning">
@@ -367,6 +386,19 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
         </CardBody>
       </Card>
 
+      {/* 3. Ficha técnica por departamento */}
+      {showSheet && (
+        <SheetPanel
+          projectId={p.id}
+          entries={sheet.entries}
+          ctx={sheet.ctx}
+          files={d.files.map(({ f }) => ({ id: f.id, name: f.name, size: f.size, mime: f.mime, tag: f.tag }))}
+          editable={Object.fromEntries(sheet.entries.map((e) => [e.section.key, canEditSection(u, e.dept.key, p)]))}
+          maxMb={settings.max_file_mb}
+          noteSuggestions={(catalogs.note ?? []).map((n) => n.label)}
+        />
+      )}
+
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="flex flex-col gap-6 lg:col-span-2">
           {/* 5. Brief visual */}
@@ -374,20 +406,20 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
             <CardHeader title="Brief" description={`Completitud ${p.completenessPct}%`} />
             <CardBody className="grid gap-6 md:grid-cols-2">
               {needsOlfactory(b) ? (
-                <div className="flex flex-col gap-3">
-                  <OlfactoryPyramid top={b.olfactory?.top} heart={b.olfactory?.heart} base={b.olfactory?.base} />
-                  <div className="flex flex-wrap justify-center gap-1.5">
+                <div className="flex flex-col gap-3 rounded-lg bg-slate-50 p-4">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Perfil olfativo solicitado</h3>
+                  <div className="flex flex-wrap gap-1.5">
                     {b.olfactory?.families?.map((f) => (
-                      <span key={f} className="rounded-full bg-violet-50 px-2.5 py-0.5 text-xs text-violet-800 ring-1 ring-violet-200">
+                      <span key={f} className="rounded-full bg-white px-2.5 py-0.5 text-xs text-slate-800 ring-1 ring-slate-300">
                         {f}
                       </span>
                     ))}
                   </div>
                   {!!b.olfactory?.genders?.length && (
-                    <p className="text-center text-xs text-slate-500">Género: {b.olfactory.genders.map((g) => GENDER_LABEL[g]).join(" · ")}</p>
+                    <p className="text-xs text-slate-600">Género: {b.olfactory.genders.map((g) => GENDER_LABEL[g]).join(" · ")}</p>
                   )}
                   {b.olfactory?.intensity && (
-                    <p className="text-center text-xs text-slate-500">
+                    <p className="text-xs text-slate-600">
                       Intensidad{" "}
                       <span aria-label={`${b.olfactory.intensity} de 5`}>
                         {"●".repeat(b.olfactory.intensity)}
@@ -395,6 +427,12 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
                       </span>
                       {b.olfactory.duration ? ` · ${b.olfactory.duration}` : ""}
                     </p>
+                  )}
+                  {b.olfactory?.blacklist && <p className="whitespace-pre-line text-xs text-slate-600">Blacklist: {b.olfactory.blacklist}</p>}
+                  {showSheet && (
+                    <a href="#ficha-formula" className="text-xs font-medium text-slate-700 underline underline-offset-2 hover:text-slate-900">
+                      Pirámides desarrolladas y aprobadas → ficha técnica
+                    </a>
                   )}
                 </div>
               ) : (

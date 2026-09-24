@@ -1,7 +1,7 @@
 "use client";
 import { ExternalLink, Plus, Trash2 } from "lucide-react";
 import type * as React from "react";
-import { ChipGroup, TagInput } from "@/components/ui/chips";
+import { ChipGroup } from "@/components/ui/chips";
 import { Field, Input, Textarea } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import type { Option } from "@/lib/catalog-defaults";
@@ -11,9 +11,6 @@ type Inspiration = { product: string; brand: string; likes: string; url?: string
 
 export type OlfactoryState = {
   families?: string[];
-  top?: string[];
-  heart?: string[];
-  base?: string[];
   intensity?: number | string;
   duration?: string;
   inspirations?: Inspiration[];
@@ -34,21 +31,21 @@ export function OlfactoryFields({
   value,
   onChange,
   families,
-  notes,
   highlight,
   errorFor,
   blacklistUpload,
+  inspirationUpload,
 }: {
   value: OlfactoryState;
   onChange: (v: OlfactoryState) => void;
   families: Option[];
-  notes: Option[];
   highlight: (key: string) => boolean;
   errorFor: (key: string) => string | undefined;
   blacklistUpload?: React.ReactNode;
+  /** Subida de imágenes/documentos de las referencias de inspiración (varios archivos). */
+  inspirationUpload?: React.ReactNode;
 }) {
   const set = <K extends keyof OlfactoryState>(k: K, v: OlfactoryState[K]) => onChange({ ...value, [k]: v });
-  const noteNames = notes.map((n) => n.label);
   const insp = value.inspirations ?? [];
   const setInsp = (idx: number, patch: Partial<Inspiration>) => set("inspirations", insp.map((x, j) => (j === idx ? { ...x, ...patch } : x)));
 
@@ -63,18 +60,6 @@ export function OlfactoryFields({
       <Field label="Género" required hint="Puedes elegir varios." error={errorFor("olfactory.genders")} highlight={highlight("olfactory.genders")}>
         <ChipGroup options={GENDER_OPTIONS} value={value.genders ?? []} onChange={(v) => set("genders", v)} ariaLabel="Género" />
       </Field>
-
-      <div className={cn("grid gap-3 sm:grid-cols-3", highlight("olfactory.notes") && "field-highlight p-2")}>
-        <Field label="Notas de salida" recommended>
-          <TagInput value={value.top ?? []} onChange={(v) => set("top", v)} suggestions={noteNames} placeholder="p. ej. bergamota" chipClassName="bg-amber-50 text-amber-900 ring-amber-200" />
-        </Field>
-        <Field label="Notas de corazón" recommended>
-          <TagInput value={value.heart ?? []} onChange={(v) => set("heart", v)} suggestions={noteNames} placeholder="p. ej. jazmín" chipClassName="bg-rose-50 text-rose-900 ring-rose-200" />
-        </Field>
-        <Field label="Notas de fondo" recommended>
-          <TagInput value={value.base ?? []} onChange={(v) => set("base", v)} suggestions={noteNames} placeholder="p. ej. vainilla" chipClassName="bg-stone-100 text-stone-800 ring-stone-300" />
-        </Field>
-      </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Intensidad" recommended highlight={highlight("olfactory.intensity")}>
@@ -133,6 +118,12 @@ export function OlfactoryFields({
           <Button type="button" variant="secondary" size="sm" className="self-start" onClick={() => set("inspirations", [...insp, { product: "", brand: "", likes: "", url: "" }])}>
             <Plus /> Añadir referencia
           </Button>
+          {inspirationUpload && (
+            <div className="mt-1">
+              <p className="mb-1 text-xs text-slate-500">Imágenes o documentos de las referencias (puedes subir varios a la vez).</p>
+              {inspirationUpload}
+            </div>
+          )}
         </div>
       </Field>
 
