@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { AlertTriangle, ArrowDown, ArrowUp, ChevronRight, FileEdit } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronRight, FileEdit } from "lucide-react";
 import { MonthlyChart, PhaseFunnel } from "@/components/dashboard/charts";
+import { DashboardKpis } from "@/components/dashboard/kpis";
 import { Filters } from "@/components/dashboard/filters";
 import { StatusBadge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -13,23 +14,6 @@ import { cn, formatDate } from "@/lib/utils";
 import { NeededBySignal } from "@/components/needed-by";
 
 export const metadata = { title: "Panel" };
-
-function Kpi({ label, value, hint, href, tone }: { label: string; value: React.ReactNode; hint?: React.ReactNode; href?: string; tone?: "warn" }) {
-  const body = (
-    <Card className={cn("h-full px-4 py-3", href && "transition-colors hover:border-brand-300")}>
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className={cn("mt-1 text-2xl font-semibold tabular-nums text-slate-900", tone === "warn" && "text-amber-700")}>{value}</p>
-      {hint && <p className="mt-0.5 text-xs text-slate-500">{hint}</p>}
-    </Card>
-  );
-  return href ? (
-    <Link href={href} className="block">
-      {body}
-    </Link>
-  ) : (
-    body
-  );
-}
 
 function sortHref(f: ProjectFilters, key: string) {
   const sp = new URLSearchParams(Object.entries(f).filter(([, v]) => v) as [string, string][]);
@@ -64,7 +48,6 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
     filterOptions(),
   ]);
   const t = stats.totals;
-  const decided = t.approvedG1 + t.rejectedG1;
 
   const pageLink = (p: number) => {
     const sp = new URLSearchParams(Object.entries(f).filter(([, v]) => v) as [string, string][]);
@@ -106,27 +89,18 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
         <Filters {...options} />
       </Suspense>
 
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8" aria-label="Indicadores">
-        <Kpi label="Proyectos" value={t.total} hint="Según los filtros" />
-        <Kpi label="Solicitados" value={t.solicitados} href="/?status=g:solicitados" hint="Incl. pendiente de info" />
-        <Kpi label="En proceso" value={t.enProceso} href="/?status=g:en_proceso" hint="Incl. en pausa" />
-        <Kpi label="Cerrados" value={t.cerrados} href="/?status=g:cerrados" hint="En producción" />
-        <Kpi label="Rechazados" value={t.rechazados} href="/?status=g:rechazados" hint="Incl. cancelados" />
-        <Kpi
-          label="En riesgo"
-          value={
-            <span className="inline-flex items-center gap-1.5">
-              {t.atRisk > 0 && <AlertTriangle className="size-5" />}
-              {t.atRisk}
-            </span>
-          }
-          hint={`Fecha < ${settings.risk_days} días`}
-          href="/?risk=1"
-          tone={t.atRisk > 0 ? "warn" : undefined}
-        />
-        <Kpi label="Tiempo hasta G1" value={t.avgDaysToG1 == null ? "—" : `${t.avgDaysToG1.toFixed(1)} d`} />
-        <Kpi label="Aprobados en G1" value={decided ? `${Math.round((t.approvedG1 / decided) * 100)}%` : "—"} hint={`${t.approvedG1} de ${decided}`} />
-      </section>
+      <DashboardKpis
+        total={t.total}
+        solicitados={t.solicitados}
+        enProceso={t.enProceso}
+        cerrados={t.cerrados}
+        rechazados={t.rechazados}
+        atRisk={t.atRisk}
+        riskDays={settings.risk_days}
+        avgDaysToG1={t.avgDaysToG1}
+        approvedG1={t.approvedG1}
+        rejectedG1={t.rejectedG1}
+      />
 
       <section className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">

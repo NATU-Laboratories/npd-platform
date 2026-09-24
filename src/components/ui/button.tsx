@@ -1,6 +1,9 @@
+"use client";
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
+import { Loader2 } from "lucide-react";
 import * as React from "react";
+import { useFormStatus } from "react-dom";
 import { cn } from "@/lib/utils";
 
 export const buttonVariants = cva(
@@ -31,5 +34,15 @@ export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> &
 
 export function Button({ className, variant, size, asChild, ...props }: ButtonProps) {
   const Comp = asChild ? Slot : "button";
+  // Botón de envío de un <form action={serverAction}>: feedback inmediato mientras el servidor responde.
+  const { pending } = useFormStatus();
+  if (!asChild && props.type === "submit" && pending) {
+    return (
+      <Comp className={cn(buttonVariants({ variant, size }), className)} {...props} disabled aria-busy>
+        <Loader2 className="animate-spin" aria-hidden />
+        {props.children}
+      </Comp>
+    );
+  }
   return <Comp className={cn(buttonVariants({ variant, size }), className)} {...props} />;
 }

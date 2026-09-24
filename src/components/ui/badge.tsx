@@ -1,6 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import { STATUS_COLOR, statusLabel } from "@/lib/labels";
+import { FIRST_RUNNING_PHASE, STATUS_COLOR, statusLabel, VALIDATION_COLOR } from "@/lib/labels";
 import type { ProjectStatus } from "@/db/schema";
 
 export function Badge({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) {
@@ -8,7 +8,8 @@ export function Badge({ className, ...props }: React.HTMLAttributes<HTMLSpanElem
 }
 
 export function StatusBadge({ status, phase, className }: { status: ProjectStatus; phase?: number | null; className?: string }) {
-  return <Badge className={cn(STATUS_COLOR[status], className)}>{statusLabel(status, phase)}</Badge>;
+  const validating = status === "in_progress" && phase != null && phase < FIRST_RUNNING_PHASE;
+  return <Badge className={cn(validating ? VALIDATION_COLOR : STATUS_COLOR[status], className)}>{statusLabel(status, phase)}</Badge>;
 }
 
 export function DeptChip({ name, color }: { name: string; color: string }) {

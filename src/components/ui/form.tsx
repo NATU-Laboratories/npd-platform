@@ -50,7 +50,7 @@ export function Field({
       <Label htmlFor={htmlFor} className="flex items-center gap-1.5">
         {label}
         {required && <span className="text-rose-600" aria-label="obligatorio">*</span>}
-        {recommended && <span className="rounded bg-sky-50 px-1.5 text-[10px] font-medium uppercase tracking-wide text-sky-700">recomendado</span>}
+        {recommended && <span className="rounded bg-[#eef0e6] px-1.5 text-[10px] font-medium uppercase tracking-wide text-[#56613f]">recomendado</span>}
       </Label>
       {children}
       {hint && !error && <p className="text-xs text-slate-500">{hint}</p>}

@@ -1,17 +1,47 @@
 @import "tailwindcss";
 
+/*
+ * Identidad NATU Laboratories (Brand Book v1.0, 2024):
+ *  - Principales: gris oscuro #3E3F3E y gris cálido #DAD7D1 (80 % neutros).
+ *  - Complementarios (20 % acentos): salmón #E2A29A, melocotón #E4BCA5, verde salvia #D3D7C4, beige #DCD5BE.
+ *  - Tipografía: Montserrat (principal) y Athelas/Georgia (acentos editoriales).
+ *
+ * `brand`: 50–400 tintes de salmón (selección, resaltados) y 600–900 gris oscuro NATU (acciones, cabecera).
+ * `slate` se redefine como escala de grises cálidos para que todo el interfaz use los neutros de marca.
+ */
 @theme {
-  --color-brand-50: #f0f7f6;
-  --color-brand-100: #d9ecea;
-  --color-brand-200: #b3d8d4;
-  --color-brand-300: #7fbab4;
-  --color-brand-400: #4c9891;
-  --color-brand-500: #2d7c75;
-  --color-brand-600: #0f5f5a;
-  --color-brand-700: #0c4c48;
-  --color-brand-800: #0a3d3a;
-  --color-brand-900: #072b29;
-  --font-sans: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --color-brand-50: #fbf4f2;
+  --color-brand-100: #f6e5e1;
+  --color-brand-200: #efcfc9;
+  --color-brand-300: #e2a29a;
+  --color-brand-400: #cf8579;
+  --color-brand-500: #b0675b;
+  --color-brand-600: #3e3f3e;
+  --color-brand-700: #333433;
+  --color-brand-800: #2a2b2a;
+  --color-brand-900: #1f201f;
+
+  --color-slate-50: #f8f7f5;
+  --color-slate-100: #f1efeb;
+  --color-slate-200: #e4e1dc;
+  --color-slate-300: #d0ccc5;
+  --color-slate-400: #a6a19a;
+  --color-slate-500: #77736d;
+  --color-slate-600: #5b5955;
+  --color-slate-700: #474745;
+  --color-slate-800: #3e3f3e;
+  --color-slate-900: #2b2b2a;
+  --color-slate-950: #1c1c1b;
+
+  --color-natu-dark: #3e3f3e;
+  --color-natu-warm: #dad7d1;
+  --color-natu-salmon: #e2a29a;
+  --color-natu-peach: #e4bca5;
+  --color-natu-sage: #d3d7c4;
+  --color-natu-beige: #dcd5be;
+
+  --font-sans: "Montserrat Variable", "Montserrat", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  --font-serif: Athelas, Georgia, "Times New Roman", serif;
 }
 
 :root {

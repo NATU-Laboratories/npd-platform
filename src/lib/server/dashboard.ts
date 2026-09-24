@@ -189,7 +189,7 @@ export async function dashboardStats(u: CurrentUser, f: ProjectFilters, riskDays
         count(*) filter (where type = 'PL')::int as pl,
         count(*) filter (where type = 'MP')::int as mp,
         count(*) filter (where decided_g1_at is not null)::int as approved_g1,
-        count(*) filter (where status = 'rejected')::int as rejected_g1,
+        count(*) filter (where status = 'rejected' and decided_g1_at is null)::int as rejected_g1,
         avg(extract(epoch from (decided_g1_at - requested_at)) / 86400) as avg_days_g1,
         count(*) filter (where status in ('submitted','info_requested','in_progress','paused') and needed_by <= current_date + ${riskDays}::int)::int as at_risk
       from ${base}`),
