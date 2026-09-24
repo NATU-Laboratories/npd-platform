@@ -98,7 +98,9 @@ export async function deleteFileAction(fileId: number): Promise<ActionResult> {
     const [f] = await db.select({ f: files, p: projects }).from(files).innerJoin(projects, eq(projects.id, files.projectId)).where(eq(files.id, fileId));
     if (!f) return { ok: false, error: "No encontrado" };
     const own = f.f.uploadedBy === u.id;
-    if (!(own && (f.p.status === "draft" || canEditBrief(u, f.p))) && !isAdmin(u)) return { ok: false, error: "Sin permiso" };
+    // Cada persona puede borrar lo que ha subido mientras el proyecto siga abierto (brief y ficha técnica)
+    const open = !["rejected", "cancelled"].includes(f.p.status);
+    if (!(own && open) && !isAdmin(u)) return { ok: false, error: "Sin permiso" };
     await getStorage().deleteItem(f.f.sharepointItemId).catch(() => undefined);
     await db.delete(files).where(and(eq(files.id, fileId)));
     if (f.p.status !== "draft") {

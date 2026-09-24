@@ -119,9 +119,6 @@ export function briefSections(b: BriefData, l: Lookups): Section[] {
       step: 3,
       rows: [
         ["Familias", list(o.families)],
-        ["Notas de salida", list(o.top)],
-        ["Notas de corazón", list(o.heart)],
-        ["Notas de fondo", list(o.base)],
         ["Intensidad", o.intensity ? `${o.intensity} / 5` : null],
         ["Duración deseada", o.duration ?? null],
         ["Género", o.genders?.length ? o.genders.map((g) => GENDER_LABEL[g]).join(", ") : null],

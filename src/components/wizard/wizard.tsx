@@ -50,8 +50,9 @@ export function Wizard(props: WizardProps) {
   const [serverErrors, setServerErrors] = React.useState<Record<string, string>>({});
   const [submitting, setSubmitting] = React.useState(false);
   const [answer, setAnswer] = React.useState("");
-  const [files, setFiles] = React.useState(() => props.files.filter((f) => f.tag !== "blacklist"));
+  const [files, setFiles] = React.useState(() => props.files.filter((f) => f.tag !== "blacklist" && f.tag !== "inspiracion"));
   const [blacklistFiles, setBlacklistFiles] = React.useState(() => props.files.filter((f) => f.tag === "blacklist"));
+  const [inspirationFiles, setInspirationFiles] = React.useState(() => props.files.filter((f) => f.tag === "inspiracion"));
   const [clients, setClients] = React.useState<Record<number, ClientLite>>(() => Object.fromEntries(props.clients.map((c) => [c.id, c])));
   const topRef = React.useRef<HTMLDivElement>(null);
 
@@ -514,9 +515,20 @@ export function Wizard(props: WizardProps) {
                     value={(brief.olfactory ?? {}) as OlfactoryState}
                     onChange={(v) => set("olfactory", v as BriefInput["olfactory"])}
                     families={opts("olfactory_family")}
-                    notes={opts("note")}
                     highlight={hl}
                     errorFor={errorFor}
+                    inspirationUpload={
+                      <Uploader
+                        projectId={project.id}
+                        phase={0}
+                        initial={inspirationFiles}
+                        maxMb={props.settings.max_file_mb}
+                        onChange={setInspirationFiles}
+                        defaultTag="inspiracion"
+                        showTags={false}
+                        compact
+                      />
+                    }
                     blacklistUpload={
                       <Uploader
                         projectId={project.id}
@@ -600,7 +612,7 @@ export function Wizard(props: WizardProps) {
               ))}
               <div className="rounded-lg border border-slate-200 px-4 py-3 text-sm">
                 <p className="text-xs text-slate-500">Adjuntos</p>
-                <p>{files.length || blacklistFiles.length ? [...files, ...blacklistFiles].map((f) => f.name).join(", ") : "—"}</p>
+                <p>{files.length || inspirationFiles.length || blacklistFiles.length ? [...files, ...inspirationFiles, ...blacklistFiles].map((f) => f.name).join(", ") : "—"}</p>
               </div>
               {props.canAnswer && (
                 <Field label="Respuesta a la petición de información" htmlFor="answer" required error={serverErrors.answer}>

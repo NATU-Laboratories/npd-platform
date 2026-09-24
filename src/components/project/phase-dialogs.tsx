@@ -250,9 +250,22 @@ export function BudgetDialog({
 
 // ─── Fases 3–6: avanzar ───────────────────────────────────────────────────
 
-export function AdvanceDialog({ projectId, nextLabel, toProduction }: { projectId: string; nextLabel: string; toProduction: boolean }) {
+export function AdvanceDialog({
+  projectId,
+  nextLabel,
+  toProduction,
+  pendingSections = [],
+}: {
+  projectId: string;
+  nextLabel: string;
+  toProduction: boolean;
+  /** Apartados de la ficha técnica sin terminar hasta la fase actual. */
+  pendingSections?: string[];
+}) {
   const [open, setOpen] = React.useState(false);
   const [comment, setComment] = React.useState("");
+  const [force, setForce] = React.useState(false);
+  const blocked = pendingSections.length > 0 && !force;
   const { busy, run } = useAction();
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -265,6 +278,20 @@ export function AdvanceDialog({ projectId, nextLabel, toProduction }: { projectI
         title={toProduction ? "Pasar a producción" : `Avanzar a «${nextLabel}»`}
         description={toProduction ? "El proyecto se cierra con éxito y pasa a SAP / producción." : "Se notificará al solicitante y a los departamentos implicados."}
       >
+        {pendingSections.length > 0 && (
+          <div className="mb-4 rounded-lg border border-brand-200 bg-brand-50 p-3 text-sm text-slate-800">
+            <p className="font-semibold">La ficha técnica tiene apartados sin terminar:</p>
+            <ul className="mt-1 list-disc pl-5">
+              {pendingSections.map((s) => (
+                <li key={s}>{s}</li>
+              ))}
+            </ul>
+            <label className="mt-3 flex items-start gap-2">
+              <input type="checkbox" className="mt-0.5 size-4 accent-brand-600" checked={force} onChange={(e) => setForce(e.target.checked)} />
+              <span>Avanzar igualmente. Los departamentos podrán completarlos después.</span>
+            </label>
+          </div>
+        )}
         <Field label="Comentario" hint="Opcional">
           <Textarea rows={3} value={comment} onChange={(e) => setComment(e.target.value)} autoFocus />
         </Field>
@@ -272,7 +299,7 @@ export function AdvanceDialog({ projectId, nextLabel, toProduction }: { projectI
           <Button variant="secondary" onClick={() => setOpen(false)}>
             Cancelar
           </Button>
-          <Button disabled={busy} onClick={() => run(() => advancePhaseAction(projectId, comment), toProduction ? "Proyecto en producción" : `Fase: ${nextLabel}`, () => setOpen(false))}>
+          <Button disabled={busy || blocked} onClick={() => run(() => advancePhaseAction(projectId, comment), toProduction ? "Proyecto en producción" : `Fase: ${nextLabel}`, () => setOpen(false))}>
             {busy && <Loader2 className="animate-spin" />} Confirmar
           </Button>
         </div>

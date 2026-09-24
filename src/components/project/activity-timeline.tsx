@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 export type ActivityItem = {
   id: number;
-  group: "comentarios" | "decisiones" | "info" | "ediciones" | "archivos" | "otros";
+  group: "comentarios" | "decisiones" | "info" | "ediciones" | "ficha" | "archivos" | "otros";
   actor: string;
   text: string;
   detail?: string | null;
@@ -17,6 +17,7 @@ const GROUPS: [ActivityItem["group"] | "todo", string][] = [
   ["decisiones", "Decisiones"],
   ["info", "Peticiones de info"],
   ["comentarios", "Comentarios"],
+  ["ficha", "Ficha técnica"],
   ["ediciones", "Ediciones"],
   ["archivos", "Archivos"],
 ];
@@ -26,6 +27,7 @@ const DOT: Record<ActivityItem["group"], string> = {
   info: "bg-amber-500",
   comentarios: "bg-sky-500",
   ediciones: "bg-violet-500",
+  ficha: "bg-[#7f8f63]",
   archivos: "bg-slate-400",
   otros: "bg-slate-300",
 };

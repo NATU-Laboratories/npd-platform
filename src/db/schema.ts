@@ -117,6 +117,8 @@ export const departmentMembers = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    /** Responsable del departamento: edita su apartado de la ficha técnica y lo marca como terminado. */
+    isLead: boolean("is_lead").notNull().default(false),
   },
   (t) => [primaryKey({ columns: [t.departmentId, t.userId] })],
 );
@@ -537,3 +539,31 @@ export const storageUploads = pgTable("storage_uploads", {
   data: bytea("data").notNull().default(sql`''::bytea`),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// ─── Ficha técnica (apartados por departamento) ───────────────────────────
+
+export const sheetStatus = pgEnum("sheet_status", ["pending", "done", "na"]);
+
+/**
+ * Información que cada departamento aporta al proyecto conforme avanza
+ * (cotización, fórmula, envase, etiqueta, regulatorio, producción).
+ * La definición de cada apartado vive en `src/lib/sheet/sections.ts`.
+ */
+export const projectSheet = pgTable(
+  "project_sheet",
+  {
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    section: text("section").notNull(),
+    data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),
+    status: sheetStatus("status").notNull().default("pending"),
+    statusBy: uuid("status_by").references(() => users.id, { onDelete: "set null" }),
+    statusAt: timestamp("status_at", { withTimezone: true }),
+    statusNote: text("status_note"),
+    updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.section] })],
+);
+export type SheetRow = typeof projectSheet.$inferSelect;

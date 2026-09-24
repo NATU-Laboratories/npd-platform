@@ -52,7 +52,6 @@ export const CATALOG_DEFAULTS: Record<CatalogType, string[]> = {
     "perfumeria|Perfumería",
     "farmacia|Farmacia / parafarmacia",
     "online|Online",
-    "horeca|Horeca",
     "otro|Otro",
   ],
   market: [
@@ -135,8 +134,7 @@ export const BRAND_DEFAULTS = ["NATU", "BetrésON", "SevenKIDS", "Delisea"];
 export const DEPARTMENT_DEFAULTS: { key: string; name: string; color: string }[] = [
   { key: "marketing", name: "Marketing / NPD", color: "#0f766e" },
   { key: "idi", name: "Laboratorio / I+D", color: "#7c3aed" },
-  { key: "calidad", name: "Calidad", color: "#0284c7" },
-  { key: "regulatory", name: "Regulatory", color: "#4338ca" },
+  { key: "calidad", name: "Calidad y Regulatory", color: "#0284c7" },
   { key: "diseno", name: "Diseño", color: "#db2777" },
   { key: "comunicacion", name: "Comunicación", color: "#ea580c" },
   { key: "operaciones", name: "Operaciones", color: "#65a30d" },
@@ -153,7 +151,9 @@ export const SETTINGS_DEFAULTS = {
   max_file_mb: 50,
   sender_mailbox: "",
   requesters_see_all: false,
-} as const;
+  /** Reasignación de apartados de la ficha técnica a departamentos: { apartado: clave de departamento }. */
+  sheet_departments: {} as Record<string, string>,
+};
 
 export type AppSettings = {
   completeness_threshold: number;
@@ -161,4 +161,5 @@ export type AppSettings = {
   max_file_mb: number;
   sender_mailbox: string;
   requesters_see_all: boolean;
+  sheet_departments: Record<string, string>;
 };

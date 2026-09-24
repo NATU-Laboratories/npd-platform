@@ -21,7 +21,7 @@ type TaskDef = { key: string; phase: number; dept: string; title: string; deps?:
 // Fase 1 (Cotización): estudios de viabilidad y escandallo para poder cotizar.
 const concept: TaskDef[] = [
   { key: "c1", phase: 1, dept: "idi", title: "Viabilidad técnica", days: 5 },
-  { key: "c2", phase: 1, dept: "regulatory", title: "Viabilidad regulatoria", days: 5 },
+  { key: "c2", phase: 1, dept: "calidad", title: "Viabilidad regulatoria", days: 5 },
   { key: "c3", phase: 1, dept: "operaciones", title: "Escandallo inicial", days: 5 },
   { key: "c4", phase: 1, dept: "produccion", title: "Factibilidad de maquinaria", days: 3, optional: true },
   { key: "c5", phase: 1, dept: "marketing", title: "Estudio de competencia y posicionamiento", days: 7 },
@@ -31,12 +31,12 @@ const development: TaskDef[] = [
   { key: "d1", phase: 3, dept: "idi", title: "Fórmula y pruebas", days: 15 },
   { key: "d2", phase: 3, dept: "marketing", title: "Elección de envase", days: 7 },
   { key: "d3", phase: 3, dept: "idi", title: "Estabilidad y compatibilidad envase-fórmula", deps: ["d1", "d2"], days: 30 },
-  { key: "d4", phase: 3, dept: "regulatory", title: "Claims y requisitos por país", days: 7 },
+  { key: "d4", phase: 3, dept: "calidad", title: "Claims y requisitos por país", days: 7 },
   { key: "d5", phase: 3, dept: "calidad", title: "Tests externos", deps: ["d1"], days: 20, optional: true },
 ];
 const design: TaskDef[] = [
   { key: "a1", phase: 4, dept: "marketing", title: "Textos brutos (etiqueta/estuche)", days: 3 },
-  { key: "a2", phase: 4, dept: "regulatory", title: "Revisión de textos (Regulatory + Calidad)", deps: ["a1"], returns: "a1", days: 3 },
+  { key: "a2", phase: 4, dept: "calidad", title: "Revisión de textos (Calidad y Regulatory)", deps: ["a1"], returns: "a1", days: 3 },
   { key: "a3", phase: 4, dept: "comunicacion", title: "Adaptación de tono", deps: ["a2"], days: 2 },
   { key: "a4", phase: 4, dept: "diseno", title: "Artes finales", deps: ["a3"], days: 7 },
   { key: "a5", phase: 4, dept: "calidad", title: "Revisión AAFF (Calidad + Regulatory)", deps: ["a4"], returns: "a4", days: 3 },
@@ -51,9 +51,9 @@ const production: TaskDef[] = [
   { key: "p5", phase: 5, dept: "produccion", title: "Planificación con Producción", deps: ["p1"], days: 3 },
 ];
 const cosmeticReg: TaskDef[] = [
-  { key: "r1", phase: 3, dept: "regulatory", title: "Evaluación de seguridad (CPSR)", deps: ["d1"], days: 15 },
-  { key: "r2", phase: 5, dept: "regulatory", title: "Expediente de producto (PIF)", days: 10 },
-  { key: "r3", phase: 5, dept: "regulatory", title: "Notificación previa a comercialización (CPNP)", deps: ["r2"], days: 3 },
+  { key: "r1", phase: 3, dept: "calidad", title: "Evaluación de seguridad (CPSR)", deps: ["d1"], days: 15 },
+  { key: "r2", phase: 5, dept: "calidad", title: "Expediente de producto (PIF)", days: 10 },
+  { key: "r3", phase: 5, dept: "calidad", title: "Notificación previa a comercialización (CPNP)", deps: ["r2"], days: 3 },
 ];
 
 const TEMPLATES: { name: string; appliesTo: { types?: string[]; subtypes?: string[]; categories?: string[] }; tasks: TaskDef[] }[] = [
@@ -154,12 +154,12 @@ async function main() {
 
 async function seedDemo(db: ReturnType<typeof drizzle<typeof s>>, depts: Record<string, number>) {
   const roleIds = Object.fromEntries((await db.select().from(s.roles)).map((r) => [r.key, r.id]));
-  const people: { email: string; name: string; roles: s.RoleKey[]; depts: string[]; decider?: ("PL" | "MP")[] }[] = [
+  const people: { email: string; name: string; roles: s.RoleKey[]; depts: string[]; leads?: boolean; decider?: ("PL" | "MP")[] }[] = [
     { email: "admin@natu.test", name: "Irene Admin", roles: ["admin"], depts: [] },
-    { email: "comercial@natu.test", name: "Carlos Comercial", roles: ["requester"], depts: ["comercial"] },
-    { email: "marketing@natu.test", name: "Marta Marketing", roles: ["requester", "decider", "dept_member"], depts: ["marketing"], decider: ["PL", "MP"] },
-    { email: "idi@natu.test", name: "Luis Laboratorio", roles: ["dept_member"], depts: ["idi"] },
-    { email: "calidad@natu.test", name: "Carmen Calidad", roles: ["dept_member"], depts: ["calidad"] },
+    { email: "comercial@natu.test", name: "Carlos Comercial", roles: ["requester"], depts: ["comercial"], leads: true },
+    { email: "marketing@natu.test", name: "Marta Marketing", roles: ["requester", "decider", "dept_member"], depts: ["marketing"], leads: true, decider: ["PL", "MP"] },
+    { email: "idi@natu.test", name: "Luis Laboratorio", roles: ["dept_member"], depts: ["idi"], leads: true },
+    { email: "calidad@natu.test", name: "Carmen Calidad", roles: ["dept_member"], depts: ["calidad"], leads: true },
     { email: "direccion@natu.test", name: "Diego Dirección", roles: ["global_reader", "requester"], depts: ["direccion"] },
   ];
   for (const p of people) {
@@ -168,7 +168,11 @@ async function seedDemo(db: ReturnType<typeof drizzle<typeof s>>, depts: Record<
       ? [found]
       : await db.insert(s.users).values({ email: p.email, name: p.name, status: "active", isActive: true }).returning({ id: s.users.id });
     for (const r of p.roles) await db.insert(s.userRoles).values({ userId: u!.id, roleId: roleIds[r]! }).onConflictDoNothing();
-    for (const d of p.depts) await db.insert(s.departmentMembers).values({ userId: u!.id, departmentId: depts[d]! }).onConflictDoNothing();
+    for (const d of p.depts)
+      await db
+        .insert(s.departmentMembers)
+        .values({ userId: u!.id, departmentId: depts[d]!, isLead: !!p.leads })
+        .onConflictDoUpdate({ target: [s.departmentMembers.departmentId, s.departmentMembers.userId], set: { isLead: !!p.leads } });
     for (const t of p.decider ?? []) await db.insert(s.gateDeciders).values({ gate: "G1", projectType: t, userId: u!.id }).onConflictDoNothing();
   }
   for (const key of Object.keys(depts)) {

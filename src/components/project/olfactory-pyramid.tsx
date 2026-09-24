@@ -1,9 +1,9 @@
 /** Pirámide olfativa dibujada: salida (arriba) · corazón · fondo (base). */
 export function OlfactoryPyramid({ top = [], heart = [], base = [] }: { top?: string[]; heart?: string[]; base?: string[] }) {
   const tiers = [
-    { label: "Salida", notes: top, fill: "#fef3c7", stroke: "#f59e0b", text: "#78350f" },
-    { label: "Corazón", notes: heart, fill: "#ffe4e6", stroke: "#f43f5e", text: "#881337" },
-    { label: "Fondo", notes: base, fill: "#e7e5e4", stroke: "#78716c", text: "#292524" },
+    { label: "Salida", notes: top, fill: "#f7e6db", stroke: "#e4bca5", text: "#6b4331" },
+    { label: "Corazón", notes: heart, fill: "#f3d4ce", stroke: "#e2a29a", text: "#6e3a31" },
+    { label: "Fondo", notes: base, fill: "#e4e1dc", stroke: "#a6a19a", text: "#3e3f3e" },
   ];
   // Triángulo 300×240 dividido en tres franjas de 80px
   const W = 300;

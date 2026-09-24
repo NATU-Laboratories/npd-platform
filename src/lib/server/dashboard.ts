@@ -5,6 +5,8 @@ import { db } from "@/db";
 import { brands, clients, departments, projectDepartments, projects, users, type ProjectStatus } from "@/db/schema";
 import { OPEN_STATUSES, STATUS_GROUPS } from "@/lib/labels";
 import { hasRole, projectVisibility, type CurrentUser } from "./authz";
+import { SHEET_SECTIONS } from "@/lib/sheet/sections";
+import { sectionDeptKeys } from "./sheet";
 
 export type ProjectFilters = {
   q?: string;
@@ -29,9 +31,10 @@ const requester = alias(users, "requester");
 
 /**
  * "Requieren mi acción": info pedida a mí, aprobaciones G1/G2 pendientes que me
- * tocan y cotizaciones pendientes de enviar de mis cuentas.
+ * tocan, cotizaciones pendientes de enviar de mis cuentas y apartados de la
+ * ficha técnica de mis departamentos (como responsable) cuya fase ya ha llegado.
  */
-function requiresMyAction(u: CurrentUser): SQL {
+function requiresMyAction(u: CurrentUser, sectionDept: Record<string, string>): SQL {
   const mine = or(eq(projects.requesterId, u.id), eq(projects.accountManagerId, u.id))!;
   const conds: SQL[] = [
     and(eq(projects.status, "info_requested"), mine)!,
@@ -44,6 +47,12 @@ function requiresMyAction(u: CurrentUser): SQL {
   else {
     if (typesFor("G1").length) conds.push(and(g1, inArray(projects.type, typesFor("G1")))!);
     if (typesFor("G2").length) conds.push(and(g2, inArray(projects.type, typesFor("G2")))!);
+  }
+  for (const sec of SHEET_SECTIONS) {
+    if (!u.leadDepartmentKeys.includes(sectionDept[sec.key] ?? sec.dept)) continue;
+    conds.push(
+      sql`(${projects.status} in ('in_progress', 'paused') and ${projects.phase} >= ${sec.phase} and not exists (select 1 from project_sheet ps where ps.project_id = ${projects.id} and ps.section = ${sec.key} and ps.status <> 'pending'))`,
+    );
   }
   return or(...conds)!;
 }
@@ -78,7 +87,7 @@ export async function buildWhere(u: CurrentUser, f: ProjectFilters, riskDays: nu
   if (f.to && /^\d{4}-\d{2}-\d{2}$/.test(f.to)) conds.push(lte(projects.requestedAt, new Date(`${f.to}T23:59:59`)));
   if (f.risk === "1") conds.push(riskCondition(riskDays));
   if (f.mine === "1") conds.push(or(eq(projects.requesterId, u.id), eq(projects.accountManagerId, u.id))!);
-  if (f.action === "1") conds.push(requiresMyAction(u));
+  if (f.action === "1") conds.push(requiresMyAction(u, await sectionDeptKeys()));
   return and(...conds)!;
 }
 

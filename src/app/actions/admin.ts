@@ -18,6 +18,7 @@ import {
   users,
 } from "@/db/schema";
 import { CATALOG_TYPES, type AppSettings } from "@/lib/catalog-defaults";
+import { SHEET_SECTIONS } from "@/lib/sheet/sections";
 import { logActivity } from "@/lib/server/activity";
 import { requireAdminAction } from "@/lib/server/authz";
 import { retryJobs } from "@/lib/server/jobs";
@@ -46,8 +47,12 @@ export async function updateUserAction(fd: FormData) {
     await tx.delete(userRoles).where(eq(userRoles.userId, userId));
     const ids = roleRows.filter((r) => roleKeys.includes(r.key)).map((r) => r.id);
     if (ids.length) await tx.insert(userRoles).values(ids.map((roleId) => ({ userId, roleId })));
+    // Conservar la marca de responsable en los departamentos que mantiene
+    const leadOf = new Set(
+      (await tx.select().from(departmentMembers).where(eq(departmentMembers.userId, userId))).filter((m) => m.isLead).map((m) => m.departmentId),
+    );
     await tx.delete(departmentMembers).where(eq(departmentMembers.userId, userId));
-    if (deptIds.length) await tx.insert(departmentMembers).values(deptIds.map((departmentId) => ({ userId, departmentId })));
+    if (deptIds.length) await tx.insert(departmentMembers).values(deptIds.map((departmentId) => ({ userId, departmentId, isLead: leadOf.has(departmentId) })));
   });
   await audit(admin.id, "admin.user.updated", "user", userId, { email: before?.email, status: { from: before?.status, to: status }, roles: roleKeys, departments: deptIds });
   revalidatePath("/admin/usuarios");
@@ -79,7 +84,7 @@ function parseDept(fd: FormData) {
     notifyEmails: String(fd.get("notifyEmails") ?? "")
       .split(/[\s,;]+/)
       .filter(Boolean),
-    leadUserId: fd.get("leadUserId") || null,
+    leadUserId: fd.getAll("leads").map(String)[0] || null, // primer responsable (compatibilidad)
     isActive: fd.get("isActive") === "on",
   });
 }
@@ -88,7 +93,8 @@ export async function saveDepartmentAction(fd: FormData) {
   const admin = await requireAdminAction();
   const data = parseDept(fd);
   const id = fd.get("id") ? Number(fd.get("id")) : null;
-  const memberIds = fd.getAll("members").map(String);
+  const leadIds = new Set(fd.getAll("leads").map(String));
+  const memberIds = [...new Set([...fd.getAll("members").map(String), ...leadIds])];
   let deptId = id;
   if (id) {
     await db.update(departments).set(data).where(eq(departments.id, id));
@@ -98,9 +104,9 @@ export async function saveDepartmentAction(fd: FormData) {
   }
   if (fd.has("membersSubmitted")) {
     await db.delete(departmentMembers).where(eq(departmentMembers.departmentId, deptId!));
-    if (memberIds.length) await db.insert(departmentMembers).values(memberIds.map((userId) => ({ userId, departmentId: deptId! })));
+    if (memberIds.length) await db.insert(departmentMembers).values(memberIds.map((userId) => ({ userId, departmentId: deptId!, isLead: leadIds.has(userId) })));
   }
-  await audit(admin.id, id ? "admin.department.updated" : "admin.department.created", "department", deptId!, { ...data, members: memberIds.length });
+  await audit(admin.id, id ? "admin.department.updated" : "admin.department.created", "department", deptId!, { ...data, members: memberIds.length, leads: leadIds.size });
   revalidatePath("/admin/departamentos");
 }
 
@@ -201,7 +207,7 @@ export async function importClientsAction(fd: FormData) {
 export async function saveSettingsAction(fd: FormData) {
   const admin = await requireAdminAction();
   const before = await getSettings();
-  const next: AppSettings = {
+  const next: Omit<AppSettings, "sheet_departments"> = {
     completeness_threshold: z.coerce.number().int().min(0).max(100).parse(fd.get("completeness_threshold")),
     risk_days: z.coerce.number().int().min(1).max(365).parse(fd.get("risk_days")),
     max_file_mb: z.coerce.number().int().min(1).max(250).parse(fd.get("max_file_mb")),
@@ -211,6 +217,20 @@ export async function saveSettingsAction(fd: FormData) {
   for (const [k, v] of Object.entries(next)) await setSetting(k as keyof AppSettings, v as never);
   await audit(admin.id, "admin.settings.updated", "settings", "app", { before, after: next });
   revalidatePath("/admin/configuracion");
+}
+
+/** Departamento responsable de cada apartado de la ficha técnica. */
+export async function saveSheetDepartmentsAction(fd: FormData) {
+  const admin = await requireAdminAction();
+  const valid = new Set((await db.select({ key: departments.key }).from(departments)).map((d) => d.key));
+  const map: Record<string, string> = {};
+  for (const s of SHEET_SECTIONS) {
+    const v = String(fd.get(`sheet_${s.key}`) ?? "");
+    if (v && v !== s.dept && valid.has(v)) map[s.key] = v;
+  }
+  await setSetting("sheet_departments", map);
+  await audit(admin.id, "admin.sheet_departments.updated", "settings", "sheet_departments", map);
+  revalidatePath("/admin/departamentos");
 }
 
 // ─── Notificaciones y cola ────────────────────────────────────────────────

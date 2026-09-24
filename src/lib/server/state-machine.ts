@@ -20,6 +20,7 @@ import { parseBriefLenient, type BriefData } from "@/lib/brief/schema";
 import { logActivity, jsonDiff } from "./activity";
 import { canDecideGate, canEditBrief, canManageProject, canRequest, canSendQuote, type CurrentUser } from "./authz";
 import { enqueueJob, kickJobs } from "./jobs";
+import { notifyPhaseSections } from "./sheet";
 import {
   notifyApproved,
   notifyProjectEvent,
@@ -266,7 +267,10 @@ export async function decideGate(u: CurrentUser, projectId: string, decision: Ga
           { projectId, actorId: u.id, action: "gate.approved", entity: "gate", entityId: gate, diff: { gate, departmentIds: deptIds, templateId: decision.templateId ?? null, comment: decision.comment ?? null } },
           tx,
         );
-        return () => notifyApproved(projectId, deptIds, decision.comment);
+        return async () => {
+          await notifyApproved(projectId, deptIds, decision.comment);
+          await notifyPhaseSections(projectId, 1);
+        };
       }
       case "request_info": {
         const message = decision.message.trim();
@@ -486,8 +490,8 @@ export async function decideBudget(u: CurrentUser, projectId: string, decision: 
             : prepayment?.status === "waived"
               ? `Se inicia SIN anticipo del 30 % bajo la responsabilidad de ${prepayment.responsible}.`
               : null;
-        return () =>
-          notifyProjectEvent(projectId, "gate.approved.g2", {
+        return async () => {
+          await notifyProjectEvent(projectId, "gate.approved.g2", {
             title: "Presupuesto aprobado por el cliente",
             intro: "El proyecto pasa a En curso · Desarrollo.",
             message: [decision.comment?.trim(), ppText].filter(Boolean).length
@@ -495,6 +499,8 @@ export async function decideBudget(u: CurrentUser, projectId: string, decision: 
               : null,
             to: { requester: true, accountManager: true, departments: true },
           });
+          await notifyPhaseSections(projectId, FIRST_RUNNING_PHASE);
+        };
       }
       case "changes": {
         const reason = decision.reason.trim();
@@ -563,7 +569,7 @@ export async function advancePhase(u: CurrentUser, projectId: string, comment?: 
     if (p.phase === LAST_PHASE) {
       await tx.update(projects).set({ status: "in_production", closedAt: now, updatedAt: now }).where(eq(projects.id, projectId));
       await logActivity({ projectId, actorId: u.id, action: "project.in_production", entity: "project", entityId: projectId, diff: { comment: text } }, tx);
-      return { to: "producción", done: true, comment: text };
+      return { to: "producción", done: true, comment: text, phase: p.phase };
     }
     const next = p.phase + 1;
     await tx.update(projects).set({ phase: next, updatedAt: now }).where(eq(projects.id, projectId));
@@ -571,7 +577,7 @@ export async function advancePhase(u: CurrentUser, projectId: string, comment?: 
       { projectId, actorId: u.id, action: "phase.advanced", entity: "project", entityId: projectId, diff: { from: p.phase, to: next, comment: text } },
       tx,
     );
-    return { to: PHASES[next]!.name, done: false, comment: text };
+    return { to: PHASES[next]!.name, done: false, comment: text, phase: next };
   });
   await notifyProjectEvent(projectId, result.done ? "project.in_production" : "phase.advanced", {
     title: result.done ? "Proyecto en producción" : `Nueva fase: ${result.to}`,
@@ -579,4 +585,5 @@ export async function advancePhase(u: CurrentUser, projectId: string, comment?: 
     message: result.comment ? { label: "Comentario", body: result.comment } : null,
     to: { requester: true, accountManager: true, departments: true },
   });
+  if (!result.done) await notifyPhaseSections(projectId, result.phase);
 }
