@@ -36,7 +36,7 @@ export function renderEmail(opts: {
       ["Categoría", p.categoryLabel],
       ...(p.clientOrBrand ? ([["Cliente / marca", p.clientOrBrand]] as [string, string][]) : []),
       ["Solicitante", p.requesterName],
-      ["Fecha necesaria", formatDate(p.neededBy)],
+      ["Fecha de entrega requerida", formatDate(p.neededBy)],
       ...(p.priorityLabel ? ([["Prioridad", p.priorityLabel]] as [string, string][]) : []),
       ["Estado", p.statusLabel],
     );

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AlertTriangle, ArrowRight, CheckCircle2, Info } from "lucide-react";
+import { SITUATIONS, type SituationKey } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
 /** Icono (i) con explicación al pasar el ratón o al enfocarlo con teclado. */
@@ -23,14 +24,9 @@ export function InfoTip({ text, className, align = "center", onDark = false }: {
   );
 }
 
-type Segment = { key: string; label: string; n: number; color: string; href: string; tip: string };
-
 export type KpiData = {
   total: number;
-  solicitados: number;
-  enProceso: number;
-  cerrados: number;
-  rechazados: number;
+  bySituation: Record<SituationKey, number>;
   atRisk: number;
   riskDays: number;
   avgDaysToG1: number | null;
@@ -38,55 +34,22 @@ export type KpiData = {
   rejectedG1: number;
 };
 
-/** Cabecera de indicadores del panel: cartera por estado, alertas y aprobación G1. */
+/** Cabecera de indicadores del panel: cartera por situación, alertas y aprobación G1. */
 export function DashboardKpis(k: KpiData) {
-  const segments: Segment[] = [
-    {
-      key: "solicitados",
-      label: "Solicitados",
-      n: k.solicitados,
-      color: "bg-natu-peach",
-      href: "/?status=g:solicitados",
-      tip: "Solicitudes enviadas que esperan la decisión G1, incluidas las que están pendientes de información del solicitante.",
-    },
-    {
-      key: "en_proceso",
-      label: "En proceso",
-      n: k.enProceso,
-      color: "bg-brand-400",
-      href: "/?status=g:en_proceso",
-      tip: "Aprobados en G1 y todavía abiertos: en validación (cotización y valoración con el cliente) o en curso (desarrollo → producción). Incluye los pausados.",
-    },
-    {
-      key: "cerrados",
-      label: "Cerrados",
-      n: k.cerrados,
-      color: "bg-natu-dark",
-      href: "/?status=g:cerrados",
-      tip: "Proyectos que han completado todas las fases y han pasado a producción.",
-    },
-    {
-      key: "rechazados",
-      label: "Rechazados",
-      n: k.rechazados,
-      color: "bg-slate-300",
-      href: "/?status=g:rechazados",
-      tip: "Proyectos rechazados (en G1 o por el cliente en G2) o cancelados.",
-    },
-  ];
+  const segments = SITUATIONS.map((x) => ({ ...x, n: k.bySituation[x.key] ?? 0, href: `/?status=${x.key}` }));
   const decided = k.approvedG1 + k.rejectedG1;
   const rate = decided ? Math.round((k.approvedG1 / decided) * 100) : null;
 
   return (
     <section className="flex flex-col gap-2" aria-label="Indicadores">
       <div className="grid gap-3 lg:grid-cols-12">
-        {/* Cartera por estado */}
+        {/* Cartera por situación */}
         <div className="rounded-xl border border-slate-200 bg-white p-5 lg:col-span-6">
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                 Cartera de proyectos
-                <InfoTip text="Proyectos enviados que cumplen los filtros activos (no incluye borradores), repartidos por estado. Pulsa un estado para filtrar la tabla." />
+                <InfoTip text="Proyectos enviados que cumplen los filtros activos (no incluye borradores), repartidos por situación. Pulsa una situación para filtrar la tabla." />
               </h2>
               <p className="mt-1 text-4xl font-black tabular-nums text-natu-dark">{k.total}</p>
             </div>
@@ -94,15 +57,15 @@ export function DashboardKpis(k: KpiData) {
           <div className="mt-4 flex h-2.5 overflow-hidden rounded-full bg-slate-100" aria-hidden>
             {segments.map((s) => (s.n > 0 ? <span key={s.key} className={cn("h-full", s.color)} style={{ width: `${(s.n / Math.max(1, k.total)) * 100}%` }} /> : null))}
           </div>
-          <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
+          <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
             {segments.map((s) => (
               <div key={s.key} className="min-w-0">
-                <dt className="flex items-center gap-1.5 text-xs text-slate-500">
-                  <span className={cn("size-2 shrink-0 rounded-full", s.color)} aria-hidden />
-                  <Link href={s.href} className="truncate hover:text-slate-900 hover:underline">
+                <dt className="flex items-start gap-1.5 text-xs text-slate-500">
+                  <span className={cn("mt-1 size-2 shrink-0 rounded-full", s.color)} aria-hidden />
+                  <Link href={s.href} className="leading-tight hover:text-slate-900 hover:underline">
                     {s.label}
                   </Link>
-                  <InfoTip text={s.tip} />
+                  <InfoTip text={s.hint} />
                 </dt>
                 <dd className="mt-0.5 text-2xl font-bold tabular-nums text-slate-900">{s.n}</dd>
               </div>
@@ -120,7 +83,7 @@ export function DashboardKpis(k: KpiData) {
           <div>
             <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
               En riesgo
-              <InfoTip text={`Proyectos abiertos cuya fecha necesaria vence en menos de ${k.riskDays} días o ya ha vencido. Pulsa para verlos.`} />
+              <InfoTip text={`Proyectos abiertos cuya fecha de entrega requerida vence en menos de ${k.riskDays} días o ya ha vencido. Pulsa para verlos.`} />
             </h2>
             <p className={cn("mt-1 flex items-center gap-2 text-4xl font-black tabular-nums", k.atRisk > 0 ? "text-brand-500" : "text-natu-dark")}>
               {k.atRisk > 0 ? <AlertTriangle className="size-7" aria-hidden /> : <CheckCircle2 className="size-7 text-emerald-600" aria-hidden />}
@@ -129,7 +92,7 @@ export function DashboardKpis(k: KpiData) {
           </div>
           {k.atRisk > 0 ? (
             <Link href="/?risk=1" className="group mt-3 inline-flex items-center gap-1 text-xs font-medium text-slate-700 hover:underline">
-              Fecha necesaria en &lt; {k.riskDays} días
+              Entrega requerida en &lt; {k.riskDays} días
               <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden />
             </Link>
           ) : (
@@ -193,7 +156,7 @@ export function DashboardKpis(k: KpiData) {
           <b className="font-semibold text-slate-700">Validación</b> · Solicitud, cotización y valoración con cliente
         </span>
         <span>
-          <b className="font-semibold text-slate-700">En curso</b> · Desarrollo, diseño y AAFF, preparación para producción
+          <b className="font-semibold text-slate-700">En curso</b> · Desarrollo, diseño y AAFF, preparación para producción (tras G2)
         </span>
       </p>
     </section>

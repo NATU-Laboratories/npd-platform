@@ -47,7 +47,7 @@ export function briefSections(b: BriefData, l: Lookups): Section[] {
         ["Tipo de proyecto", b.type ? TYPE_LABEL[b.type] : null],
         ["Categoría", b.category ? CATEGORY_LABEL[b.category] : null],
         ["Nombre provisional", b.name ?? null],
-        ["Fecha necesaria", b.neededBy ? new Date(`${b.neededBy}T00:00:00`).toLocaleDateString("es-ES") : null],
+        ["Fecha de entrega requerida", b.neededBy ? new Date(`${b.neededBy}T00:00:00`).toLocaleDateString("es-ES") : null],
         ["Motivo de la fecha", [reason, b.neededByReasonText].filter(Boolean).join(" — ") || null],
         ["Prioridad sugerida", b.priority ? PRIORITY_LABEL[b.priority] : null],
       ],

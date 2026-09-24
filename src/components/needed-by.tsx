@@ -1,6 +1,6 @@
 import { cn, daysUntil, formatDate } from "@/lib/utils";
 
-/** Fecha necesaria con semáforo (§7.1). `compact`: días restantes en segunda línea (tablas). */
+/** Fecha de entrega requerida con semáforo (§7.1). `compact`: días restantes en segunda línea (tablas). */
 export function NeededBySignal({ date, riskDays, status, compact }: { date: string | null; riskDays: number; status: string; compact?: boolean }) {
   const d = daysUntil(date);
   if (d === null) return <span className="text-slate-400">—</span>;

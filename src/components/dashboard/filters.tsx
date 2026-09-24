@@ -3,7 +3,7 @@ import { Search, X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import * as React from "react";
 import { Input, Select } from "@/components/ui/form";
-import { CATEGORY_LABEL, PHASES, STATUS_GROUPS, STATUS_LABEL } from "@/lib/labels";
+import { CATEGORY_LABEL, PHASES, SITUATIONS, STAGES } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
 type Opt = { id: number | string; name: string };
@@ -84,13 +84,24 @@ export function Filters({ brands, departments, requesters }: { brands: Opt[]; de
         ])}
         {sel("brand", "Marca", brands.map((b) => [String(b.id), b.name]))}
         {sel("category", "Categoría", Object.entries(CATEGORY_LABEL))}
-        {sel("status", "Estado", [
-          ...Object.entries(STATUS_GROUPS).map(([k, g]) => [`g:${k}`, `▸ ${g.label}`] as [string, string]),
-          ...Object.entries(STATUS_LABEL)
-            .filter(([k]) => k !== "draft")
-            .map(([k, l]) => [k, k === "in_progress" ? "Activo (validación o en curso)" : l] as [string, string]),
-        ])}
-        {sel("phase", "Fase", PHASES.map((p) => [String(p.n), `${p.n} · ${p.name}`]))}
+        {sel("status", "Situación", SITUATIONS.map((x) => [x.key, x.label]))}
+        <Select
+          aria-label="Fase"
+          value={sp.get("phase") ?? ""}
+          onChange={(e) => setParam({ phase: e.target.value || null })}
+          className={cn("h-8 w-auto text-xs", sp.get("phase") && "border-brand-500 bg-brand-50")}
+        >
+          <option value="">Fase</option>
+          {STAGES.map((st) => (
+            <optgroup key={st.key} label={st.name}>
+              {PHASES.filter((p) => p.n >= st.from && p.n <= st.to).map((p) => (
+                <option key={p.n} value={p.n}>
+                  {p.n} · {p.name}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </Select>
         {sel("requester", "Solicitante", requesters.map((r) => [String(r.id), r.name]))}
         {sel("department", "Departamento", departments.map((d) => [String(d.id), d.name]))}
         <label className="flex items-center gap-1 text-xs text-slate-500">

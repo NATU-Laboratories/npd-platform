@@ -1,9 +1,9 @@
 import "server-only";
-import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, lte, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, lt, lte, ne, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
-import { brands, clients, departments, projectDepartments, projects, users, type ProjectStatus } from "@/db/schema";
-import { OPEN_STATUSES, STATUS_GROUPS } from "@/lib/labels";
+import { brands, clients, departments, projectDepartments, projects, users } from "@/db/schema";
+import { FIRST_RUNNING_PHASE, LAST_PHASE, OPEN_STATUSES, SITUATIONS, type SituationKey } from "@/lib/labels";
 import { hasRole, projectVisibility, type CurrentUser } from "./authz";
 import { SHEET_SECTIONS } from "@/lib/sheet/sections";
 import { sectionDeptKeys } from "./sheet";
@@ -13,7 +13,7 @@ export type ProjectFilters = {
   type?: string;
   brand?: string;
   category?: string;
-  status?: string; // estado o grupo (g:solicitados…)
+  status?: string; // situación (SITUATIONS)
   phase?: string;
   requester?: string;
   department?: string;
@@ -59,6 +59,24 @@ function requiresMyAction(u: CurrentUser, sectionDept: Record<string, string>): 
   return or(...conds)!;
 }
 
+/** Condición SQL de cada situación (misma lógica que `StatusBadge`). */
+export function situationCondition(key: SituationKey): SQL {
+  switch (key) {
+    case "g1":
+      return inArray(projects.status, ["submitted", "info_requested"]);
+    case "validacion":
+      return and(eq(projects.status, "in_progress"), lt(projects.phase, FIRST_RUNNING_PHASE))!;
+    case "en_curso":
+      return and(eq(projects.status, "in_progress"), gte(projects.phase, FIRST_RUNNING_PHASE))!;
+    case "pausa":
+      return eq(projects.status, "paused");
+    case "produccion":
+      return eq(projects.status, "in_production");
+    case "descartado":
+      return inArray(projects.status, ["rejected", "cancelled"]);
+  }
+}
+
 export function riskCondition(riskDays: number): SQL {
   return and(
     inArray(projects.status, OPEN_STATUSES),
@@ -77,11 +95,9 @@ export async function buildWhere(u: CurrentUser, f: ProjectFilters, riskDays: nu
   if (f.type === "PL" || f.type === "MP" || f.type === "MDD") conds.push(eq(projects.type, f.type));
   if (f.brand) conds.push(eq(projects.brandId, Number(f.brand)));
   if (f.category === "perfume" || f.category === "ambient" || f.category === "cosmetic") conds.push(eq(projects.category, f.category));
-  if (f.status?.startsWith("g:")) {
-    const g = STATUS_GROUPS[f.status.slice(2) as keyof typeof STATUS_GROUPS];
-    if (g) conds.push(inArray(projects.status, g.statuses as unknown as ProjectStatus[]));
-  } else if (f.status) conds.push(eq(projects.status, f.status as ProjectStatus));
-  if (f.phase && /^[0-4]$/.test(f.phase)) conds.push(eq(projects.phase, Number(f.phase)));
+  const situation = SITUATIONS.find((x) => x.key === f.status);
+  if (situation) conds.push(situationCondition(situation.key));
+  if (f.phase && /^\d$/.test(f.phase) && Number(f.phase) <= LAST_PHASE) conds.push(eq(projects.phase, Number(f.phase)));
   if (f.requester) conds.push(or(eq(projects.requesterId, f.requester), eq(projects.accountManagerId, f.requester))!);
   if (f.department)
     conds.push(sql`exists (select 1 from ${projectDepartments} pd where pd.project_id = ${projects.id} and pd.department_id = ${Number(f.department)})`);
@@ -193,10 +209,12 @@ export async function dashboardStats(u: CurrentUser, f: ProjectFilters, riskDays
     q<Record<string, string | number | null>>(sql`
       select
         count(*)::int as total,
-        count(*) filter (where status in ('submitted','info_requested'))::int as solicitados,
-        count(*) filter (where status in ('in_progress','paused'))::int as en_proceso,
-        count(*) filter (where status = 'in_production')::int as cerrados,
-        count(*) filter (where status in ('rejected','cancelled'))::int as rechazados,
+        count(*) filter (where status in ('submitted','info_requested'))::int as g1,
+        count(*) filter (where status = 'in_progress' and phase < ${FIRST_RUNNING_PHASE})::int as validacion,
+        count(*) filter (where status = 'in_progress' and phase >= ${FIRST_RUNNING_PHASE})::int as en_curso,
+        count(*) filter (where status = 'paused')::int as pausa,
+        count(*) filter (where status = 'in_production')::int as produccion,
+        count(*) filter (where status in ('rejected','cancelled'))::int as descartado,
         count(*) filter (where type = 'PL')::int as pl,
         count(*) filter (where type = 'MP')::int as mp,
         count(*) filter (where decided_g1_at is not null)::int as approved_g1,
@@ -225,10 +243,7 @@ export async function dashboardStats(u: CurrentUser, f: ProjectFilters, riskDays
   return {
     totals: {
       total: n("total"),
-      solicitados: n("solicitados"),
-      enProceso: n("en_proceso"),
-      cerrados: n("cerrados"),
-      rechazados: n("rechazados"),
+      bySituation: Object.fromEntries(SITUATIONS.map((x) => [x.key, n(x.key)])) as Record<SituationKey, number>,
       pl: n("pl"),
       mp: n("mp"),
       approvedG1: n("approved_g1"),

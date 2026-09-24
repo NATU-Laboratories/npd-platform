@@ -323,7 +323,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
               {d.clientName ? ` · ${d.clientName}` : ""} · Solicitado por {d.requesterName} el {formatDate(p.requestedAt)}
             </p>
             <p className="mt-1 text-sm">
-              Fecha necesaria: <NeededBySignal date={p.neededBy} riskDays={settings.risk_days} status={p.status} />
+              Entrega requerida: <NeededBySignal date={p.neededBy} riskDays={settings.risk_days} status={p.status} />
             </p>
           </div>
           <div className="flex flex-wrap gap-2">

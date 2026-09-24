@@ -24,7 +24,7 @@ export const FIELDS: FieldDef[] = [
   { key: "type", label: "Tipo de proyecto", step: 1, level: "required" },
   { key: "category", label: "Categoría", step: 1, level: "required" },
   { key: "name", label: "Nombre provisional", step: 1, level: "required" },
-  { key: "neededBy", label: "Fecha necesaria", step: 1, level: "required" },
+  { key: "neededBy", label: "Fecha de entrega requerida", step: 1, level: "required" },
   { key: "neededByReason", label: "Motivo de la fecha", step: 1, level: "required" },
   { key: "priority", label: "Prioridad sugerida", step: 1, level: "required" },
 
