@@ -68,7 +68,7 @@ function ScalarInput({ f, value, onChange, id, suggestions }: { f: ScalarField; 
   }
 }
 
-/** Editor de un apartado de la ficha técnica (responsables del departamento). */
+/** Editor de un apartado de la ficha técnica (miembros del departamento y decisor global). */
 export function SectionEditor({
   projectId,
   sectionKey,

@@ -58,7 +58,7 @@ export const taskStatus = pgEnum("task_status", [
 export const jobStatus = pgEnum("job_status", ["pending", "running", "done", "failed"]);
 export const notificationStatus = pgEnum("notification_status", ["pending", "sent", "failed"]);
 
-export const ROLE_KEYS = ["admin", "requester", "decider", "dept_member", "global_reader"] as const;
+export const ROLE_KEYS = ["admin", "global_decider", "requester", "decider", "dept_member", "global_reader"] as const;
 export type RoleKey = (typeof ROLE_KEYS)[number];
 
 // ─── Users, roles, departments ────────────────────────────────────────────
@@ -117,8 +117,6 @@ export const departmentMembers = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    /** Responsable del departamento: edita su apartado de la ficha técnica y lo marca como terminado. */
-    isLead: boolean("is_lead").notNull().default(false),
   },
   (t) => [primaryKey({ columns: [t.departmentId, t.userId] })],
 );

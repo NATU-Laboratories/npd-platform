@@ -7,7 +7,7 @@ import { GateDialog } from "@/components/project/gate-dialog";
 import { ProjectAction } from "@/components/project/project-actions";
 import { AdvanceDialog, BudgetDialog, PrepaymentReceivedDialog, QuoteDialog } from "@/components/project/phase-dialogs";
 import { NeededBySignal } from "@/components/needed-by";
-import { SheetPanel } from "@/components/sheet/sheet-panel";
+import { SheetPanel, SheetSummary } from "@/components/sheet/sheet-panel";
 import { Uploader } from "@/components/uploader";
 import { Badge, DeptChip, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,19 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { briefSections, formatFormat, type Lookups } from "@/lib/brief/display";
 import { applicableFields, FIELD_BY_KEY, isFieldFilled } from "@/lib/brief/fields";
 import { needsOlfactory } from "@/lib/brief/schema";
-import { ACTION_LABEL, CATEGORY_LABEL, FILE_TAGS, LAST_PHASE, PHASE_FOLDERS, PHASES, PREPAYMENT_TYPES, STAGES, PRIORITY_COLOR, PRIORITY_LABEL, TYPE_LABEL } from "@/lib/labels";
+import {
+  ACTION_LABEL,
+  CATEGORY_LABEL,
+  FILE_TAGS,
+  LAST_PHASE,
+  PHASE_FOLDERS,
+  PHASES,
+  PREPAYMENT_TYPES,
+  STAGES,
+  PRIORITY_COLOR,
+  PRIORITY_LABEL,
+  TYPE_LABEL,
+} from "@/lib/labels";
 import { GENDER_LABEL } from "@/lib/brief/display";
 import { canDecideGate, canEditBrief, canManageProject, canSendQuote, canViewProject, requireUser } from "@/lib/server/authz";
 import { getActiveUsers, getAllCatalogs, getBrands, getDepartments } from "@/lib/server/catalogs";
@@ -30,7 +42,11 @@ export const metadata = { title: "Proyecto" };
 function fmt(v: unknown): string {
   if (v == null || v === "") return "";
   if (Array.isArray(v)) return v.map(fmt).join(", ");
-  if (typeof v === "object") return Object.values(v as object).filter(Boolean).map(fmt).join(" / ");
+  if (typeof v === "object")
+    return Object.values(v as object)
+      .filter(Boolean)
+      .map(fmt)
+      .join(" / ");
   if (typeof v === "boolean") return v ? "Sí" : "No";
   return String(v);
 }
@@ -109,14 +125,28 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
 
   const activity: ActivityItem[] = d.activity.map(({ a, actor }) => {
     const diff = (a.diff ?? {}) as Record<string, unknown>;
-    const base = { id: a.id, actor: actor ?? "Sistema", at: a.createdAt.toISOString() };
+    const base = {
+      id: a.id,
+      actor: actor ?? "Sistema",
+      at: a.createdAt.toISOString(),
+    };
     switch (a.action) {
       case "comment.created":
-        return { ...base, group: "comentarios", text: "comentó", detail: String(diff.body ?? "") };
+        return {
+          ...base,
+          group: "comentarios",
+          text: "comentó",
+          detail: String(diff.body ?? ""),
+        };
       case "gate.approved": {
         if (diff.gate === "G2") {
           const ppd = diff.prepayment as { status?: string; responsible?: string; note?: string } | null | undefined;
-          const ppText = ppd?.status === "received" ? "Anticipo del 30 % recibido." : ppd?.status === "waived" ? `Inicio SIN anticipo bajo la responsabilidad de ${ppd.responsible}.` : null;
+          const ppText =
+            ppd?.status === "received"
+              ? "Anticipo del 30 % recibido."
+              : ppd?.status === "waived"
+                ? `Inicio SIN anticipo bajo la responsabilidad de ${ppd.responsible}.`
+                : null;
           return {
             ...base,
             group: "decisiones",
@@ -125,10 +155,20 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
           };
         }
         const names = (diff.departmentIds as number[] | undefined)?.map((x) => departments.find((dd) => dd.id === x)?.name).filter(Boolean);
-        return { ...base, group: "decisiones", text: `aprobó la solicitud (G1) · departamentos: ${names?.join(", ") ?? "—"}`, detail: (diff.comment as string) || null };
+        return {
+          ...base,
+          group: "decisiones",
+          text: `aprobó la solicitud (G1) · departamentos: ${names?.join(", ") ?? "—"}`,
+          detail: (diff.comment as string) || null,
+        };
       }
       case "gate.recycled":
-        return { ...base, group: "decisiones", text: "registró que el cliente pide cambios · vuelve a Cotización", detail: (diff.reason as string) || null };
+        return {
+          ...base,
+          group: "decisiones",
+          text: "registró que el cliente pide cambios · vuelve a Cotización",
+          detail: (diff.reason as string) || null,
+        };
       case "quote.sent":
         return {
           ...base,
@@ -137,31 +177,70 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
           detail: (diff.comment as string) || null,
         };
       case "phase.advanced":
-        return { ...base, group: "decisiones", text: `avanzó a la fase «${PHASES[Number(diff.to)]?.name ?? diff.to}»`, detail: (diff.comment as string) || null };
+        return {
+          ...base,
+          group: "decisiones",
+          text: `avanzó a la fase «${PHASES[Number(diff.to)]?.name ?? diff.to}»`,
+          detail: (diff.comment as string) || null,
+        };
       case "project.in_production":
-        return { ...base, group: "decisiones", text: "pasó el proyecto a producción", detail: (diff.comment as string) || null };
+        return {
+          ...base,
+          group: "decisiones",
+          text: "pasó el proyecto a producción",
+          detail: (diff.comment as string) || null,
+        };
       case "prepayment.received":
-        return { ...base, group: "decisiones", text: "registró el anticipo del 30 %", detail: (diff.note as string) || null };
+        return {
+          ...base,
+          group: "decisiones",
+          text: "registró el anticipo del 30 %",
+          detail: (diff.note as string) || null,
+        };
       case "gate.rejected": {
         const reason = c.rejection_reason?.[String(diff.reasonCode)] ?? String(diff.reasonCode ?? "");
-        return { ...base, group: "decisiones", text: `rechazó el proyecto en ${diff.gate ?? "G1"}`, detail: [reason, diff.reasonText].filter(Boolean).join(" — ") };
+        return {
+          ...base,
+          group: "decisiones",
+          text: `rechazó el proyecto en ${diff.gate ?? "G1"}`,
+          detail: [reason, diff.reasonText].filter(Boolean).join(" — "),
+        };
       }
       case "gate.paused":
       case "project.cancelled":
       case "project.resumed":
-        return { ...base, group: "decisiones", text: ACTION_LABEL[a.action]!, detail: (diff.reason as string) || (diff.comment as string) || null };
+        return {
+          ...base,
+          group: "decisiones",
+          text: ACTION_LABEL[a.action]!,
+          detail: (diff.reason as string) || (diff.comment as string) || null,
+        };
       case "gate.info_requested": {
         const fields = (diff.fields as string[] | undefined)?.map(fieldLabel) ?? [];
-        return { ...base, group: "info", text: "pidió más información", detail: `${diff.message ?? ""}${fields.length ? `\nCampos: ${fields.join(", ")}` : ""}` };
+        return {
+          ...base,
+          group: "info",
+          text: "pidió más información",
+          detail: `${diff.message ?? ""}${fields.length ? `\nCampos: ${fields.join(", ")}` : ""}`,
+        };
       }
       case "info.answered":
-        return { ...base, group: "info", text: "respondió a la petición de información", detail: String(diff.answer ?? "") };
+        return {
+          ...base,
+          group: "info",
+          text: "respondió a la petición de información",
+          detail: String(diff.answer ?? ""),
+        };
       case "project.edited":
         return {
           ...base,
           group: "ediciones",
           text: "editó el brief",
-          changes: Object.entries(diff as Record<string, { from: unknown; to: unknown }>).map(([k, v]) => ({ field: fieldLabel(k), from: fmt(v?.from), to: fmt(v?.to) })),
+          changes: Object.entries(diff as Record<string, { from: unknown; to: unknown }>).map(([k, v]) => ({
+            field: fieldLabel(k),
+            from: fmt(v?.from),
+            to: fmt(v?.to),
+          })),
         };
       case "sheet.updated": {
         const fields = (diff.fields as string[] | undefined) ?? [];
@@ -169,30 +248,56 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
           ...base,
           group: "ficha",
           text: `actualizó «${diff.title ?? diff.section}» en la ficha técnica`,
-          detail: [fields.length ? `Campos: ${fields.join(", ")}` : null, diff.reopened ? "Vuelve a pendiente: falta información obligatoria." : null].filter(Boolean).join("\n") || null,
+          detail:
+            [fields.length ? `Campos: ${fields.join(", ")}` : null, diff.reopened ? "Vuelve a pendiente: falta información obligatoria." : null]
+              .filter(Boolean)
+              .join("\n") || null,
         };
       }
       case "sheet.done":
-        return { ...base, group: "ficha", text: `marcó como terminado «${diff.title ?? diff.section}»` };
+        return {
+          ...base,
+          group: "ficha",
+          text: `marcó como terminado «${diff.title ?? diff.section}»`,
+        };
       case "sheet.na":
-        return { ...base, group: "ficha", text: `marcó «${diff.title ?? diff.section}» como no aplicable`, detail: (diff.note as string) || null };
+        return {
+          ...base,
+          group: "ficha",
+          text: `marcó «${diff.title ?? diff.section}» como no aplicable`,
+          detail: (diff.note as string) || null,
+        };
       case "sheet.reopened":
-        return { ...base, group: "ficha", text: `reabrió «${diff.title ?? diff.section}»` };
+        return {
+          ...base,
+          group: "ficha",
+          text: `reabrió «${diff.title ?? diff.section}»`,
+        };
       case "file.uploaded":
       case "file.deleted":
-        return { ...base, group: "archivos", text: `${ACTION_LABEL[a.action]}: ${diff.name ?? ""}` };
+        return {
+          ...base,
+          group: "archivos",
+          text: `${ACTION_LABEL[a.action]}: ${diff.name ?? ""}`,
+        };
       case "project.submitted":
-        return { ...base, group: "decisiones", text: `envió la solicitud (${diff.code ?? ""})` };
+        return {
+          ...base,
+          group: "decisiones",
+          text: `envió la solicitud (${diff.code ?? ""})`,
+        };
       default:
-        return { ...base, group: "otros", text: ACTION_LABEL[a.action] ?? a.action };
+        return {
+          ...base,
+          group: "otros",
+          text: ACTION_LABEL[a.action] ?? a.action,
+        };
     }
   });
 
   const images = d.files.filter((f) => f.f.mime?.startsWith("image/"));
   const inspirations = b.olfactory?.inspirations?.filter((i) => i.product || i.brand || i.url) ?? [];
-  const sortedTemplates = templates
-    .map((t) => ({ ...t, score: templateScore(t, p) }))
-    .sort((a, z) => z.score - a.score);
+  const sortedTemplates = templates.map((t) => ({ ...t, score: templateScore(t, p) })).sort((a, z) => z.score - a.score);
 
   return (
     <div className="flex flex-col gap-6">
@@ -226,12 +331,30 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
               <GateDialog
                 projectId={p.id}
                 gateLabel="G1 · Aprobación de la solicitud"
-                summary={{ completeness: p.completenessPct, requester: d.requesterName, requestedAt: formatDate(p.requestedAt) }}
-                templates={sortedTemplates.map((t) => ({ id: t.id, name: t.name, departmentIds: t.departmentIds, score: t.score }))}
-                departments={departments.map((x) => ({ id: x.id, name: x.name, color: x.color }))}
+                summary={{
+                  completeness: p.completenessPct,
+                  requester: d.requesterName,
+                  requestedAt: formatDate(p.requestedAt),
+                }}
+                templates={sortedTemplates.map((t) => ({
+                  id: t.id,
+                  name: t.name,
+                  departmentIds: t.departmentIds,
+                  score: t.score,
+                }))}
+                departments={departments.map((x) => ({
+                  id: x.id,
+                  name: x.name,
+                  color: x.color,
+                }))}
                 fields={applicableFields(b)
                   .filter((f) => f.level !== "optional" || f.key === "notes")
-                  .map((f) => ({ key: f.key, label: f.label, level: f.level, missing: !isFieldFilled(f, b) }))}
+                  .map((f) => ({
+                    key: f.key,
+                    label: f.label,
+                    level: f.level,
+                    missing: !isFieldFilled(f, b),
+                  }))}
                 rejectionReasons={catalogs.rejection_reason}
               />
             )}
@@ -241,16 +364,17 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
                 projectId={p.id}
                 requiresPrepayment={needsPrepayment}
                 currentUserName={u.name}
-                quoteInfo={
-                  p.quotedAt
-                    ? `Cotización enviada el ${formatDate(p.quotedAt)}${p.quoteAmount ? ` por ${formatEuro(p.quoteAmount)}` : ""}.`
-                    : null
-                }
+                quoteInfo={p.quotedAt ? `Cotización enviada el ${formatDate(p.quotedAt)}${p.quoteAmount ? ` por ${formatEuro(p.quoteAmount)}` : ""}.` : null}
                 rejectionReasons={catalogs.rejection_reason}
               />
             )}
             {canAdvance && (
-              <AdvanceDialog projectId={p.id} nextLabel={PHASES[p.phase + 1]?.name ?? ""} toProduction={p.phase === LAST_PHASE} pendingSections={sheetPending} />
+              <AdvanceDialog
+                projectId={p.id}
+                nextLabel={PHASES[p.phase + 1]?.name ?? ""}
+                toProduction={p.phase === LAST_PHASE}
+                pendingSections={sheetPending}
+              />
             )}
             {p.status === "info_requested" && isRequester && (
               <Button asChild variant="warning">
@@ -303,8 +427,8 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
               <span>recibido{pp.receivedAt ? ` (${formatDate(pp.receivedAt)})` : ""}.</span>
             ) : (
               <span>
-                <strong>pendiente</strong>. Se inició sin anticipo bajo la responsabilidad de <strong>{pp.responsible}</strong> (registrado por {pp.recordedBy} el{" "}
-                {formatDate(pp.recordedAt)}).
+                <strong>pendiente</strong>. Se inició sin anticipo bajo la responsabilidad de <strong>{pp.responsible}</strong> (registrado por {pp.recordedBy}{" "}
+                el {formatDate(pp.recordedAt)}).
               </span>
             )}
             {pp.note && <span className="text-xs opacity-80">· {pp.note}</span>}
@@ -346,7 +470,12 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
               return (
                 <li key={ph.n} className="flex min-w-0 flex-col gap-1" aria-current={current ? "step" : undefined}>
                   <div className={cn("h-2 rounded-full", done ? "bg-brand-600" : current ? "bg-brand-300" : "bg-slate-200")} />
-                  <p className={cn("text-[11px] font-medium leading-tight sm:text-xs lg:text-sm", current ? "text-brand-800" : done ? "text-slate-700" : "text-slate-400")}>
+                  <p
+                    className={cn(
+                      "text-[11px] font-medium leading-tight sm:text-xs lg:text-sm",
+                      current ? "text-brand-800" : done ? "text-slate-700" : "text-slate-400",
+                    )}
+                  >
                     <span className="hidden lg:inline">{ph.n} · </span>
                     <span className="lg:hidden">{ph.short}</span>
                     <span className="hidden lg:inline">{ph.name}</span>
@@ -386,123 +515,161 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
         </CardBody>
       </Card>
 
-      {/* 3. Ficha técnica por departamento */}
-      {showSheet && (
-        <SheetPanel
-          projectId={p.id}
-          entries={sheet.entries}
-          ctx={sheet.ctx}
-          files={d.files.map(({ f }) => ({ id: f.id, name: f.name, size: f.size, mime: f.mime, tag: f.tag }))}
-          editable={Object.fromEntries(sheet.entries.map((e) => [e.section.key, canEditSection(u, e.dept.key, p)]))}
-          maxMb={settings.max_file_mb}
-          noteSuggestions={(catalogs.note ?? []).map((n) => n.label)}
-        />
-      )}
+      {/* 3. De un vistazo: resumen del proyecto | estado por departamento */}
+      <div className="grid items-start gap-6 lg:grid-cols-2">
+        {/* 5. Brief visual */}
+        <Card className="h-full">
+          <CardHeader title="Resumen del proyecto" description={`Brief de la solicitud · completo al ${p.completenessPct}%`} />
+          <CardBody className="flex flex-col gap-5">
+            {needsOlfactory(b) ? (
+              <div className="flex flex-col gap-3 rounded-lg bg-slate-50 p-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Perfil olfativo solicitado</h3>
+                <div className="flex flex-wrap gap-1.5">
+                  {b.olfactory?.families?.map((f) => (
+                    <span key={f} className="rounded-full bg-white px-2.5 py-0.5 text-xs text-slate-800 ring-1 ring-slate-300">
+                      {f}
+                    </span>
+                  ))}
+                </div>
+                {!!b.olfactory?.genders?.length && (
+                  <p className="text-xs text-slate-600">Género: {b.olfactory.genders.map((g) => GENDER_LABEL[g]).join(" · ")}</p>
+                )}
+                {b.olfactory?.intensity && (
+                  <p className="text-xs text-slate-600">
+                    Intensidad{" "}
+                    <span aria-label={`${b.olfactory.intensity} de 5`}>
+                      {"●".repeat(b.olfactory.intensity)}
+                      <span className="text-slate-300">{"●".repeat(5 - b.olfactory.intensity)}</span>
+                    </span>
+                    {b.olfactory.duration ? ` · ${b.olfactory.duration}` : ""}
+                  </p>
+                )}
+                {b.olfactory?.blacklist && <p className="whitespace-pre-line text-xs text-slate-600">Blacklist: {b.olfactory.blacklist}</p>}
+                {showSheet && (
+                  <a href="#ficha-formula" className="text-xs font-medium text-slate-700 underline underline-offset-2 hover:text-slate-900">
+                    Pirámides desarrolladas y aprobadas → ficha técnica
+                  </a>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-lg bg-slate-50 p-4 text-sm text-slate-500">Sin bloque olfativo.</div>
+            )}
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
+              <Datum label="Formato" value={[formatFormat(b, lookups), b.capacityMl ? `${b.capacityMl} ml` : null].filter(Boolean).join(" · ") || null} />
+              <Datum label="Referencias" value={b.references ? formatNumber(b.references) : null} />
+              <Datum
+                label={p.type === "MP" ? "Unidades (1er año)" : "Unidades 1er pedido"}
+                value={p.type === "MP" ? (p.unitsAnnual ? formatNumber(p.unitsAnnual) : null) : p.unitsFirstOrder ? formatNumber(p.unitsFirstOrder) : null}
+              />
+              <Datum label="Previsión anual" value={p.type === "PL" && p.unitsAnnual ? formatNumber(p.unitsAnnual) : null} />
+              <Datum label="Precio objetivo" value={b.targetPrice != null ? formatEuro(b.targetPrice) : null} />
+              <Datum label="PVP" value={b.rrp != null ? formatEuro(b.rrp) : null} />
+              <Datum label="Canal" value={b.channels?.map((x) => c.channel?.[x] ?? x).join(", ") || null} className="col-span-2" />
+              <div className="col-span-2 sm:col-span-3">
+                <dt className="text-xs text-slate-500">Mercados</dt>
+                <dd className="mt-1 flex flex-wrap gap-1">
+                  {b.markets?.length
+                    ? b.markets.map((m) => (
+                        <span key={m} className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-700" title={c.market?.[m] ?? m}>
+                          <span className="font-mono">{m}</span> {c.market?.[m] ?? ""}
+                        </span>
+                      ))
+                    : "—"}
+                </dd>
+              </div>
+            </dl>
+
+            {(inspirations.length > 0 || images.length > 0) && (
+              <div>
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Inspiración y referencias</h3>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {inspirations.map((i, idx) => (
+                    <div key={`i${idx}`} className="rounded-lg border border-slate-200 bg-gradient-to-br from-violet-50 to-white p-3 text-sm">
+                      <p className="font-medium text-slate-900">{i.product || "—"}</p>
+                      <p className="text-xs text-slate-500">{i.brand}</p>
+                      {i.likes && <p className="mt-1 text-xs text-slate-700">“{i.likes}”</p>}
+                      {i.url && (
+                        <a
+                          href={i.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-brand-700 hover:underline"
+                        >
+                          <ExternalLink className="size-3" /> {/fragrantica/i.test(i.url) ? "Fragrantica" : "Ver referencia"}
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                  {images.map(({ f }) => (
+                    <a
+                      key={f.id}
+                      href={`/api/files/${f.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="group overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/api/files/${f.id}`}
+                        alt={f.name}
+                        className="aspect-square w-full object-cover transition-transform group-hover:scale-105"
+                        loading="lazy"
+                      />
+                      <p className="truncate px-2 py-1 text-[11px] text-slate-500">{FILE_TAGS[f.tag as keyof typeof FILE_TAGS] ?? f.name}</p>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardBody>
+          <details className="border-t border-slate-100">
+            <summary className="cursor-pointer px-5 py-3 text-sm font-medium text-brand-700 hover:bg-slate-50">Ver brief completo</summary>
+            <div className="flex flex-col gap-4 px-5 pb-5">
+              {briefSections(b, lookups).map((s) => (
+                <div key={s.title}>
+                  <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{s.title}</h3>
+                  <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+                    {s.rows.map(([label, v]) => (
+                      <Datum key={label} label={label} value={v} />
+                    ))}
+                  </dl>
+                </div>
+              ))}
+            </div>
+          </details>
+        </Card>
+        {showSheet ? (
+          <SheetSummary entries={sheet.entries} />
+        ) : (
+          <Card className="h-full">
+            <CardHeader title="Estado por departamento" />
+            <CardBody>
+              <p className="text-sm text-slate-500">La ficha técnica de los departamentos se abre cuando se aprueba la solicitud (G1).</p>
+            </CardBody>
+          </Card>
+        )}
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="flex flex-col gap-6 lg:col-span-2">
-          {/* 5. Brief visual */}
-          <Card>
-            <CardHeader title="Brief" description={`Completitud ${p.completenessPct}%`} />
-            <CardBody className="grid gap-6 md:grid-cols-2">
-              {needsOlfactory(b) ? (
-                <div className="flex flex-col gap-3 rounded-lg bg-slate-50 p-4">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Perfil olfativo solicitado</h3>
-                  <div className="flex flex-wrap gap-1.5">
-                    {b.olfactory?.families?.map((f) => (
-                      <span key={f} className="rounded-full bg-white px-2.5 py-0.5 text-xs text-slate-800 ring-1 ring-slate-300">
-                        {f}
-                      </span>
-                    ))}
-                  </div>
-                  {!!b.olfactory?.genders?.length && (
-                    <p className="text-xs text-slate-600">Género: {b.olfactory.genders.map((g) => GENDER_LABEL[g]).join(" · ")}</p>
-                  )}
-                  {b.olfactory?.intensity && (
-                    <p className="text-xs text-slate-600">
-                      Intensidad{" "}
-                      <span aria-label={`${b.olfactory.intensity} de 5`}>
-                        {"●".repeat(b.olfactory.intensity)}
-                        <span className="text-slate-300">{"●".repeat(5 - b.olfactory.intensity)}</span>
-                      </span>
-                      {b.olfactory.duration ? ` · ${b.olfactory.duration}` : ""}
-                    </p>
-                  )}
-                  {b.olfactory?.blacklist && <p className="whitespace-pre-line text-xs text-slate-600">Blacklist: {b.olfactory.blacklist}</p>}
-                  {showSheet && (
-                    <a href="#ficha-formula" className="text-xs font-medium text-slate-700 underline underline-offset-2 hover:text-slate-900">
-                      Pirámides desarrolladas y aprobadas → ficha técnica
-                    </a>
-                  )}
-                </div>
-              ) : (
-                <div className="rounded-lg bg-slate-50 p-4 text-sm text-slate-500">Sin bloque olfativo.</div>
-              )}
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-3 self-start text-sm">
-                <Datum label="Formato" value={[formatFormat(b, lookups), b.capacityMl ? `${b.capacityMl} ml` : null].filter(Boolean).join(" · ") || null} />
-                <Datum label="Referencias" value={b.references ? formatNumber(b.references) : null} />
-                <Datum label={p.type === "MP" ? "Unidades (1er año)" : "Unidades 1er pedido"} value={p.type === "MP" ? (p.unitsAnnual ? formatNumber(p.unitsAnnual) : null) : p.unitsFirstOrder ? formatNumber(p.unitsFirstOrder) : null} />
-                <Datum label="Previsión anual" value={p.type === "PL" && p.unitsAnnual ? formatNumber(p.unitsAnnual) : null} />
-                <Datum label="Precio objetivo" value={b.targetPrice != null ? formatEuro(b.targetPrice) : null} />
-                <Datum label="PVP" value={b.rrp != null ? formatEuro(b.rrp) : null} />
-                <Datum label="Canal" value={b.channels?.map((x) => c.channel?.[x] ?? x).join(", ") || null} className="col-span-2" />
-                <div className="col-span-2">
-                  <dt className="text-xs text-slate-500">Mercados</dt>
-                  <dd className="mt-1 flex flex-wrap gap-1">
-                    {b.markets?.length
-                      ? b.markets.map((m) => (
-                          <span key={m} className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-700" title={c.market?.[m] ?? m}>
-                            <span className="font-mono">{m}</span> {c.market?.[m] ?? ""}
-                          </span>
-                        ))
-                      : "—"}
-                  </dd>
-                </div>
-              </dl>
-
-              {(inspirations.length > 0 || images.length > 0) && (
-                <div className="md:col-span-2">
-                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Inspiración y referencias</h3>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    {inspirations.map((i, idx) => (
-                      <div key={`i${idx}`} className="rounded-lg border border-slate-200 bg-gradient-to-br from-violet-50 to-white p-3 text-sm">
-                        <p className="font-medium text-slate-900">{i.product || "—"}</p>
-                        <p className="text-xs text-slate-500">{i.brand}</p>
-                        {i.likes && <p className="mt-1 text-xs text-slate-700">“{i.likes}”</p>}
-                        {i.url && (
-                          <a href={i.url} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-brand-700 hover:underline">
-                            <ExternalLink className="size-3" /> {/fragrantica/i.test(i.url) ? "Fragrantica" : "Ver referencia"}
-                          </a>
-                        )}
-                      </div>
-                    ))}
-                    {images.map(({ f }) => (
-                      <a key={f.id} href={`/api/files/${f.id}`} target="_blank" rel="noreferrer" className="group overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={`/api/files/${f.id}`} alt={f.name} className="aspect-square w-full object-cover transition-transform group-hover:scale-105" loading="lazy" />
-                        <p className="truncate px-2 py-1 text-[11px] text-slate-500">{FILE_TAGS[f.tag as keyof typeof FILE_TAGS] ?? f.name}</p>
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </CardBody>
-            <details className="border-t border-slate-100">
-              <summary className="cursor-pointer px-5 py-3 text-sm font-medium text-brand-700 hover:bg-slate-50">Ver brief completo</summary>
-              <div className="flex flex-col gap-4 px-5 pb-5">
-                {briefSections(b, lookups).map((s) => (
-                  <div key={s.title}>
-                    <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{s.title}</h3>
-                    <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-                      {s.rows.map(([label, v]) => (
-                        <Datum key={label} label={label} value={v} />
-                      ))}
-                    </dl>
-                  </div>
-                ))}
-              </div>
-            </details>
-          </Card>
+          {/* 4. Ficha técnica: detalle por departamento */}
+          {showSheet && (
+            <SheetPanel
+              projectId={p.id}
+              entries={sheet.entries}
+              ctx={sheet.ctx}
+              files={d.files.map(({ f }) => ({
+                id: f.id,
+                name: f.name,
+                size: f.size,
+                mime: f.mime,
+                tag: f.tag,
+              }))}
+              editable={Object.fromEntries(sheet.entries.map((e) => [e.section.key, canEditSection(u, e.dept.key, p)]))}
+              maxMb={settings.max_file_mb}
+              noteSuggestions={(catalogs.note ?? []).map((n) => n.label)}
+            />
+          )}
 
           {/* 7. Comentarios */}
           <Card id="comentarios">
@@ -526,7 +693,14 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
                 </div>
               ))}
               {!d.comments.length && <p className="text-sm text-slate-400">Sin comentarios todavía.</p>}
-              <CommentComposer projectId={p.id} users={users.map((x) => ({ id: x.id, name: x.name }))} departments={departments.map((x) => ({ id: x.id, name: x.name }))} />
+              <CommentComposer
+                projectId={p.id}
+                users={users.map((x) => ({ id: x.id, name: x.name }))}
+                departments={departments.map((x) => ({
+                  id: x.id,
+                  name: x.name,
+                }))}
+              />
             </CardBody>
           </Card>
         </div>
@@ -538,7 +712,12 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
               title="Archivos"
               actions={
                 p.sharepointFolderUrl ? (
-                  <a href={p.sharepointFolderUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-brand-700 hover:underline">
+                  <a
+                    href={p.sharepointFolderUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-brand-700 hover:underline"
+                  >
                     <ExternalLink className="size-3.5" /> Abrir en SharePoint
                   </a>
                 ) : (
@@ -559,7 +738,13 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
                       {list.map(({ f, by }) => (
                         <li key={f.id} className="flex items-center gap-2 text-sm">
                           <FileText className="size-4 shrink-0 text-slate-400" />
-                          <a href={`/api/files/${f.id}`} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate hover:underline" title={`${f.name} · ${by} · ${formatDate(f.createdAt)}`}>
+                          <a
+                            href={`/api/files/${f.id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="min-w-0 flex-1 truncate hover:underline"
+                            title={`${f.name} · ${by} · ${formatDate(f.createdAt)}`}
+                          >
                             {f.name}
                           </a>
                           <span className="shrink-0 text-xs text-slate-400">{formatBytes(f.size)}</span>

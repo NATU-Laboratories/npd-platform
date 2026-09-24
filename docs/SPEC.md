@@ -60,7 +60,7 @@ Cada proyecto tiene una **ficha técnica** con un apartado por departamento, que
 | Etiqueta y artes finales | Diseño | 4 Diseño y AAFF | Tipo y ubicación de etiqueta, artes finales y aprobación del cliente |
 | Preparación para producción | Operaciones | 5 Preparación | Fecha prevista, materiales pedidos y escandallo final |
 
-- Solo los **responsables** del departamento (varios por departamento, en el backoffice) y los administradores editan su apartado, adjuntan documentos y lo marcan como **terminado** (exige que no falte nada obligatorio) o **no aplica** (con motivo). La asignación apartado → departamento es configurable.
+- Solo los **miembros** del departamento del apartado, el **decisor global** y los administradores editan el apartado; el resto de usuarios solo lo ve. Pueden adjuntar documentos y marcarlo como **terminado** (exige que no falte nada obligatorio) o **no aplica** (con motivo). La asignación apartado → departamento es configurable.
 - La ficha muestra un resumen de lo hecho y lo que falta por departamento. Al avanzar de fase se avisa si quedan apartados sin terminar (se puede avanzar igualmente confirmándolo).
 - Al entrar en una fase se notifica a los departamentos con apartados en ella, con lo ya disponible en la ficha. Al terminar un apartado se notifica al solicitante, al comercial de la cuenta y a Marketing.
 - Los apartados pendientes de los que un usuario es responsable aparecen en "Requieren mi acción".
@@ -118,7 +118,7 @@ Plantillas iniciales (seed):
 2. PL – Fórmula de catálogo NATU con marca del cliente
 3. PL – Solo cambio de packaging/diseño
 4. Marca propia – Nuevo producto
-5. Cosmética (PL o MP) – con tareas regulatorias reforzadas (evaluación de seguridad, expediente de producto, notificación previa a comercialización)
+5. Personal Care (PL, MP o MDD) – con tareas regulatorias reforzadas (evaluación de seguridad, expediente de producto, notificación previa a comercialización)
 
 Ejemplo (fase 3, Diseño y AAFF):
 ```
@@ -160,9 +160,10 @@ Los usuarios acceden con su cuenta corporativa Microsoft 365 (SSO). Un usuario p
 
 | Rol | Permisos |
 |-----|----------|
-| **Admin** | Todo + backoffice (usuarios, roles, departamentos, catálogos, plantillas, logs) |
+| **Admin** | Todo + backoffice (usuarios, roles, departamentos, marcas propias, plantillas, logs) |
+| **Decisor global** (gestor de proyectos) | Ve todos los proyectos; decide G1 y G2, envía cotizaciones, avanza fases, edita el brief y rellena y cierra todos los apartados de la ficha técnica |
 | **Solicitante** | Crear solicitudes, ver y editar sus borradores, responder peticiones de info, comentar en sus proyectos. Por defecto: comerciales, marketing, dirección |
-| **Decisor** | Decidir en las puertas que tenga asignadas (configurable por puerta y tipo de proyecto) |
+| **Decisor** | Decidir en las puertas que tenga asignadas (configurable por puerta y tipo de proyecto). En G2, el comercial que dio de alta el proyecto siempre puede decidir, además de los aprobadores configurados |
 | **Miembro de departamento** | Ver proyectos donde su departamento tiene tareas, cambiar estado de esas tareas, comentar, subir archivos |
 | **Lectura global** | Ver todos los proyectos y dashboards (Dirección) |
 
@@ -183,7 +184,7 @@ Guardado automático como **Borrador** en cada paso. Barra de progreso e **indic
 | Solicitado por | auto (usuario logueado) | ✔ |
 | Fecha de solicitud | auto | ✔ |
 | Tipo de proyecto | PL / Marca propia | ✔ |
-| Categoría | Perfumería / Ambientación / Cosmética | ✔ |
+| Categoría | Perfumería / Ambientación / Personal Care | ✔ |
 | Nombre provisional del proyecto | texto | ✔ |
 | Fecha necesaria | fecha | ✔ |
 | Motivo de la fecha | select: feria, lanzamiento del cliente, temporada, licitación, orientativa, otro + texto | ✔ |
@@ -229,7 +230,7 @@ Guardado automático como **Borrador** en cada paso. Barra de progreso e **indic
 - Duración/rendimiento deseado
 - Bloque olfativo
 
-**Cosmética**
+**Personal Care**
 - Formato: crema, gel, champú, body lotion, desodorante, aceite, otro · Capacidad
 - Función y claims deseados (multiselect + texto)
 - Tipo de piel/cabello y público (adulto, infantil, bebé)
@@ -330,7 +331,7 @@ Bandeja por usuario/departamento: tareas pendientes, en curso, devueltas y bloqu
 - **Usuarios**: listado (sincronizado vía SSO), activar/desactivar, roles, departamentos, preferencias de notificación.
 - **Departamentos**: CRUD, color, emails de notificación, responsable, miembros.
 - **Decisores por puerta**: matriz puerta × tipo de proyecto → usuarios/rol.
-- **Catálogos**: marcas, categorías, formatos por categoría, familias olfativas, notas, canales, mercados, clientes, motivos de rechazo.
+- **Marcas propias**: alta, edición y activación de las marcas de NATU. El resto de listas (formatos, familias, notas, canales, mercados, motivos de rechazo) se mantienen en el seed; los clientes se dan de alta desde la solicitud.
 - **Plantillas de flujo**: editor de fases → tareas (departamento, dependencias, obligatoria, puede devolver a…, duración estimada).
 - **Configuración**: umbral de completitud, días para "en riesgo", límites de archivos, buzón remitente.
 - **Registro de actividad (auditoría)**: quién hizo qué, cuándo, sobre qué entidad; filtrable y exportable a CSV.

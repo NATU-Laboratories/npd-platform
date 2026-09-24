@@ -85,7 +85,7 @@ const TEMPLATES: { name: string; appliesTo: { types?: string[]; subtypes?: strin
     tasks: [...concept, ...development, ...design.filter((t) => t.key !== "a7"), ...production],
   },
   {
-    name: "Cosmética (PL, MP o MDD) – regulatorio reforzado",
+    name: "Personal Care (PL, MP o MDD) – regulatorio reforzado",
     appliesTo: { types: ["PL", "MP", "MDD"], categories: ["cosmetic"] },
     tasks: [...concept, ...development, ...cosmeticReg, ...design, ...production],
   },
@@ -154,12 +154,12 @@ async function main() {
 
 async function seedDemo(db: ReturnType<typeof drizzle<typeof s>>, depts: Record<string, number>) {
   const roleIds = Object.fromEntries((await db.select().from(s.roles)).map((r) => [r.key, r.id]));
-  const people: { email: string; name: string; roles: s.RoleKey[]; depts: string[]; leads?: boolean; decider?: ("PL" | "MP")[] }[] = [
+  const people: { email: string; name: string; roles: s.RoleKey[]; depts: string[]; decider?: ("PL" | "MP")[] }[] = [
     { email: "admin@natu.test", name: "Irene Admin", roles: ["admin"], depts: [] },
-    { email: "comercial@natu.test", name: "Carlos Comercial", roles: ["requester"], depts: ["comercial"], leads: true },
-    { email: "marketing@natu.test", name: "Marta Marketing", roles: ["requester", "decider", "dept_member"], depts: ["marketing"], leads: true, decider: ["PL", "MP"] },
-    { email: "idi@natu.test", name: "Luis Laboratorio", roles: ["dept_member"], depts: ["idi"], leads: true },
-    { email: "calidad@natu.test", name: "Carmen Calidad", roles: ["dept_member"], depts: ["calidad"], leads: true },
+    { email: "comercial@natu.test", name: "Carlos Comercial", roles: ["requester"], depts: ["comercial"] },
+    { email: "marketing@natu.test", name: "Marta Marketing", roles: ["requester", "decider", "dept_member"], depts: ["marketing"], decider: ["PL", "MP"] },
+    { email: "idi@natu.test", name: "Luis Laboratorio", roles: ["dept_member"], depts: ["idi"] },
+    { email: "calidad@natu.test", name: "Carmen Calidad", roles: ["dept_member"], depts: ["calidad"] },
     { email: "direccion@natu.test", name: "Diego Dirección", roles: ["global_reader", "requester"], depts: ["direccion"] },
   ];
   for (const p of people) {
@@ -168,11 +168,7 @@ async function seedDemo(db: ReturnType<typeof drizzle<typeof s>>, depts: Record<
       ? [found]
       : await db.insert(s.users).values({ email: p.email, name: p.name, status: "active", isActive: true }).returning({ id: s.users.id });
     for (const r of p.roles) await db.insert(s.userRoles).values({ userId: u!.id, roleId: roleIds[r]! }).onConflictDoNothing();
-    for (const d of p.depts)
-      await db
-        .insert(s.departmentMembers)
-        .values({ userId: u!.id, departmentId: depts[d]!, isLead: !!p.leads })
-        .onConflictDoUpdate({ target: [s.departmentMembers.departmentId, s.departmentMembers.userId], set: { isLead: !!p.leads } });
+    for (const d of p.depts) await db.insert(s.departmentMembers).values({ userId: u!.id, departmentId: depts[d]! }).onConflictDoNothing();
     for (const t of p.decider ?? []) await db.insert(s.gateDeciders).values({ gate: "G1", projectType: t, userId: u!.id }).onConflictDoNothing();
   }
   for (const key of Object.keys(depts)) {

@@ -4,7 +4,7 @@
  *
  * - Cada apartado pertenece a un departamento (por clave; reasignable en el
  *   backoffice) y a la fase en la que debe completarse.
- * - Los responsables del departamento editan su apartado y lo marcan como
+ * - Los miembros del departamento (y el decisor global) editan su apartado y lo marcan como
  *   terminado (solo si no falta nada obligatorio) o como "no aplica".
  */
 
