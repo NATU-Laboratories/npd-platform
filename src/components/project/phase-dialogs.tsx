@@ -128,7 +128,7 @@ export function BudgetDialog({
         : kind === "reject"
           ? { kind, reasonCode, reasonText: reason }
           : { kind, reason };
-    const msg = { approve: "Presupuesto aprobado. El proyecto pasa a En curso.", changes: "El proyecto vuelve a Cotización.", reject: "Proyecto rechazado.", pause: "Proyecto en pausa." }[kind];
+    const msg = { approve: "Presupuesto aprobado. El proyecto pasa a En curso · Desarrollo.", changes: "El proyecto vuelve a Cotización.", reject: "Proyecto rechazado.", pause: "Proyecto en pausa." }[kind];
     return run(() => decideBudgetAction(projectId, decision as Parameters<typeof decideBudgetAction>[1]), msg, () => setOpen(false));
   };
 

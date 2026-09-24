@@ -29,21 +29,21 @@ El proyecto avanza por **fases** separadas por **puertas (gates)** de decisión.
 
 ### 2.1 Fases y puertas
 
-> **Revisión 24/09/2026:** el flujo pasa a 7 fases con dos aprobaciones formales (sustituye a la propuesta G1–G5 original).
+> **Revisión 24/09/2026:** el flujo pasa a 6 fases agrupadas en dos etapas, con dos aprobaciones formales (sustituye a la propuesta G1–G5 original):
+> **Validación** (Solicitud → Cotización → Valoración con cliente) y **En curso** (Desarrollo → Diseño y artes finales → Preparación para producción). El proyecto entra en *En curso* cuando el cliente aprueba el presupuesto (G2).
 
-| # | Fase | Para pasar a la siguiente | Decide |
-|---|------|---------------------------|--------|
-| 0 | **Solicitud** | **G1 – Aprobación de la solicitud** (aprobar / pedir info / rechazar / pausar). Al aprobar se eligen los departamentos implicados. | Aprobadores G1 (configurables por tipo; habitualmente Marketing) |
-| 1 | **Cotización** | Enviar la cotización al cliente (importe opcional + PDF en `01 Cotización`) | Marketing, Operaciones, Comercial o el comercial de la cuenta |
-| 2 | **Valoración con cliente** | **G2 – Aprobación del presupuesto**: cliente aprueba / pide cambios (vuelve a Cotización) / rechaza / pausa. **Solo PL:** anticipo del 30 % recibido, o inicio sin anticipo con el nombre de la persona que asume la responsabilidad (queda auditado y se puede registrar el pago más tarde). | Aprobadores G2 (configurables por tipo; habitualmente Comercial) |
-| 3 | **En curso** | Avanzar de fase | Marketing / Admin / aprobadores |
-| 4 | **Desarrollo** | Avanzar de fase | ídem |
-| 5 | **Diseño y artes finales** | Avanzar de fase | ídem |
-| 6 | **Preparación para producción** | Pasar a producción (estado *En producción*) | ídem |
+| # | Etapa | Fase | Para pasar a la siguiente | Decide |
+|---|-------|------|---------------------------|--------|
+| 0 | Validación | **Solicitud** | **G1 – Aprobación de la solicitud** (aprobar / pedir info / rechazar / pausar). Al aprobar se eligen los departamentos implicados. | Aprobadores G1 (configurables por tipo; habitualmente Marketing) |
+| 1 | Validación | **Cotización** | Enviar la cotización al cliente (importe opcional + PDF en `01 Cotización`) | Marketing, Operaciones, Comercial o el comercial de la cuenta |
+| 2 | Validación | **Valoración con cliente** | **G2 – Aprobación del presupuesto**: cliente aprueba / pide cambios (vuelve a Cotización) / rechaza / pausa. **Solo PL:** anticipo del 30 % recibido, o inicio sin anticipo con el nombre de la persona que asume la responsabilidad (queda auditado y se puede registrar el pago más tarde). | Aprobadores G2 (configurables por tipo; habitualmente Comercial) |
+| 3 | En curso | **Desarrollo** | Avanzar de fase | Marketing / Admin / aprobadores |
+| 4 | En curso | **Diseño y artes finales** | Avanzar de fase | ídem |
+| 5 | En curso | **Preparación para producción** | Pasar a producción (estado *En producción*) | ídem |
 
 Tipos de proyecto: **PL** (marca privada), **MP** (marca propia) y **MDD** (marca de distribuidor; mismos datos de cliente que PL, sin cláusula de anticipo). Códigos `AAAA-PL-NNNN`, `AAAA-MP-NNNN`, `AAAA-MDD-NNNN`.
 
-Subcarpetas SharePoint: `00 Solicitud`, `01 Cotización`, `02 Valoración cliente`, `03 En curso`, `04 Desarrollo`, `05 Diseño-AAFF`, `06 Preparación producción`.
+Subcarpetas SharePoint: `00 Solicitud`, `01 Cotización`, `02 Valoración cliente`, `03 Desarrollo`, `04 Diseño-AAFF`, `05 Preparación producción`.
 
 Brief (revisión): género obligatorio con selección múltiple (mujer / hombre / unisex); se eliminan estilo, rango de edad, estacionalidad, alérgenos, % natural, vegano y certificaciones; se añade **Blacklist** (texto pegado y/o adjunto, opcional) y enlace a **Fragrantica** en cada referencia de inspiración.
 
