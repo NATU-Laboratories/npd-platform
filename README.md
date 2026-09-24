@@ -24,7 +24,7 @@ Next.js 16 (App Router, Server Actions) · TypeScript · Tailwind v4 · Drizzle 
 | Panel | KPIs, gráficos (mensual PL/MP, estado, tipo/marca, categoría, solicitante, embudo por fase), listado filtrable/ordenable con semáforo de fecha, "mis proyectos", "requieren mi acción", "en riesgo". |
 | Ficha | Cabecera con acciones por rol, línea de fases, brief visual (perfil olfativo, inspiraciones, galería, datos comerciales), actividad filtrable con diff de ediciones, comentarios con `@persona` / `@departamento`, archivos por fase + "Abrir en SharePoint". |
 | Ficha técnica | Apartados por departamento (cotización, fórmula y pirámides, envase, regulatorio, etiqueta, producción) que completan y cierran sus responsables; resumen hecho/falta, aviso al avanzar de fase y notificación a los departamentos de cada fase. |
-| Backoffice | Usuarios (roles, departamentos, estado), departamentos (color, emails, responsable, miembros), matriz de decisores puerta × tipo, catálogos (marcas, clientes con import CSV, formatos, notas…), plantillas (lectura), configuración, auditoría con export CSV, errores, notificaciones/cola, uso. |
+| Backoffice | Usuarios (roles, departamentos, estado), departamentos (color, emails, miembros; asignación de apartados de la ficha técnica), matriz de aprobadores puerta × tipo, marcas propias, plantillas (lectura), configuración, auditoría con export CSV, errores, notificaciones/cola, uso. |
 
 Pendiente para V2/V3 según el SPEC: tareas por departamento, carriles, Gantt, "Mis tareas", puertas G2–G5, editor de plantillas, resumen diario/alertas de riesgo, Teams, Pipedrive, PDF. La preferencia "resumen diario" ya se guarda por usuario, pero en V1 todos los avisos son inmediatos.
 

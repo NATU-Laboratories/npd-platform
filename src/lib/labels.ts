@@ -45,7 +45,7 @@ export const PREPAYMENT_TYPES: readonly string[] = ["PL"];
 export const CATEGORY_LABEL = {
   perfume: "Perfumería",
   ambient: "Ambientación",
-  cosmetic: "Cosmética",
+  cosmetic: "Personal Care",
 } as const;
 export const PRIORITY_LABEL = { low: "Baja", medium: "Media", high: "Alta", urgent: "Urgente" } as const;
 export const PRIORITY_COLOR = {
@@ -86,7 +86,7 @@ export function stageOf(phase: number) {
 export const LAST_PHASE = PHASES.length - 1;
 export const APPROVAL_GATES = [
   { gate: "G1", name: "Aprobación de la solicitud", phase: 0, description: "Solicitud → Cotización. Decide si el proyecto es viable y se cotiza." },
-  { gate: "G2", name: "Aprobación del presupuesto", phase: 2, description: "Valoración con cliente → En curso (Desarrollo). Comercial registra que el cliente aprueba el presupuesto." },
+  { gate: "G2", name: "Aprobación del presupuesto", phase: 2, description: "Valoración con cliente → En curso (Desarrollo). Comercial registra que el cliente aprueba el presupuesto. El comercial que dio de alta el proyecto siempre puede decidirla; aquí se añaden aprobadores adicionales." },
 ] as const;
 
 /** Subcarpetas de SharePoint por fase (§9.1). */
@@ -101,6 +101,7 @@ export const PHASE_FOLDERS = [
 
 export const ROLE_LABEL = {
   admin: "Admin",
+  global_decider: "Decisor global (gestor de proyectos)",
   requester: "Solicitante",
   decider: "Aprobador",
   dept_member: "Miembro de departamento",

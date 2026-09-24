@@ -15,7 +15,6 @@ export const metadata = { title: "Departamentos" };
 export default async function DepartmentsPage() {
   const [depts, people, members, sectionDept] = await Promise.all([getDepartments(false), getActiveUsers(), db.select().from(departmentMembers), sectionDeptKeys()]);
   const isMember = (d: { id: number }, userId: string) => members.some((m) => m.departmentId === d.id && m.userId === userId);
-  const isLead = (d: { id: number }, userId: string) => members.some((m) => m.departmentId === d.id && m.userId === userId && m.isLead);
   const form = (d?: (typeof depts)[number]) => (
     <form action={saveDepartmentAction} className="grid gap-3 sm:grid-cols-2">
       {d && <input type="hidden" name="id" value={d.id} />}
@@ -29,18 +28,7 @@ export default async function DepartmentsPage() {
       <Field label="Emails de notificación" hint="Separados por comas o saltos de línea" className="sm:col-span-2">
         <Textarea name="notifyEmails" rows={2} defaultValue={d?.notifyEmails.join(", ")} />
       </Field>
-      <Field
-        label="Responsables"
-        hint="Completan el apartado del departamento en la ficha técnica de cada proyecto y lo marcan como terminado. Puede haber varios."
-        className="sm:col-span-2"
-      >
-        <div className="grid max-h-40 gap-1 overflow-y-auto rounded-md border border-brand-200 bg-brand-50/40 p-2 sm:grid-cols-3">
-          {people.map((p) => (
-            <Checkbox key={p.id} name="leads" value={p.id} label={p.name} defaultChecked={!!d && isLead(d, p.id)} />
-          ))}
-        </div>
-      </Field>
-      <Field label="Miembros" hint="Reciben avisos y ven los proyectos del departamento." className="sm:col-span-2">
+      <Field label="Miembros" hint="Solo los miembros pueden rellenar el apartado del departamento en la ficha técnica y marcarlo como terminado (además del decisor global y los administradores)." className="sm:col-span-2">
         <div className="grid max-h-40 gap-1 overflow-y-auto rounded-md border border-slate-200 p-2 sm:grid-cols-3">
           {people.map((p) => (
             <Checkbox key={p.id} name="members" value={p.id} label={p.name} defaultChecked={!!d && isMember(d, p.id)} />
@@ -57,7 +45,7 @@ export default async function DepartmentsPage() {
   );
   return (
     <>
-      <PageTitle title="Departamentos" description="Nombre, color, emails que reciben las notificaciones, responsables y miembros." />
+      <PageTitle title="Departamentos" description="Nombre, color, emails que reciben las notificaciones y miembros." />
       <div className="flex flex-col gap-3">
         {depts.map((d) => (
           <Card key={d.id}>
@@ -68,7 +56,7 @@ export default async function DepartmentsPage() {
                 {!d.isActive && <span className="text-xs text-slate-400">(inactivo)</span>}
                 <span className="ml-auto truncate text-xs text-slate-500">{d.notifyEmails.join(", ") || "sin emails"}</span>
                 <span className="text-xs text-slate-400">
-                  {members.filter((m) => m.departmentId === d.id && m.isLead).length} resp. · {members.filter((m) => m.departmentId === d.id).length} miembros
+                  {members.filter((m) => m.departmentId === d.id).length} miembros
                 </span>
               </summary>
               <div className="border-t border-slate-100 p-4">{form(d)}</div>
@@ -83,7 +71,7 @@ export default async function DepartmentsPage() {
 
       <Card className="mt-8 p-4">
         <h2 className="text-base font-semibold text-slate-900">Apartados de la ficha técnica</h2>
-        <p className="mb-4 text-sm text-slate-500">Qué departamento completa cada apartado. Sus responsables serán quienes puedan editarlo y marcarlo como terminado.</p>
+        <p className="mb-4 text-sm text-slate-500">Qué departamento completa cada apartado. Sus miembros serán quienes puedan editarlo y marcarlo como terminado.</p>
         <form action={saveSheetDepartmentsAction} className="flex flex-col gap-3">
           <div className="grid gap-3 sm:grid-cols-2">
             {SHEET_SECTIONS.map((s) => (

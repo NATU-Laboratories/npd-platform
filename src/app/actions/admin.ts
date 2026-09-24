@@ -5,8 +5,6 @@ import { z } from "zod";
 import { db } from "@/db";
 import {
   brands,
-  catalogItems,
-  clients,
   departmentMembers,
   departments,
   gateDeciders,
@@ -17,7 +15,7 @@ import {
   userRoles,
   users,
 } from "@/db/schema";
-import { CATALOG_TYPES, type AppSettings } from "@/lib/catalog-defaults";
+import type { AppSettings } from "@/lib/catalog-defaults";
 import { SHEET_SECTIONS } from "@/lib/sheet/sections";
 import { logActivity } from "@/lib/server/activity";
 import { requireAdminAction } from "@/lib/server/authz";
@@ -47,12 +45,8 @@ export async function updateUserAction(fd: FormData) {
     await tx.delete(userRoles).where(eq(userRoles.userId, userId));
     const ids = roleRows.filter((r) => roleKeys.includes(r.key)).map((r) => r.id);
     if (ids.length) await tx.insert(userRoles).values(ids.map((roleId) => ({ userId, roleId })));
-    // Conservar la marca de responsable en los departamentos que mantiene
-    const leadOf = new Set(
-      (await tx.select().from(departmentMembers).where(eq(departmentMembers.userId, userId))).filter((m) => m.isLead).map((m) => m.departmentId),
-    );
     await tx.delete(departmentMembers).where(eq(departmentMembers.userId, userId));
-    if (deptIds.length) await tx.insert(departmentMembers).values(deptIds.map((departmentId) => ({ userId, departmentId, isLead: leadOf.has(departmentId) })));
+    if (deptIds.length) await tx.insert(departmentMembers).values(deptIds.map((departmentId) => ({ userId, departmentId })));
   });
   await audit(admin.id, "admin.user.updated", "user", userId, { email: before?.email, status: { from: before?.status, to: status }, roles: roleKeys, departments: deptIds });
   revalidatePath("/admin/usuarios");
@@ -84,7 +78,7 @@ function parseDept(fd: FormData) {
     notifyEmails: String(fd.get("notifyEmails") ?? "")
       .split(/[\s,;]+/)
       .filter(Boolean),
-    leadUserId: fd.getAll("leads").map(String)[0] || null, // primer responsable (compatibilidad)
+    leadUserId: null,
     isActive: fd.get("isActive") === "on",
   });
 }
@@ -93,8 +87,7 @@ export async function saveDepartmentAction(fd: FormData) {
   const admin = await requireAdminAction();
   const data = parseDept(fd);
   const id = fd.get("id") ? Number(fd.get("id")) : null;
-  const leadIds = new Set(fd.getAll("leads").map(String));
-  const memberIds = [...new Set([...fd.getAll("members").map(String), ...leadIds])];
+  const memberIds = fd.getAll("members").map(String);
   let deptId = id;
   if (id) {
     await db.update(departments).set(data).where(eq(departments.id, id));
@@ -104,9 +97,9 @@ export async function saveDepartmentAction(fd: FormData) {
   }
   if (fd.has("membersSubmitted")) {
     await db.delete(departmentMembers).where(eq(departmentMembers.departmentId, deptId!));
-    if (memberIds.length) await db.insert(departmentMembers).values(memberIds.map((userId) => ({ userId, departmentId: deptId!, isLead: leadIds.has(userId) })));
+    if (memberIds.length) await db.insert(departmentMembers).values(memberIds.map((userId) => ({ userId, departmentId: deptId! })));
   }
-  await audit(admin.id, id ? "admin.department.updated" : "admin.department.created", "department", deptId!, { ...data, members: memberIds.length, leads: leadIds.size });
+  await audit(admin.id, id ? "admin.department.updated" : "admin.department.created", "department", deptId!, { ...data, members: memberIds.length });
   revalidatePath("/admin/departamentos");
 }
 
@@ -132,35 +125,7 @@ export async function saveDecidersAction(fd: FormData) {
   revalidatePath("/admin/decisores");
 }
 
-// ─── Catálogos ────────────────────────────────────────────────────────────
-
-export async function addCatalogItemAction(fd: FormData) {
-  const admin = await requireAdminAction();
-  const type = z.enum(Object.keys(CATALOG_TYPES) as [string, ...string[]]).parse(fd.get("type"));
-  const label = z.string().trim().min(1).max(200).parse(fd.get("label"));
-  const value =
-    z.string().trim().max(100).parse(fd.get("value") ?? "") ||
-    label
-      .normalize("NFD")
-      .replace(/\p{Diacritic}/gu, "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "_")
-      .replace(/^_|_$/g, "");
-  await db.insert(catalogItems).values({ type, value, label, sort: 999 }).onConflictDoUpdate({ target: [catalogItems.type, catalogItems.value], set: { label, isActive: true } });
-  await audit(admin.id, "admin.catalog.added", "catalog_item", `${type}:${value}`, { label });
-  revalidatePath("/admin/catalogos");
-}
-
-export async function updateCatalogItemAction(fd: FormData) {
-  const admin = await requireAdminAction();
-  const id = Number(fd.get("id"));
-  const label = z.string().trim().min(1).max(200).parse(fd.get("label"));
-  const sort = Number(fd.get("sort") ?? 0) || 0;
-  const isActive = fd.get("isActive") === "on";
-  await db.update(catalogItems).set({ label, sort, isActive }).where(eq(catalogItems.id, id));
-  await audit(admin.id, "admin.catalog.updated", "catalog_item", id, { label, sort, isActive });
-  revalidatePath("/admin/catalogos");
-}
+// ─── Marcas propias ───────────────────────────────────────────────────────
 
 export async function saveBrandAction(fd: FormData) {
   const admin = await requireAdminAction();
@@ -169,37 +134,7 @@ export async function saveBrandAction(fd: FormData) {
   if (id) await db.update(brands).set({ name, isActive: fd.get("isActive") === "on" }).where(eq(brands.id, id));
   else await db.insert(brands).values({ name }).onConflictDoNothing();
   await audit(admin.id, "admin.brand.saved", "brand", id ?? name, { name });
-  revalidatePath("/admin/catalogos");
-}
-
-export async function saveClientAction(fd: FormData) {
-  const admin = await requireAdminAction();
-  const data = {
-    name: z.string().trim().min(1).max(200).parse(fd.get("name")),
-    country: String(fd.get("country") ?? "").trim() || null,
-    contact: String(fd.get("contact") ?? "").trim() || null,
-    externalRef: String(fd.get("externalRef") ?? "").trim() || null,
-    accountManagerUserId: String(fd.get("accountManagerUserId") ?? "") || null,
-  };
-  const id = fd.get("id") ? Number(fd.get("id")) : null;
-  if (id) await db.update(clients).set(data).where(eq(clients.id, id));
-  else await db.insert(clients).values(data);
-  await audit(admin.id, "admin.client.saved", "client", id ?? data.name, data);
-  revalidatePath("/admin/catalogos");
-}
-
-/** Carga inicial de clientes desde CSV: nombre;país;contacto;ref_externa */
-export async function importClientsAction(fd: FormData) {
-  const admin = await requireAdminAction();
-  const text = String(fd.get("csv") ?? "");
-  const rows = text
-    .split(/\r?\n/)
-    .map((l) => l.split(/[;,\t]/).map((c) => c.trim()))
-    .filter((r) => r[0] && r[0].toLowerCase() !== "nombre");
-  if (!rows.length) return;
-  await db.insert(clients).values(rows.map((r) => ({ name: r[0]!, country: r[1] || null, contact: r[2] || null, externalRef: r[3] || null })));
-  await audit(admin.id, "admin.client.imported", "client", "csv", { count: rows.length });
-  revalidatePath("/admin/catalogos");
+  revalidatePath("/admin/marcas");
 }
 
 // ─── Configuración ────────────────────────────────────────────────────────

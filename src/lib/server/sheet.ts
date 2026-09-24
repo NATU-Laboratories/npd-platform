@@ -22,7 +22,7 @@ import type { CurrentUser } from "./authz";
 import { notifyProjectEvent } from "./notifications";
 import { getSettings } from "./settings";
 
-export type SheetDept = { key: string; name: string; color: string; leads: string[] };
+export type SheetDept = { key: string; name: string; color: string; members: string[] };
 
 export type SheetEntry = {
   section: SheetSection;
@@ -81,17 +81,17 @@ export async function sheetContext(p: Project, tx: DbOrTx = db): Promise<SheetCt
 }
 
 async function deptsByKey(): Promise<Record<string, SheetDept>> {
-  const [rows, leads] = await Promise.all([
+  const [rows, members] = await Promise.all([
     db.select({ key: departments.key, name: departments.name, color: departments.color }).from(departments),
     db
       .select({ key: departments.key, name: users.name })
       .from(departmentMembers)
       .innerJoin(departments, eq(departments.id, departmentMembers.departmentId))
       .innerJoin(users, eq(users.id, departmentMembers.userId))
-      .where(and(eq(departmentMembers.isLead, true), eq(users.status, "active"))),
+      .where(eq(users.status, "active")),
   ]);
   return Object.fromEntries(
-    rows.filter((r) => r.key).map((r) => [r.key!, { key: r.key!, name: r.name, color: r.color, leads: leads.filter((l) => l.key === r.key).map((l) => l.name) }]),
+    rows.filter((r) => r.key).map((r) => [r.key!, { key: r.key!, name: r.name, color: r.color, members: members.filter((l) => l.key === r.key).map((l) => l.name) }]),
   );
 }
 
@@ -125,7 +125,7 @@ export async function loadSheet(p: Project): Promise<{ ctx: SheetCtx; entries: S
     return {
       section,
       title: sectionTitle(section, ctx),
-      dept: depts[key] ?? { key, name: key, color: "#77736d", leads: [] },
+      dept: depts[key] ?? { key, name: key, color: "#77736d", members: [] },
       data,
       status: row?.s.status ?? "pending",
       statusBy: row?.statusBy ?? null,
@@ -142,11 +142,14 @@ export async function loadSheet(p: Project): Promise<{ ctx: SheetCtx; entries: S
   return { ctx, entries };
 }
 
-/** ¿Puede editar el apartado y cambiar su estado? Responsables del departamento y administradores. */
+/**
+ * ¿Puede editar el apartado y marcarlo como terminado? Solo los miembros del
+ * departamento del apartado, el decisor global y los administradores. El resto lo ve.
+ */
 export function canEditSection(u: CurrentUser, deptKey: string, p: Pick<Project, "status" | "phase">) {
   if (!["in_progress", "paused", "in_production"].includes(p.status)) return false;
   if (p.status === "in_progress" && p.phase < 1) return false;
-  return u.roles.includes("admin") || u.leadDepartmentKeys.includes(deptKey);
+  return u.roles.includes("admin") || u.roles.includes("global_decider") || u.departmentKeys.includes(deptKey);
 }
 
 /** Apartados de fases ya alcanzadas que siguen sin terminar (aviso al avanzar de fase). */
@@ -184,7 +187,7 @@ async function guard(u: CurrentUser, projectId: string, sectionKey: string) {
   const p = await loadProjectRow(projectId);
   if (!p) throw new SheetError("Proyecto no encontrado");
   const deptKey = (await sectionDeptKeys())[section.key]!;
-  if (!canEditSection(u, deptKey, p)) throw new SheetError("Solo los responsables del departamento pueden editar este apartado");
+  if (!canEditSection(u, deptKey, p)) throw new SheetError("Solo los miembros del departamento pueden editar este apartado");
   return { section, p, deptKey };
 }
 

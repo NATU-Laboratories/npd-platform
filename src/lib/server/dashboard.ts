@@ -32,7 +32,7 @@ const requester = alias(users, "requester");
 /**
  * "Requieren mi acción": info pedida a mí, aprobaciones G1/G2 pendientes que me
  * tocan, cotizaciones pendientes de enviar de mis cuentas y apartados de la
- * ficha técnica de mis departamentos (como responsable) cuya fase ya ha llegado.
+ * ficha técnica de mis departamentos cuya fase ya ha llegado.
  */
 function requiresMyAction(u: CurrentUser, sectionDept: Record<string, string>): SQL {
   const mine = or(eq(projects.requesterId, u.id), eq(projects.accountManagerId, u.id))!;
@@ -43,13 +43,15 @@ function requiresMyAction(u: CurrentUser, sectionDept: Record<string, string>): 
   const typesFor = (gate: "G1" | "G2") => u.deciderFor.filter((d) => d.gate === gate).map((d) => d.projectType);
   const g1 = and(eq(projects.status, "submitted"), eq(projects.phase, 0))!;
   const g2 = and(eq(projects.status, "in_progress"), eq(projects.phase, 2))!;
-  if (hasRole(u, "admin")) conds.push(g1, g2);
+  // G2: el comercial que dio de alta el proyecto siempre puede (y debe) registrarlo
+  conds.push(and(g2, eq(projects.requesterId, u.id))!);
+  if (hasRole(u, "admin", "global_decider")) conds.push(g1, g2);
   else {
     if (typesFor("G1").length) conds.push(and(g1, inArray(projects.type, typesFor("G1")))!);
     if (typesFor("G2").length) conds.push(and(g2, inArray(projects.type, typesFor("G2")))!);
   }
   for (const sec of SHEET_SECTIONS) {
-    if (!u.leadDepartmentKeys.includes(sectionDept[sec.key] ?? sec.dept)) continue;
+    if (!u.departmentKeys.includes(sectionDept[sec.key] ?? sec.dept)) continue;
     conds.push(
       sql`(${projects.status} in ('in_progress', 'paused') and ${projects.phase} >= ${sec.phase} and not exists (select 1 from project_sheet ps where ps.project_id = ${projects.id} and ps.section = ${sec.key} and ps.status <> 'pending'))`,
     );

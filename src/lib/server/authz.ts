@@ -27,8 +27,6 @@ export type CurrentUser = {
   roles: RoleKey[];
   departmentIds: number[];
   departmentKeys: string[];
-  /** Departamentos de los que es responsable (edita su apartado de la ficha técnica). */
-  leadDepartmentKeys: string[];
   deciderFor: { gate: GateKey; projectType: "PL" | "MP" | "MDD" }[];
 };
 
@@ -49,7 +47,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const [roleRows, deptRows, deciderRows] = await Promise.all([
     db.select({ key: roles.key }).from(userRoles).innerJoin(roles, eq(roles.id, userRoles.roleId)).where(eq(userRoles.userId, id)),
     db
-      .select({ id: departments.id, key: departments.key, isLead: departmentMembers.isLead })
+      .select({ id: departments.id, key: departments.key })
       .from(departmentMembers)
       .innerJoin(departments, eq(departments.id, departmentMembers.departmentId))
       .where(eq(departmentMembers.userId, id)),
@@ -63,7 +61,6 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     roles: roleRows.map((r) => r.key),
     departmentIds: deptRows.map((d) => d.id),
     departmentKeys: deptRows.map((d) => d.key ?? ""),
-    leadDepartmentKeys: deptRows.filter((d) => d.isLead && d.key).map((d) => d.key!),
     deciderFor: deciderRows,
   };
 });
@@ -95,6 +92,11 @@ export function isAdmin(u: CurrentUser) {
   return u.roles.includes("admin");
 }
 
+/** Decisor global (gestor de proyectos): decide, rellena y avanza en todas las fases de todos los proyectos. */
+export function isGlobalDecider(u: CurrentUser) {
+  return u.roles.includes("global_decider");
+}
+
 export function isMarketing(u: CurrentUser) {
   return u.departmentKeys.includes("marketing");
 }
@@ -123,7 +125,7 @@ export function canRequest(u: CurrentUser) {
 export async function projectVisibility(u: CurrentUser): Promise<SQL> {
   const notDraft = ne(projects.status, "draft");
   const ownDraft = and(eq(projects.status, "draft"), eq(projects.requesterId, u.id))!;
-  if (hasRole(u, "admin", "global_reader") || isMarketing(u)) return or(notDraft, ownDraft)!;
+  if (hasRole(u, "admin", "global_decider", "global_reader") || isMarketing(u)) return or(notDraft, ownDraft)!;
 
   const conds: SQL[] = [
     and(notDraft, or(eq(projects.requesterId, u.id), eq(projects.accountManagerId, u.id)))!,
@@ -155,19 +157,28 @@ export async function canViewProject(u: CurrentUser, projectId: string) {
 
 export function canEditBrief(u: CurrentUser, p: Pick<Project, "requesterId" | "status">) {
   if (p.status === "draft") return p.requesterId === u.id;
-  if (isAdmin(u) || isMarketing(u)) return true;
+  if (isAdmin(u) || isGlobalDecider(u) || isMarketing(u)) return true;
   return p.requesterId === u.id && (p.status === "submitted" || p.status === "info_requested");
 }
 
-export function canDecideGate(u: CurrentUser, p: Pick<Project, "type">, gate: GateKey) {
-  if (isAdmin(u)) return true;
-  if (!hasRole(u, "decider")) return false;
-  return u.deciderFor.some((d) => d.gate === gate && d.projectType === p.type);
+/** Aprobador configurado en el backoffice para esa puerta y tipo de proyecto. */
+function isConfiguredDecider(u: CurrentUser, p: Pick<Project, "type">, gate: GateKey) {
+  return hasRole(u, "decider") && u.deciderFor.some((d) => d.gate === gate && d.projectType === p.type);
 }
 
-/** Pausar/reanudar/cancelar/avanzar fase: Admin, Marketing y aprobadores (G1/G2) del tipo de proyecto. */
+/**
+ * ¿Puede decidir la puerta? Admin, decisor global, aprobadores configurados y,
+ * en G2 (aprobación del presupuesto), siempre el comercial que dio de alta el proyecto.
+ */
+export function canDecideGate(u: CurrentUser, p: Pick<Project, "type" | "requesterId">, gate: GateKey) {
+  if (isAdmin(u) || isGlobalDecider(u)) return true;
+  if (gate === "G2" && p.requesterId === u.id) return true;
+  return isConfiguredDecider(u, p, gate);
+}
+
+/** Pausar/reanudar/cancelar/avanzar fase: Admin, decisor global, Marketing y aprobadores (G1/G2) del tipo de proyecto. */
 export function canManageProject(u: CurrentUser, p: Pick<Project, "type" | "phase">) {
-  return isAdmin(u) || isMarketing(u) || canDecideGate(u, p, "G1") || canDecideGate(u, p, "G2");
+  return isAdmin(u) || isGlobalDecider(u) || isMarketing(u) || isConfiguredDecider(u, p, "G1") || isConfiguredDecider(u, p, "G2");
 }
 
 /** Enviar la cotización al cliente (fase Cotización): gestores, comercial de la cuenta, Operaciones y Comercial. */

@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronDown, Circle, FileText, Info } from "lucide-react";
+import { CheckCircle2, ChevronDown, Circle, FileText } from "lucide-react";
 import { OlfactoryPyramid } from "@/components/project/olfactory-pyramid";
 import type { UploadedFile } from "@/components/uploader";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -120,6 +120,61 @@ function FieldView({ f, data, ctx, files }: { f: SheetField; data: SheetData; ct
   );
 }
 
+/** Resumen compacto: qué ha terminado cada departamento y qué le falta. */
+export function SheetSummary({ entries }: { entries: SheetEntry[] }) {
+  const closed = entries.filter((e) => e.status !== "pending").length;
+  return (
+    <Card className="h-full">
+      <CardHeader
+        title="Estado por departamento"
+        description="Qué ha terminado cada departamento y qué le falta."
+        actions={
+          <span className="text-xs text-slate-500">
+            <b className="text-base font-bold tabular-nums text-slate-900">{closed}</b> de {entries.length} terminados
+          </span>
+        }
+      />
+      <ul className="divide-y divide-slate-100">
+        {entries.map((e) => {
+          const missing = e.reqs.filter((r) => !r.ok).map((r) => r.label);
+          return (
+            <li key={e.section.key} className={cn("px-5 py-3", !e.due && e.status === "pending" && "opacity-70")}>
+              <div className="flex items-start gap-3">
+                <span className="mt-1.5 size-2.5 shrink-0 rounded-full" style={{ background: e.dept.color }} aria-hidden />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <a href={`#ficha-${e.section.key}`} className="font-medium text-slate-900 hover:underline">
+                      {e.title}
+                    </a>
+                    <Pill e={e} />
+                  </div>
+                  <div className="mt-0.5 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                    <span title={e.dept.members.length ? `Miembros: ${e.dept.members.join(", ")}` : "Sin miembros asignados"}>
+                      {e.dept.name} · Fase {e.section.phase} · {PHASES[e.section.phase]?.short}
+                    </span>
+                    <Bar e={e} />
+                  </div>
+                  {e.status === "pending" && e.due && missing.length > 0 && (
+                    <p className="mt-1 text-xs text-brand-500">
+                      Falta: {missing.slice(0, 3).join(" · ")}
+                      {missing.length > 3 ? ` (+${missing.length - 3})` : ""}
+                    </p>
+                  )}
+                  {e.status !== "pending" && e.statusAt && (
+                    <p className="mt-1 text-xs text-slate-500">
+                      {e.status === "done" ? "Terminado" : "No aplica"} · {e.statusBy} · {formatDate(e.statusAt)}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
+  );
+}
+
 export function SheetPanel({
   projectId,
   entries,
@@ -137,73 +192,12 @@ export function SheetPanel({
   maxMb: number;
   noteSuggestions: string[];
 }) {
-  const closed = entries.filter((e) => e.status !== "pending").length;
-  const dueOpen = entries.filter((e) => e.due && e.status === "pending");
   return (
     <Card id="ficha">
       <CardHeader
-        title="Ficha técnica"
-        description="Lo que aporta cada departamento conforme avanza el proyecto. Cada responsable completa su apartado y lo marca como terminado."
-        actions={
-          <span className="text-xs text-slate-500">
-            <b className="text-base font-bold text-slate-900 tabular-nums">{closed}</b> de {entries.length} terminados
-          </span>
-        }
+        title="Ficha técnica · detalle por departamento"
+        description="Lo que aporta cada departamento conforme avanza el proyecto. Solo los miembros de cada departamento (y el decisor global) pueden editar su apartado y marcarlo como terminado."
       />
-
-      {/* Resumen: qué está hecho y qué falta, por departamento */}
-      <div className="overflow-x-auto border-b border-slate-100">
-        <table className="w-full min-w-[640px] text-left text-sm">
-          <thead className="bg-slate-50 text-xs text-slate-500">
-            <tr>
-              <th className="px-5 py-2 font-medium">Apartado</th>
-              <th className="px-3 py-2 font-medium">Departamento</th>
-              <th className="px-3 py-2 font-medium">Progreso</th>
-              <th className="px-3 py-2 font-medium">Estado</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {entries.map((e) => (
-              <tr key={e.section.key} className={cn(!e.due && e.status === "pending" && "text-slate-500")}>
-                <td className="px-5 py-2.5">
-                  <a href={`#ficha-${e.section.key}`} className="font-medium text-slate-900 hover:underline">
-                    {e.title}
-                  </a>
-                  <p className="text-xs text-slate-500">
-                    Fase {e.section.phase} · {PHASES[e.section.phase]?.name}
-                  </p>
-                </td>
-                <td className="px-3 py-2.5">
-                  <span className="inline-flex items-center gap-1.5 text-sm">
-                    <span className="size-2 rounded-full" style={{ background: e.dept.color }} aria-hidden />
-                    {e.dept.name}
-                  </span>
-                  <p className="text-xs text-slate-500">{e.dept.leads.length ? `Resp.: ${e.dept.leads.join(", ")}` : "Sin responsable asignado"}</p>
-                </td>
-                <td className="px-3 py-2.5">
-                  <Bar e={e} />
-                </td>
-                <td className="px-3 py-2.5">
-                  <Pill e={e} />
-                  {e.status !== "pending" && e.statusAt && (
-                    <p className="mt-0.5 text-[11px] text-slate-500">
-                      {e.statusBy} · {formatDate(e.statusAt)}
-                    </p>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {dueOpen.length > 0 && (
-        <p className="flex items-start gap-2 border-b border-slate-100 bg-brand-50/60 px-5 py-2.5 text-xs text-slate-700">
-          <Info className="mt-0.5 size-3.5 shrink-0 text-brand-500" />
-          <span>
-            Pendiente hasta la fase actual: {dueOpen.map((e) => `${e.title} (${e.dept.name})`).join(" · ")}
-          </span>
-        </p>
-      )}
 
       {/* Apartados */}
       <div className="divide-y divide-slate-100">
@@ -284,7 +278,7 @@ export function SheetPanel({
 
                 <p className="text-[11px] text-slate-400">
                   {e.updatedAt ? `Última edición: ${e.updatedBy ?? "—"} · ${formatDate(e.updatedAt, true)}` : "Sin datos todavía."}
-                  {!canEdit && e.dept.leads.length > 0 && ` Lo completan los responsables de ${e.dept.name}.`}
+                  {!canEdit && ` Lo completan los miembros de ${e.dept.name}.`}
                   {e.status === "done" && e.statusAt && ` · Terminado por ${e.statusBy} el ${formatDate(e.statusAt)}.`}
                 </p>
               </div>
