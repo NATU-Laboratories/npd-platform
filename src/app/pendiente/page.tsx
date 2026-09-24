@@ -14,7 +14,7 @@ export default async function PendingPage() {
   return (
     <main className="flex min-h-dvh items-center justify-center bg-slate-100 p-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow">
-        <Logo className="text-brand-700" />
+        <Logo />
         <Clock className="mx-auto mt-8 size-10 text-amber-500" />
         <h1 className="mt-4 text-lg font-semibold">{u.status === "disabled" ? "Usuario desactivado" : "Pendiente de activación"}</h1>
         <p className="mt-2 text-sm text-slate-600">

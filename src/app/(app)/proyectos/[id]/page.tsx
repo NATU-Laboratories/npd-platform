@@ -339,7 +339,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
                         className={cn(
                           "whitespace-normal ring-slate-200",
                           g?.g.status === "approved"
-                            ? "bg-emerald-50 text-emerald-800"
+                            ? "bg-[#eef0e6] text-[#56613f]"
                             : g?.g.status === "rejected"
                               ? "bg-rose-50 text-rose-800"
                               : current

@@ -17,10 +17,10 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           Modo pruebas: acceso provisional sin Microsoft. Los emails no se envían y los archivos no van a SharePoint.
         </div>
       )}
-      <header className="sticky top-0 z-30 bg-brand-700 text-white shadow">
-        <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4">
+      <header className="sticky top-0 z-30 bg-natu-dark text-white shadow-sm">
+        <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4">
           <Link href="/" className="shrink-0">
-            <Logo />
+            <Logo onDark />
           </Link>
           <nav className="ml-4 hidden items-center gap-1 text-sm sm:flex">
             <Link href="/" className="rounded px-3 py-1.5 hover:bg-white/10">
@@ -35,7 +35,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           <div className="ml-auto flex items-center gap-2">
             {canRequest(u) && (
               <form action={newDraftAction}>
-                <Button type="submit" size="sm" className="bg-white text-brand-800 hover:bg-brand-50">
+                <Button type="submit" size="sm" className="bg-natu-salmon font-semibold text-natu-dark hover:bg-brand-200">
                   <Plus /> <span className="hidden sm:inline">Nueva solicitud</span>
                   <span className="sm:hidden">Nueva</span>
                 </Button>

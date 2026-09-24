@@ -35,9 +35,11 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
         : null;
 
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-brand-700 to-brand-900 p-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-xl">
-        <Logo className="text-brand-700" />
+    <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-natu-dark p-4">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/brand/natu-leaf.png" alt="" aria-hidden className="pointer-events-none absolute -right-24 -bottom-24 h-[36rem] w-auto opacity-[0.07] invert" />
+      <div className="relative w-full max-w-sm rounded-xl bg-white p-8 shadow-xl">
+        <Logo />
         <h1 className="mt-6 text-xl font-semibold text-slate-900">Gestión de nuevos desarrollos</h1>
         <p className="mt-1 text-sm text-slate-500">Accede con tu cuenta corporativa de Microsoft 365.</p>
         {errorMsg && <p className="mt-4 rounded-md bg-rose-50 p-3 text-sm text-rose-700">{errorMsg}</p>}

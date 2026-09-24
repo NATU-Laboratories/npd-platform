@@ -13,14 +13,17 @@ export const STATUS_LABEL: Record<ProjectStatus, string> = {
 
 export const STATUS_COLOR: Record<ProjectStatus, string> = {
   draft: "bg-slate-100 text-slate-700 ring-slate-200",
-  submitted: "bg-sky-50 text-sky-800 ring-sky-200",
+  submitted: "bg-[#f9ede6] text-[#7a4f3b] ring-natu-peach",
   info_requested: "bg-amber-50 text-amber-800 ring-amber-200",
-  in_progress: "bg-emerald-50 text-emerald-800 ring-emerald-200",
-  paused: "bg-zinc-100 text-zinc-700 ring-zinc-300",
-  in_production: "bg-teal-600 text-white ring-teal-700",
+  in_progress: "bg-brand-50 text-brand-500 ring-brand-200",
+  paused: "bg-slate-100 text-slate-600 ring-slate-300",
+  in_production: "bg-natu-dark text-white ring-natu-dark",
   rejected: "bg-rose-50 text-rose-800 ring-rose-200",
   cancelled: "bg-rose-50 text-rose-700 ring-rose-200",
 };
+
+/** Color del estado "En validación" (activo antes de G2), en verde salvia de marca. */
+export const VALIDATION_COLOR = "bg-[#eef0e6] text-[#56613f] ring-natu-sage";
 
 /** Agrupación para el panel (§2.3). */
 export const STATUS_GROUPS = {

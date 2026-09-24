@@ -14,7 +14,7 @@ export type ProjectSummary = {
   statusLabel: string;
 };
 
-const BRAND = "#0f5f5a";
+const BRAND = "#3e3f3e";
 
 /** Plantilla HTML de email con marca NATU (§6). Tablas + estilos en línea para Outlook. */
 export function renderEmail(opts: {
