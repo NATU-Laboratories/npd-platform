@@ -126,8 +126,8 @@ export const SHEET_SECTIONS: SheetSection[] = [
       {
         title: "Documentos",
         fields: [
-          { key: "quoteFiles", label: "Cotización enviada", type: "files", tag: "cotizacion", required: true },
-          { key: "approvalFiles", label: "Aprobación del cliente (presupuesto firmado, pedido o email)", type: "files", tag: "aprobacion_cliente", required: true },
+          { key: "quoteFiles", label: "Cotización enviada", type: "files", tag: "cotizacion" },
+          { key: "approvalFiles", label: "Aprobación del cliente (presupuesto firmado, pedido o email)", type: "files", tag: "aprobacion_cliente" },
         ],
       },
     ],
