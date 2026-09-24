@@ -8,6 +8,8 @@ export type Lookups = {
   clients: Record<number, string>;
 };
 
+export const GENDER_LABEL = { mujer: "Mujer", hombre: "Hombre", unisex: "Unisex" } as const;
+
 const SUPPLIER_LABEL = { cliente: "Cliente", natu: "NATU", mixto: "Mixto" } as const;
 
 export type Row = [label: string, value: string | null];
@@ -52,9 +54,9 @@ export function briefSections(b: BriefData, l: Lookups): Section[] {
     },
   ];
 
-  if (b.type === "PL") {
+  if (b.type === "PL" || b.type === "MDD") {
     sections.push({
-      title: "Marca privada",
+      title: TYPE_LABEL[b.type],
       step: 2,
       rows: [
         ["Cliente", b.clientId ? (l.clients[b.clientId] ?? `#${b.clientId}`) : b.newClient?.name ? `${b.newClient.name} (nuevo)` : null],
@@ -112,12 +114,6 @@ export function briefSections(b: BriefData, l: Lookups): Section[] {
 
   if (needsOlfactory(b)) {
     const o = b.olfactory ?? {};
-    const restrictions = [
-      o.allergenFree ? `Sin alérgenos: ${o.allergenFree}` : null,
-      o.vegan ? "Vegano" : null,
-      o.naturalPct != null ? `${o.naturalPct}% natural` : null,
-      list(o.certifications),
-    ].filter(Boolean);
     sections.push({
       title: "Bloque olfativo",
       step: 3,
@@ -128,13 +124,15 @@ export function briefSections(b: BriefData, l: Lookups): Section[] {
         ["Notas de fondo", list(o.base)],
         ["Intensidad", o.intensity ? `${o.intensity} / 5` : null],
         ["Duración deseada", o.duration ?? null],
+        ["Género", o.genders?.length ? o.genders.map((g) => GENDER_LABEL[g]).join(", ") : null],
         [
           "Referencias de inspiración",
-          o.inspirations?.filter((i) => i.product || i.brand).map((i) => `${i.product}${i.brand ? ` (${i.brand})` : ""}${i.likes ? `: ${i.likes}` : ""}`).join(" · ") || null,
+          o.inspirations
+            ?.filter((i) => i.product || i.brand || i.url)
+            .map((i) => `${i.product}${i.brand ? ` (${i.brand})` : ""}${i.likes ? `: ${i.likes}` : ""}${i.url ? ` — ${i.url}` : ""}`)
+            .join(" · ") || null,
         ],
-        ["Público", [o.gender, o.ageRange, o.style].filter(Boolean).join(" · ") || null],
-        ["Estacionalidad", list(o.seasonality)],
-        ["Restricciones", restrictions.join(" · ") || null],
+        ["Blacklist", o.blacklist ?? null],
       ],
     });
   }

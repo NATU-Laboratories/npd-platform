@@ -17,7 +17,7 @@ Next.js 16 (App Router, Server Actions) · TypeScript · Tailwind v4 · Drizzle 
 | Código | `AAAA-PL-NNNN` / `AAAA-MP-NNNN`, secuencial por año y tipo (contador transaccional). |
 | SharePoint | Carpeta `AAAA-XX-NNNN · Cliente/Marca · Nombre` con subcarpetas de fase. Los adjuntos del borrador se suben a `_Borradores/<id>` y se mueven a `00 Solicitud` al enviar. En BD se guardan `drive_item_id`, no rutas. |
 | Subidas | El navegador sube por trozos **directamente** a la *upload session* de Graph (sin pasar por el límite de 4,5 MB de Vercel, sin exponer tokens). El servidor verifica que el item está en la carpeta del proyecto antes de registrarlo. |
-| G1 | Aprobar (plantilla sugerida por tipo/subtipo/categoría → departamentos precargados, editables) · Pedir más info (texto + campos a resaltar) · Rechazar (motivo obligatorio) · Pausar. Reanudar y cancelar. |
+| Flujo | 7 fases: Solicitud → **G1** → Cotización → Valoración con cliente → **G2** (presupuesto; en PL anticipo 30 % o responsable) → En curso → Desarrollo → Diseño y AAFF → Preparación para producción → En producción. Tipos PL, MP y MDD. Aprobadores G1/G2 configurables por tipo en el backoffice. |
 | Máquina de estados | `src/lib/server/state-machine.ts`: único punto de cambio de estado; valida permiso y transición, escribe `activity_log` y dispara notificaciones. |
 | Notificaciones | Email HTML con marca NATU vía Graph desde buzón compartido. Todo envío queda en `notification_log`; reenvío manual desde el backoffice. |
 | Resiliencia | Cola `jobs` con reintentos y backoff exponencial: se intenta tras la respuesta (`after()`) y el cron `/api/cron/jobs` reintenta. Si Graph cae, la solicitud se guarda igual y el error queda en `error_log`. |

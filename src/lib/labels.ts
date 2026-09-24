@@ -32,7 +32,13 @@ export const STATUS_GROUPS = {
 
 export const OPEN_STATUSES: ProjectStatus[] = ["submitted", "info_requested", "in_progress", "paused"];
 
-export const TYPE_LABEL = { PL: "Marca privada", MP: "Marca propia" } as const;
+export const TYPE_LABEL = { PL: "Marca privada", MP: "Marca propia", MDD: "Marca de distribuidor" } as const;
+export const PROJECT_TYPE_KEYS = ["PL", "MP", "MDD"] as const;
+export type ProjectTypeKey = (typeof PROJECT_TYPE_KEYS)[number];
+/** Tipos con cliente (brief de cliente, comercial de cuenta). */
+export const CLIENT_TYPES: readonly string[] = ["PL", "MDD"];
+/** Solo en PL se exige (o se asume con responsable) el anticipo del 30 % para iniciar. */
+export const PREPAYMENT_TYPES: readonly string[] = ["PL"];
 export const CATEGORY_LABEL = {
   perfume: "Perfumería",
   ambient: "Ambientación",
@@ -46,27 +52,41 @@ export const PRIORITY_COLOR = {
   urgent: "text-rose-700 font-semibold",
 } as const;
 
+/**
+ * Fases del proceso. Solo dos puertas de aprobación formales:
+ * G1 (Solicitud → Cotización) y G2 (Valoración con cliente → En curso).
+ * El resto de fases avanzan con una acción de "avanzar fase".
+ */
 export const PHASES = [
-  { n: 0, name: "Solicitud", short: "Solicitud", gate: "G1", gateName: "Viabilidad" },
-  { n: 1, name: "Validez del concepto", short: "Concepto", gate: "G2", gateName: "Validez del mix" },
-  { n: 2, name: "Desarrollo", short: "Desarrollo", gate: "G3", gateName: "Muestra aprobada" },
-  { n: 3, name: "Diseño y artes finales", short: "Diseño/AAFF", gate: "G4", gateName: "AAFF aprobados" },
-  { n: 4, name: "Preparación para producción", short: "Producción", gate: "G5", gateName: "Listo para producción" },
+  { n: 0, name: "Solicitud", short: "Solicitud", gate: "G1", gateName: "Aprobación de la solicitud" },
+  { n: 1, name: "Cotización", short: "Cotización", gate: null, gateName: null },
+  { n: 2, name: "Valoración con cliente", short: "Valoración", gate: "G2", gateName: "Aprobación del presupuesto" },
+  { n: 3, name: "En curso", short: "En curso", gate: null, gateName: null },
+  { n: 4, name: "Desarrollo", short: "Desarrollo", gate: null, gateName: null },
+  { n: 5, name: "Diseño y artes finales", short: "Diseño/AAFF", gate: null, gateName: null },
+  { n: 6, name: "Preparación para producción", short: "Producción", gate: null, gateName: null },
+] as const;
+export const LAST_PHASE = PHASES.length - 1;
+export const APPROVAL_GATES = [
+  { gate: "G1", name: "Aprobación de la solicitud", phase: 0, description: "Solicitud → Cotización. Decide si el proyecto es viable y se cotiza." },
+  { gate: "G2", name: "Aprobación del presupuesto", phase: 2, description: "Valoración con cliente → En curso. Comercial registra que el cliente aprueba el presupuesto." },
 ] as const;
 
 /** Subcarpetas de SharePoint por fase (§9.1). */
 export const PHASE_FOLDERS = [
   "00 Solicitud",
-  "01 Concepto",
-  "02 Desarrollo",
-  "03 Diseño-AAFF",
-  "04 Preparación producción",
+  "01 Cotización",
+  "02 Valoración cliente",
+  "03 En curso",
+  "04 Desarrollo",
+  "05 Diseño-AAFF",
+  "06 Preparación producción",
 ] as const;
 
 export const ROLE_LABEL = {
   admin: "Admin",
   requester: "Solicitante",
-  decider: "Decisor",
+  decider: "Aprobador",
   dept_member: "Miembro de departamento",
   global_reader: "Lectura global",
 } as const;
@@ -77,6 +97,8 @@ export const FILE_TAGS = {
   brief_cliente: "Brief del cliente",
   packaging: "Packaging",
   evidencia_cliente: "Evidencia del cliente",
+  cotizacion: "Cotización",
+  blacklist: "Blacklist",
   otro: "Otro",
 } as const;
 
@@ -85,6 +107,11 @@ export const ACTION_LABEL: Record<string, string> = {
   "project.submitted": "envió la solicitud",
   "project.edited": "editó el brief",
   "gate.approved": "aprobó la puerta",
+  "gate.recycled": "devolvió el proyecto a cotización",
+  "quote.sent": "envió la cotización al cliente",
+  "phase.advanced": "avanzó de fase",
+  "project.in_production": "pasó el proyecto a producción",
+  "prepayment.received": "registró el anticipo del 30 %",
   "gate.info_requested": "pidió más información",
   "gate.rejected": "rechazó el proyecto",
   "gate.paused": "puso el proyecto en pausa",

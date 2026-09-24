@@ -13,7 +13,8 @@ export type FieldDef = {
   filled?: (d: BriefData) => boolean;
 };
 
-const isPL = (d: BriefData) => d.type === "PL";
+/** PL y MDD comparten el bloque de cliente. */
+const isPL = (d: BriefData) => d.type === "PL" || d.type === "MDD";
 const isMP = (d: BriefData) => d.type === "MP";
 const isCat = (c: BriefData["category"]) => (d: BriefData) => d.category === c;
 
@@ -92,10 +93,10 @@ export const FIELDS: FieldDef[] = [
     step: 3,
     level: "recommended",
     when: needsOlfactory,
-    filled: (d) => !!d.olfactory?.inspirations?.some((i) => i.product || i.brand),
+    filled: (d) => !!d.olfactory?.inspirations?.some((i) => i.product || i.brand || i.url),
   },
-  { key: "olfactory.gender", label: "Público (género)", step: 3, level: "recommended", when: needsOlfactory },
-  { key: "olfactory.seasonality", label: "Estacionalidad", step: 3, level: "optional", when: needsOlfactory },
+  { key: "olfactory.genders", label: "Género", step: 3, level: "required", when: needsOlfactory },
+  { key: "olfactory.blacklist", label: "Blacklist", step: 3, level: "optional", when: needsOlfactory },
 
   // Paso 4
   { key: "notes", label: "Notas adicionales", step: 4, level: "optional" },

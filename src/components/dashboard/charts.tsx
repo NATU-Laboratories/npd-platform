@@ -1,8 +1,8 @@
 "use client";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
-// Paleta categórica validada (orden fijo): PL = serie 1, MP = serie 2.
-export const SERIES = { pl: "#2a78d6", mp: "#eb6834", single: "#2a78d6" };
+// Paleta categórica validada (orden fijo): PL = serie 1, MP = serie 2, MDD = serie 3.
+export const SERIES = { pl: "#2a78d6", mp: "#eb6834", mdd: "#1baf7a", single: "#2a78d6" };
 const AXIS = { fontSize: 11, fill: "#52514e" };
 const GRID = "#e7e5e4";
 
@@ -24,7 +24,7 @@ function TooltipBox({ active, payload, label, labelFmt }: { active?: boolean; pa
   );
 }
 
-export function MonthlyChart({ data }: { data: { month: string; pl: number; mp: number }[] }) {
+export function MonthlyChart({ data }: { data: { month: string; pl: number; mp: number; mdd: number }[] }) {
   return (
     <div>
       <div className="mb-2 flex gap-4 text-xs text-slate-600" aria-hidden>
@@ -33,6 +33,9 @@ export function MonthlyChart({ data }: { data: { month: string; pl: number; mp: 
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-0.5 w-4 rounded" style={{ background: SERIES.mp }} /> Marca propia
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-0.5 w-4 rounded" style={{ background: SERIES.mdd }} /> Marca de distribuidor
         </span>
       </div>
       <div className="h-56" role="img" aria-label="Evolución mensual de solicitudes por tipo, últimos 12 meses">
@@ -44,6 +47,7 @@ export function MonthlyChart({ data }: { data: { month: string; pl: number; mp: 
             <Tooltip content={<TooltipBox labelFmt={monthLabel} />} cursor={{ stroke: "#a8a29e", strokeDasharray: "3 3" }} />
             <Line type="monotone" dataKey="pl" name="Marca privada" stroke={SERIES.pl} strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: "#fff" }} />
             <Line type="monotone" dataKey="mp" name="Marca propia" stroke={SERIES.mp} strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: "#fff" }} />
+            <Line type="monotone" dataKey="mdd" name="Marca de distribuidor" stroke={SERIES.mdd} strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: "#fff" }} />
           </LineChart>
         </ResponsiveContainer>
       </div>

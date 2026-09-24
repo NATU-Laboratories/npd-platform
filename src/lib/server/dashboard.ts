@@ -27,12 +27,24 @@ export type ProjectFilters = {
 
 const requester = alias(users, "requester");
 
-/** Condición "requieren mi acción": decisiones G1 pendientes o info pedida a mí. */
+/**
+ * "Requieren mi acción": info pedida a mí, aprobaciones G1/G2 pendientes que me
+ * tocan y cotizaciones pendientes de enviar de mis cuentas.
+ */
 function requiresMyAction(u: CurrentUser): SQL {
-  const conds: SQL[] = [and(eq(projects.status, "info_requested"), or(eq(projects.requesterId, u.id), eq(projects.accountManagerId, u.id)))!];
-  const g1Types = u.deciderFor.filter((d) => d.gate === "G1").map((d) => d.projectType);
-  if (hasRole(u, "admin")) conds.push(eq(projects.status, "submitted"));
-  else if (g1Types.length) conds.push(and(eq(projects.status, "submitted"), inArray(projects.type, g1Types))!);
+  const mine = or(eq(projects.requesterId, u.id), eq(projects.accountManagerId, u.id))!;
+  const conds: SQL[] = [
+    and(eq(projects.status, "info_requested"), mine)!,
+    and(eq(projects.status, "in_progress"), eq(projects.phase, 1), eq(projects.accountManagerId, u.id))!,
+  ];
+  const typesFor = (gate: "G1" | "G2") => u.deciderFor.filter((d) => d.gate === gate).map((d) => d.projectType);
+  const g1 = and(eq(projects.status, "submitted"), eq(projects.phase, 0))!;
+  const g2 = and(eq(projects.status, "in_progress"), eq(projects.phase, 2))!;
+  if (hasRole(u, "admin")) conds.push(g1, g2);
+  else {
+    if (typesFor("G1").length) conds.push(and(g1, inArray(projects.type, typesFor("G1")))!);
+    if (typesFor("G2").length) conds.push(and(g2, inArray(projects.type, typesFor("G2")))!);
+  }
   return or(...conds)!;
 }
 
@@ -51,7 +63,7 @@ export async function buildWhere(u: CurrentUser, f: ProjectFilters, riskDays: nu
     const term = `%${f.q.trim()}%`;
     conds.push(or(ilike(projects.name, term), ilike(projects.code, term), ilike(clients.name, term))!);
   }
-  if (f.type === "PL" || f.type === "MP") conds.push(eq(projects.type, f.type));
+  if (f.type === "PL" || f.type === "MP" || f.type === "MDD") conds.push(eq(projects.type, f.type));
   if (f.brand) conds.push(eq(projects.brandId, Number(f.brand)));
   if (f.category === "perfume" || f.category === "ambient" || f.category === "cosmetic") conds.push(eq(projects.category, f.category));
   if (f.status?.startsWith("g:")) {
@@ -184,19 +196,20 @@ export async function dashboardStats(u: CurrentUser, f: ProjectFilters, riskDays
     q<{ key: string; n: number }>(sql`select status::text as key, count(*)::int as n from ${base} group by 1 order by 2 desc`),
     q<{ key: string; n: number }>(sql`select coalesce(category::text, '—') as key, count(*)::int as n from ${base} group by 1 order by 2 desc`),
     q<{ key: string; n: number }>(
-      sql`select coalesce(brand, case when type = 'PL' then 'Marca privada' else '—' end) as key, count(*)::int as n from ${base} group by 1 order by 2 desc limit 12`,
+      sql`select coalesce(brand, case when type = 'PL' then 'Marca privada' when type = 'MDD' then 'Marca de distribuidor' else '—' end) as key, count(*)::int as n from ${base} group by 1 order by 2 desc limit 12`,
     ),
     q<{ key: string; n: number }>(sql`select requester as key, count(*)::int as n from ${base} group by 1 order by 2 desc limit 10`),
     q<{ phase: number; n: number }>(
       sql`select phase, count(*)::int as n from ${base} where status in ('submitted','info_requested','in_progress','paused','in_production') group by 1 order by 1`,
     ),
-    q<{ month: string; pl: number; mp: number }>(sql`
+    q<{ month: string; pl: number; mp: number; mdd: number }>(sql`
       with m as (
         select generate_series(date_trunc('month', current_date) - interval '11 months', date_trunc('month', current_date), interval '1 month') as month
       )
       select to_char(m.month, 'YYYY-MM') as month,
         count(base.id) filter (where base.type = 'PL')::int as pl,
-        count(base.id) filter (where base.type = 'MP')::int as mp
+        count(base.id) filter (where base.type = 'MP')::int as mp,
+        count(base.id) filter (where base.type = 'MDD')::int as mdd
       from m left join ${base} on date_trunc('month', base.requested_at at time zone 'Europe/Madrid') = m.month
       group by m.month order by m.month`),
   ]);
@@ -222,7 +235,7 @@ export async function dashboardStats(u: CurrentUser, f: ProjectFilters, riskDays
     byBrand: byBrand.map((r) => ({ key: r.key, n: Number(r.n) })),
     byRequester: byRequester.map((r) => ({ key: r.key, n: Number(r.n) })),
     byPhase: byPhase.map((r) => ({ phase: Number(r.phase), n: Number(r.n) })),
-    monthly: monthly.map((r) => ({ month: r.month, pl: Number(r.pl), mp: Number(r.mp) })),
+    monthly: monthly.map((r) => ({ month: r.month, pl: Number(r.pl), mp: Number(r.mp), mdd: Number(r.mdd) })),
   };
 }
 

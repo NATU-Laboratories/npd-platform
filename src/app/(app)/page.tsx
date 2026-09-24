@@ -193,7 +193,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
                     </div>
                   </td>
                   <td className="px-3 py-2.5">
-                    <div className="whitespace-nowrap">{p.type === "MP" ? `MP · ${p.brandName ?? ""}` : "PL"}</div>
+                    <div className="whitespace-nowrap">{p.type === "MP" ? `MP · ${p.brandName ?? ""}` : (p.type ?? "—")}</div>
                     <div className="text-xs text-slate-500">{p.category ? CATEGORY_LABEL[p.category] : "—"}</div>
                   </td>
                   <td className="px-3 py-2.5">{p.clientName ?? <span className="text-slate-300">—</span>}</td>

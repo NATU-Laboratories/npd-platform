@@ -116,7 +116,7 @@ async function loadProject(projectId: string) {
   return { ...row, summary };
 }
 
-async function deciderEmails(gate: GateKey, type: "PL" | "MP") {
+async function deciderEmails(gate: GateKey, type: "PL" | "MP" | "MDD") {
   const rows = await db
     .select({ email: users.email })
     .from(gateDeciders)
@@ -180,7 +180,7 @@ export function notifySubmitted(projectId: string) {
       subject: subjectFor(summary, "Nueva solicitud"),
       html: renderEmail({
         title: "Nueva solicitud de desarrollo",
-        intro: `${summary.requesterName} ha enviado una nueva solicitud pendiente de decisión en G1 – Viabilidad.`,
+        intro: `${summary.requesterName} ha enviado una nueva solicitud pendiente de aprobación (G1).`,
         project: summary,
         extraRows: [["Completitud del brief", `${p.completenessPct}%`]],
         ctaLabel: "Revisar y decidir",
@@ -253,12 +253,44 @@ export function notifyApproved(projectId: string, departmentIds: number[], comme
       recipients: [...(await departmentEmails({ ids: departmentIds })), requesterEmail],
       subject: subjectFor(summary, "Proyecto aprobado (G1)"),
       html: renderEmail({
-        title: "Proyecto aprobado en G1 – Viabilidad",
-        intro: "El proyecto pasa a la fase 1 · Validez del concepto. Tu departamento ha sido implicado.",
+        title: "Solicitud aprobada (G1)",
+        intro: "El proyecto pasa a la fase de Cotización. Tu departamento ha sido implicado.",
         message: comment ? { label: "Comentario del decisor", body: comment } : null,
         project: summary,
         extraRows: extra,
       }),
+    });
+  });
+}
+
+/** Aviso genérico de un evento del proyecto a los destinatarios indicados. */
+export function notifyProjectEvent(
+  projectId: string,
+  event: string,
+  opts: {
+    title: string;
+    intro: string;
+    message?: { label: string; body: string } | null;
+    extraRows?: [string, string][];
+    to: { requester?: boolean; accountManager?: boolean; departments?: boolean; deciders?: GateKey };
+  },
+) {
+  return safely(event, async () => {
+    const { p, summary, requesterEmail, amEmail } = await loadProject(projectId);
+    const recipients: (string | null)[] = [];
+    if (opts.to.requester) recipients.push(requesterEmail);
+    if (opts.to.accountManager) recipients.push(amEmail);
+    if (opts.to.departments) {
+      const ids = (await db.execute<{ department_id: number }>(sql`select department_id from project_departments where project_id = ${p.id}`)).rows.map((r) => r.department_id);
+      recipients.push(...(await departmentEmails({ ids })));
+    }
+    if (opts.to.deciders && p.type) recipients.push(...(await deciderEmails(opts.to.deciders, p.type)));
+    await queueNotification({
+      event,
+      projectId,
+      recipients,
+      subject: subjectFor(summary, opts.title),
+      html: renderEmail({ title: opts.title, intro: opts.intro, message: opts.message ?? null, extraRows: opts.extraRows, project: summary }),
     });
   });
 }

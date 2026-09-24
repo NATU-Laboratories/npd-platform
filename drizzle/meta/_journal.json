@@ -15,6 +15,13 @@
       "when": 1790165509826,
       "tag": "0001_new_bushwacker",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790240989422,
+      "tag": "0002_youthful_edwin_jarvis",
+      "breakpoints": true
     }
   ]
 }

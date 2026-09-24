@@ -18,6 +18,7 @@ import * as s from "./schema";
 
 type TaskDef = { key: string; phase: number; dept: string; title: string; deps?: string[]; returns?: string; days?: number; optional?: boolean };
 
+// Fase 1 (Cotización): estudios de viabilidad y escandallo para poder cotizar.
 const concept: TaskDef[] = [
   { key: "c1", phase: 1, dept: "idi", title: "Viabilidad técnica", days: 5 },
   { key: "c2", phase: 1, dept: "regulatory", title: "Viabilidad regulatoria", days: 5 },
@@ -27,55 +28,55 @@ const concept: TaskDef[] = [
   { key: "c6", phase: 1, dept: "idi", title: "Primeras muestras", deps: ["c1"], days: 10 },
 ];
 const development: TaskDef[] = [
-  { key: "d1", phase: 2, dept: "idi", title: "Fórmula y pruebas", days: 15 },
-  { key: "d2", phase: 2, dept: "marketing", title: "Elección de envase", days: 7 },
-  { key: "d3", phase: 2, dept: "idi", title: "Estabilidad y compatibilidad envase-fórmula", deps: ["d1", "d2"], days: 30 },
-  { key: "d4", phase: 2, dept: "regulatory", title: "Claims y requisitos por país", days: 7 },
-  { key: "d5", phase: 2, dept: "calidad", title: "Tests externos", deps: ["d1"], days: 20, optional: true },
+  { key: "d1", phase: 4, dept: "idi", title: "Fórmula y pruebas", days: 15 },
+  { key: "d2", phase: 4, dept: "marketing", title: "Elección de envase", days: 7 },
+  { key: "d3", phase: 4, dept: "idi", title: "Estabilidad y compatibilidad envase-fórmula", deps: ["d1", "d2"], days: 30 },
+  { key: "d4", phase: 4, dept: "regulatory", title: "Claims y requisitos por país", days: 7 },
+  { key: "d5", phase: 4, dept: "calidad", title: "Tests externos", deps: ["d1"], days: 20, optional: true },
 ];
 const design: TaskDef[] = [
-  { key: "a1", phase: 3, dept: "marketing", title: "Textos brutos (etiqueta/estuche)", days: 3 },
-  { key: "a2", phase: 3, dept: "regulatory", title: "Revisión de textos (Regulatory + Calidad)", deps: ["a1"], returns: "a1", days: 3 },
-  { key: "a3", phase: 3, dept: "comunicacion", title: "Adaptación de tono", deps: ["a2"], days: 2 },
-  { key: "a4", phase: 3, dept: "diseno", title: "Artes finales", deps: ["a3"], days: 7 },
-  { key: "a5", phase: 3, dept: "calidad", title: "Revisión AAFF (Calidad + Regulatory)", deps: ["a4"], returns: "a4", days: 3 },
-  { key: "a6", phase: 3, dept: "comunicacion", title: "Traducciones", deps: ["a5"], days: 5 },
-  { key: "a7", phase: 3, dept: "comercial", title: "Aprobación AAFF por el cliente", deps: ["a6"], days: 5 },
+  { key: "a1", phase: 5, dept: "marketing", title: "Textos brutos (etiqueta/estuche)", days: 3 },
+  { key: "a2", phase: 5, dept: "regulatory", title: "Revisión de textos (Regulatory + Calidad)", deps: ["a1"], returns: "a1", days: 3 },
+  { key: "a3", phase: 5, dept: "comunicacion", title: "Adaptación de tono", deps: ["a2"], days: 2 },
+  { key: "a4", phase: 5, dept: "diseno", title: "Artes finales", deps: ["a3"], days: 7 },
+  { key: "a5", phase: 5, dept: "calidad", title: "Revisión AAFF (Calidad + Regulatory)", deps: ["a4"], returns: "a4", days: 3 },
+  { key: "a6", phase: 5, dept: "comunicacion", title: "Traducciones", deps: ["a5"], days: 5 },
+  { key: "a7", phase: 5, dept: "comercial", title: "Aprobación AAFF por el cliente", deps: ["a6"], days: 5 },
 ];
 const production: TaskDef[] = [
-  { key: "p1", phase: 4, dept: "compras", title: "Compra de materiales y envases", days: 20 },
-  { key: "p2", phase: 4, dept: "operaciones", title: "Escandallo final", days: 3 },
-  { key: "p3", phase: 4, dept: "calidad", title: "Documentación técnica", days: 5 },
-  { key: "p4", phase: 4, dept: "operaciones", title: "Documentación logística", days: 3 },
-  { key: "p5", phase: 4, dept: "produccion", title: "Planificación con Producción", deps: ["p1"], days: 3 },
+  { key: "p1", phase: 6, dept: "compras", title: "Compra de materiales y envases", days: 20 },
+  { key: "p2", phase: 6, dept: "operaciones", title: "Escandallo final", days: 3 },
+  { key: "p3", phase: 6, dept: "calidad", title: "Documentación técnica", days: 5 },
+  { key: "p4", phase: 6, dept: "operaciones", title: "Documentación logística", days: 3 },
+  { key: "p5", phase: 6, dept: "produccion", title: "Planificación con Producción", deps: ["p1"], days: 3 },
 ];
 const cosmeticReg: TaskDef[] = [
-  { key: "r1", phase: 2, dept: "regulatory", title: "Evaluación de seguridad (CPSR)", deps: ["d1"], days: 15 },
-  { key: "r2", phase: 4, dept: "regulatory", title: "Expediente de producto (PIF)", days: 10 },
-  { key: "r3", phase: 4, dept: "regulatory", title: "Notificación previa a comercialización (CPNP)", deps: ["r2"], days: 3 },
+  { key: "r1", phase: 4, dept: "regulatory", title: "Evaluación de seguridad (CPSR)", deps: ["d1"], days: 15 },
+  { key: "r2", phase: 6, dept: "regulatory", title: "Expediente de producto (PIF)", days: 10 },
+  { key: "r3", phase: 6, dept: "regulatory", title: "Notificación previa a comercialización (CPNP)", deps: ["r2"], days: 3 },
 ];
 
 const TEMPLATES: { name: string; appliesTo: { types?: string[]; subtypes?: string[]; categories?: string[] }; tasks: TaskDef[] }[] = [
   {
-    name: "PL – Desarrollo completo",
-    appliesTo: { types: ["PL"], subtypes: ["desarrollo_completo", "replica", "extension_gama"], categories: ["perfume", "ambient"] },
+    name: "PL/MDD – Desarrollo completo",
+    appliesTo: { types: ["PL", "MDD"], subtypes: ["desarrollo_completo", "replica", "extension_gama"], categories: ["perfume", "ambient"] },
     tasks: [...concept, ...development, ...design, ...production],
   },
   {
-    name: "PL – Fórmula de catálogo NATU con marca del cliente",
-    appliesTo: { types: ["PL"], subtypes: ["formula_catalogo"] },
+    name: "PL/MDD – Fórmula de catálogo NATU con marca del cliente",
+    appliesTo: { types: ["PL", "MDD"], subtypes: ["formula_catalogo"] },
     tasks: [
       concept[2]!,
       { ...concept[1]!, title: "Revisión regulatoria del mercado destino" },
-      { key: "d2", phase: 2, dept: "marketing", title: "Elección de envase", days: 5 },
-      { key: "d3", phase: 2, dept: "idi", title: "Compatibilidad envase-fórmula", deps: ["d2"], days: 15 },
+      { key: "d2", phase: 4, dept: "marketing", title: "Elección de envase", days: 5 },
+      { key: "d3", phase: 4, dept: "idi", title: "Compatibilidad envase-fórmula", deps: ["d2"], days: 15 },
       ...design,
       ...production,
     ],
   },
   {
-    name: "PL – Solo cambio de packaging/diseño",
-    appliesTo: { types: ["PL"], subtypes: ["cambio_packaging"] },
+    name: "PL/MDD – Solo cambio de packaging/diseño",
+    appliesTo: { types: ["PL", "MDD"], subtypes: ["cambio_packaging"] },
     tasks: [concept[2]!, ...design, production[0]!, production[1]!, production[4]!],
   },
   {
@@ -84,8 +85,8 @@ const TEMPLATES: { name: string; appliesTo: { types?: string[]; subtypes?: strin
     tasks: [...concept, ...development, ...design.filter((t) => t.key !== "a7"), ...production],
   },
   {
-    name: "Cosmética (PL o MP) – regulatorio reforzado",
-    appliesTo: { types: ["PL", "MP"], categories: ["cosmetic"] },
+    name: "Cosmética (PL, MP o MDD) – regulatorio reforzado",
+    appliesTo: { types: ["PL", "MP", "MDD"], categories: ["cosmetic"] },
     tasks: [...concept, ...development, ...cosmeticReg, ...design, ...production],
   },
 ];

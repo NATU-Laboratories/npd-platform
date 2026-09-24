@@ -22,7 +22,7 @@ import type { BriefData } from "@/lib/brief/schema";
 
 export const userStatus = pgEnum("user_status", ["pending", "active", "disabled"]);
 export const notifPref = pgEnum("notif_pref", ["immediate", "daily"]);
-export const projectType = pgEnum("project_type", ["PL", "MP"]);
+export const projectType = pgEnum("project_type", ["PL", "MP", "MDD"]);
 export const projectCategory = pgEnum("project_category", ["perfume", "ambient", "cosmetic"]);
 export const projectStatus = pgEnum("project_status", [
   "draft",
@@ -249,6 +249,11 @@ export const projects = pgTable(
     sharepointSubfolders: jsonb("sharepoint_subfolders").$type<Record<string, string>>(),
     stagingFolderId: text("staging_folder_id"),
     sapOrderRef: text("sap_order_ref"),
+    /** Cotización enviada al cliente (fase 1 → 2). */
+    quoteAmount: numeric("quote_amount", { precision: 12, scale: 2 }),
+    quotedAt: timestamp("quoted_at", { withTimezone: true }),
+    /** Solo PL: anticipo del 30 % recibido o inicio sin anticipo bajo responsabilidad. */
+    prepayment: jsonb("prepayment").$type<Prepayment>(),
     templateId: integer("template_id").references(() => workflowTemplates.id),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -298,6 +303,8 @@ export const gates = pgTable(
     comment: text("comment"),
     reasonCode: text("reason_code"),
     clientEvidenceFileId: integer("client_evidence_file_id"),
+    /** Datos adicionales de la decisión (p. ej. anticipo en G2). */
+    data: jsonb("data").$type<Record<string, unknown>>(),
     openedAt: timestamp("opened_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("gates_project_gate_idx").on(t.projectId, t.gate)],
@@ -357,6 +364,16 @@ export const taskDeps = pgTable(
 );
 
 // ─── Comentarios y archivos ───────────────────────────────────────────────
+
+export type Prepayment = {
+  status: "received" | "waived";
+  /** Quien asume la responsabilidad de iniciar sin anticipo. */
+  responsible?: string;
+  recordedBy: string;
+  recordedAt: string;
+  receivedAt?: string;
+  note?: string;
+};
 
 export type Mentions = { users: string[]; departments: number[] };
 
