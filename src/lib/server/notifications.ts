@@ -180,7 +180,7 @@ export function notifySubmitted(projectId: string) {
       subject: subjectFor(summary, "Nueva solicitud"),
       html: renderEmail({
         title: "Nueva solicitud de desarrollo",
-        intro: `${summary.requesterName} ha enviado una nueva solicitud pendiente de aprobación (G1).`,
+        intro: `${summary.requesterName} ha enviado una nueva solicitud pendiente de aprobación (P1).`,
         project: summary,
         extraRows: [["Completitud del brief", `${p.completenessPct}%`]],
         ctaLabel: "Revisar y decidir",
@@ -251,9 +251,9 @@ export function notifyApproved(projectId: string, departmentIds: number[], comme
       event: "gate.approved",
       projectId,
       recipients: [...(await departmentEmails({ ids: departmentIds })), requesterEmail],
-      subject: subjectFor(summary, "Proyecto aprobado (G1)"),
+      subject: subjectFor(summary, "Proyecto aprobado (P1)"),
       html: renderEmail({
-        title: "Solicitud aprobada (G1)",
+        title: "Solicitud aprobada (P1)",
         intro: "El proyecto pasa a la fase de Cotización. Tu departamento ha sido implicado.",
         message: comment ? { label: "Comentario del decisor", body: comment } : null,
         project: summary,

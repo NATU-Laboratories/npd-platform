@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { saveDecidersAction } from "@/app/actions/admin";
 import { getActiveUsers } from "@/lib/server/catalogs";
-import { APPROVAL_GATES, PROJECT_TYPE_KEYS, TYPE_LABEL } from "@/lib/labels";
+import { APPROVAL_GATES, PROJECT_TYPE_KEYS, TYPE_LABEL, GATE_LABEL } from "@/lib/labels";
 
 export const metadata = { title: "Aprobadores" };
 
@@ -25,7 +25,7 @@ export default async function DecidersPage() {
       <form action={saveDecidersAction} className="flex flex-col gap-6">
         {APPROVAL_GATES.map((g) => (
           <Card key={g.gate}>
-            <CardHeader title={`${g.gate} · ${g.name}`} description={`${g.description} ${HINT[g.gate] ?? ""}`} />
+            <CardHeader title={`${GATE_LABEL[g.gate]} · ${g.name}`} description={`${g.description} ${HINT[g.gate] ?? ""}`} />
             <CardBody className="grid gap-4 md:grid-cols-3">
               {PROJECT_TYPE_KEYS.map((t) => (
                 <fieldset key={t} className="rounded-lg border border-slate-200 p-3">

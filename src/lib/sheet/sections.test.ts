@@ -18,7 +18,7 @@ describe("ficha técnica", () => {
     expect(data.targetPrice).toBe(4.2);
     const reqs = requirements(s, ctx, data);
     const missing = reqs.filter((r) => !r.ok).map((r) => r.label);
-    expect(missing).toEqual(["Presupuesto aprobado por el cliente (G2)", "PVP recomendado"]);
+    expect(missing).toEqual(["Presupuesto aprobado por el cliente (P2)", "PVP recomendado"]);
     expect(progress(reqs).complete).toBe(false);
   });
 

@@ -29,14 +29,16 @@ El proyecto avanza por **fases** separadas por **puertas (gates)** de decisión.
 
 ### 2.1 Fases y puertas
 
-> **Revisión 24/09/2026:** el flujo pasa a 6 fases agrupadas en dos etapas, con dos aprobaciones formales (sustituye a la propuesta G1–G5 original):
-> **Validación** (Solicitud → Cotización → Valoración con cliente) y **En curso** (Desarrollo → Diseño y artes finales → Preparación para producción). El proyecto entra en *En curso* cuando el cliente aprueba el presupuesto (G2).
+> Las dos aprobaciones se muestran como **P1** y **P2** ("paso 1" y "paso 2"). En código y base de datos se mantienen las claves `G1` / `G2`.
+
+> **Revisión 24/09/2026:** el flujo pasa a 6 fases agrupadas en dos etapas, con dos aprobaciones formales (sustituye a la propuesta P1–G5 original):
+> **Validación** (Solicitud → Cotización → Valoración con cliente) y **En curso** (Desarrollo → Diseño y artes finales → Preparación para producción). El proyecto entra en *En curso* cuando el cliente aprueba el presupuesto (P2).
 
 | # | Etapa | Fase | Para pasar a la siguiente | Decide |
 |---|-------|------|---------------------------|--------|
-| 0 | Validación | **Solicitud** | **G1 – Aprobación de la solicitud** (aprobar / pedir info / rechazar / pausar). Al aprobar se eligen los departamentos implicados. | Aprobadores G1 (configurables por tipo; habitualmente Marketing) |
+| 0 | Validación | **Solicitud** | **P1 – Aprobación de la solicitud** (aprobar / pedir info / rechazar / pausar). Al aprobar se eligen los departamentos implicados. | Aprobadores P1 (configurables por tipo; habitualmente Marketing) |
 | 1 | Validación | **Cotización** | Enviar la cotización al cliente (importe opcional + PDF en `01 Cotización`) | Marketing, Operaciones, Comercial o el comercial de la cuenta |
-| 2 | Validación | **Valoración con cliente** | **G2 – Aprobación del presupuesto**: cliente aprueba / pide cambios (vuelve a Cotización) / rechaza / pausa. **Solo PL:** anticipo del 30 % recibido, o inicio sin anticipo con el nombre de la persona que asume la responsabilidad (queda auditado y se puede registrar el pago más tarde). | Aprobadores G2 (configurables por tipo; habitualmente Comercial) |
+| 2 | Validación | **Valoración con cliente** | **P2 – Aprobación del presupuesto**: cliente aprueba / pide cambios (vuelve a Cotización) / rechaza / pausa. **Solo PL:** anticipo del 30 % recibido, o inicio sin anticipo con el nombre de la persona que asume la responsabilidad (queda auditado y se puede registrar el pago más tarde). | Aprobadores P2 (configurables por tipo; habitualmente Comercial) |
 | 3 | En curso | **Desarrollo** | Avanzar de fase | Marketing / Admin / aprobadores |
 | 4 | En curso | **Diseño y artes finales** | Avanzar de fase | ídem |
 | 5 | En curso | **Preparación para producción** | Pasar a producción (estado *En producción*) | ídem |
@@ -53,7 +55,7 @@ Cada proyecto tiene una **ficha técnica** con un apartado por departamento, que
 
 | Apartado | Departamento (por defecto) | Fase | Obligatorio para terminar |
 |---|---|---|---|
-| Cotización y condiciones comerciales | Comercial | 1 Cotización | Cotización enviada y G2 aprobado (automático), precio unitario, precio objetivo y PVP recomendado (los documentos de cotización y aprobación son opcionales) |
+| Cotización y condiciones comerciales | Comercial | 1 Cotización | Cotización enviada y P2 aprobado (automático), precio unitario, precio objetivo y PVP recomendado (los documentos de cotización y aprobación son opcionales) |
 | Fórmula y pirámide olfativa | Laboratorio / I+D | 3 Desarrollo | Al menos una referencia, con su pirámide (perfumería/ambientación), y al menos una aprobada por el cliente |
 | Envase y packaging | Marketing / NPD | 3 Desarrollo | Frasco, tapón y tipo de packaging secundario |
 | Calidad y regulatorio · requisitos de etiqueta | Calidad y Regulatory | 3 Desarrollo | Pictogramas, idiomas e INCI |
@@ -70,12 +72,12 @@ Cada proyecto tiene una **ficha técnica** con un apartado por departamento, que
 
 | Resultado | Efecto |
 |-----------|--------|
-| **Aprobar** | Avanza a la siguiente fase. En G1, el decisor elige los departamentos implicados y se generan sus tareas. |
+| **Aprobar** | Avanza a la siguiente fase. En P1, el decisor elige los departamentos implicados y se generan sus tareas. |
 | **Solicitar más info** | Estado → *Pendiente de info*. Se notifica al solicitante con el detalle de lo que falta. Al responder, vuelve a *Solicitado* (o a la puerta pendiente). |
 | **Rechazar** | Estado → *Rechazado*, con motivo obligatorio. |
 | **Poner en pausa** | Estado → *En pausa*, con motivo. Reanudable. |
 
-En G2–G4 se añade: **Devolver a fase anterior** (recycle), con motivo.
+En P2–G4 se añade: **Devolver a fase anterior** (recycle), con motivo.
 
 ### 2.3 Estados del proyecto (independientes de la fase)
 
@@ -91,7 +93,7 @@ En curso → En producción   (tras G5; equivale a cerrado con éxito)
 | Estado | Descripción |
 |--------|-------------|
 | Borrador | Guardado sin enviar (solo visible para su autor) |
-| Solicitado | Enviado, pendiente de decisión en G1 |
+| Solicitado | Enviado, pendiente de decisión en P1 |
 | Pendiente de info | El decisor ha pedido información adicional |
 | En curso | Aprobado; la fase indica dónde está |
 | En pausa | Detenido temporalmente |
@@ -99,7 +101,7 @@ En curso → En producción   (tras G5; equivale a cerrado con éxito)
 | Rechazado | Denegado en una puerta |
 | Cancelado | Abandonado tras haber sido aprobado |
 
-Para el panel, tabla y filtro se usa un único vocabulario de **situación**: *Pendiente de G1* (Solicitado + Pendiente de info), *En validación* (activo en fases 1–2), *En curso* (activo en fases 3–5, tras G2), *En pausa*, *En producción* y *Rechazados / cancelados*. La tabla muestra la situación y, debajo, la fase concreta.
+Para el panel, tabla y filtro se usa un único vocabulario de **situación**: *Solicitado* (Solicitado + Pendiente de info), *Validando cliente* (activo en fases 1–2), *En curso* (activo en fases 3–5, tras P2), *En pausa*, *En producción* y *Rechazados / cancelados*. La tabla muestra la situación y, debajo, la fase concreta.
 
 ### 2.4 Tareas por departamento
 
@@ -111,7 +113,7 @@ Para el panel, tabla y filtro se usa un único vocabulario de **situación**: *P
 
 ### 2.5 Plantillas de flujo
 
-Definidas en el backoffice. Cada plantilla = conjunto de tareas por fase, con departamento, dependencias, obligatoriedad y duración estimada (días). Al aprobar G1 se instancia la plantilla y el decisor puede **activar/desactivar departamentos** (el "desplegable" de departamentos) antes de confirmar.
+Definidas en el backoffice. Cada plantilla = conjunto de tareas por fase, con departamento, dependencias, obligatoriedad y duración estimada (días). Al aprobar P1 se instancia la plantilla y el decisor puede **activar/desactivar departamentos** (el "desplegable" de departamentos) antes de confirmar.
 
 Plantillas iniciales (seed):
 1. PL – Desarrollo completo
@@ -137,7 +139,7 @@ T7 Cliente (PL): aprobación AAFF [esperando_cliente]  ← depende de T6
 
 | Departamento | Papel principal |
 |--------------|-----------------|
-| Marketing / NPD | Aprueba G1, gestiona el proyecto, elige envase, briefings |
+| Marketing / NPD | Aprueba P1, gestiona el proyecto, elige envase, briefings |
 | Laboratorio / I+D | Fórmula, muestras, estabilidad y compatibilidad |
 | Calidad | Revisión de textos y AAFF, documentación |
 | Regulatory | Claims, requisitos por país, expedientes, cosmética |
@@ -148,7 +150,7 @@ T7 Cliente (PL): aprobación AAFF [esperando_cliente]  ← depende de T6
 | Producción | Factibilidad de maquinaria y planificación (consultivo) |
 | Almacén | Consultivo (opcional) |
 | Comercial | Solicitantes; interlocución con el cliente PL |
-| Dirección | Comité (G2 en marca propia), lectura global |
+| Dirección | Comité (P2 en marca propia), lectura global |
 
 Cada departamento tiene: nombre, color, **lista de emails de notificación**, responsable y miembros.
 
@@ -161,9 +163,9 @@ Los usuarios acceden con su cuenta corporativa Microsoft 365 (SSO). Un usuario p
 | Rol | Permisos |
 |-----|----------|
 | **Admin** | Todo + backoffice (usuarios, roles, departamentos, marcas propias, plantillas, logs) |
-| **Decisor global** (gestor de proyectos) | Ve todos los proyectos; decide G1 y G2, envía cotizaciones, avanza fases, edita el brief y rellena y cierra todos los apartados de la ficha técnica |
+| **Decisor global** (gestor de proyectos) | Ve todos los proyectos; decide P1 y P2, envía cotizaciones, avanza fases, edita el brief y rellena y cierra todos los apartados de la ficha técnica |
 | **Solicitante** | Crear solicitudes, ver y editar sus borradores, responder peticiones de info, comentar en sus proyectos. Por defecto: comerciales, marketing, dirección |
-| **Decisor** | Decidir en las puertas que tenga asignadas (configurable por puerta y tipo de proyecto). En G2, el comercial que dio de alta el proyecto siempre puede decidir, además de los aprobadores configurados |
+| **Decisor** | Decidir en las puertas que tenga asignadas (configurable por puerta y tipo de proyecto). En P2, el comercial que dio de alta el proyecto siempre puede decidir, además de los aprobadores configurados |
 | **Miembro de departamento** | Ver proyectos donde su departamento tiene tareas, cambiar estado de esas tareas, comentar, subir archivos |
 | **Lectura global** | Ver todos los proyectos y dashboards (Dirección) |
 
@@ -265,16 +267,16 @@ Guardado automático como **Borrador** en cada paso. Barra de progreso e **indic
 
 | Evento | Destinatarios |
 |--------|---------------|
-| Nueva solicitud enviada | Decisores de G1 + emails del departamento Marketing |
+| Nueva solicitud enviada | Decisores de P1 + emails del departamento Marketing |
 | Solicitud de más info | Solicitante (+ comercial de la cuenta si es distinto) |
 | Info aportada | Decisor que la pidió |
-| Proyecto aprobado en G1 | Emails de los departamentos seleccionados + solicitante |
+| Proyecto aprobado en P1 | Emails de los departamentos seleccionados + solicitante |
 | Proyecto rechazado | Solicitante (con motivo) |
 | Tarea desbloqueada / asignada | Departamento o persona asignada |
 | Tarea devuelta | Departamento/persona de la tarea devuelta |
 | Mención `@usuario` en comentario | Usuario mencionado |
 | Fase lista para decisión | Decisor de esa puerta |
-| Cambio de puerta (G2–G5) | Solicitante + departamentos implicados |
+| Cambio de puerta (P2–G5) | Solicitante + departamentos implicados |
 | Proyecto en riesgo (fecha necesaria < X días y fase atrasada) | Project Manager / Marketing (resumen diario) |
 
 - Plantillas de email en HTML, con marca NATU, resumen del proyecto y botón "Ver en la plataforma".
@@ -287,7 +289,7 @@ Guardado automático como **Borrador** en cada paso. Barra de progreso e **indic
 ## 7. Pantallas
 
 ### 7.1 Panel principal (dashboard)
-**Tarjetas KPI**: proyectos totales (periodo seleccionable), por estado agrupado, PL vs MP, por marca, por categoría, por solicitante/comercial, tiempo medio hasta decisión en G1, % aprobados, proyectos en riesgo.
+**Tarjetas KPI**: proyectos totales (periodo seleccionable), por estado agrupado, PL vs MP, por marca, por categoría, por solicitante/comercial, tiempo medio hasta decisión en P1, % aprobados, proyectos en riesgo.
 
 **Gráficos**: evolución mensual de solicitudes (línea), distribución por estado (barras), por tipo/marca (barras), embudo por fase.
 
@@ -315,11 +317,11 @@ Botón destacado: **+ Nueva solicitud** (abre el asistente).
 
 ### 7.3 Modal de decisión de puerta
 - Resumen de la fase y checklist de tareas.
-- Opciones: Aprobar / Solicitar más info / Rechazar / Pausar (+ Devolver a fase anterior en G2–G4).
-- **G1 Aprobar**: seleccionar plantilla de flujo sugerida (por tipo, subtipo y categoría) → multiselect de departamentos a implicar (precargado desde plantilla) → comentario opcional → confirmar. Se generan tareas y se envían notificaciones.
+- Opciones: Aprobar / Solicitar más info / Rechazar / Pausar (+ Devolver a fase anterior en P2–G4).
+- **P1 Aprobar**: seleccionar plantilla de flujo sugerida (por tipo, subtipo y categoría) → multiselect de departamentos a implicar (precargado desde plantilla) → comentario opcional → confirmar. Se generan tareas y se envían notificaciones.
 - **Solicitar más info**: texto obligatorio + checklist opcional de campos del brief que faltan (los resalta al solicitante).
 - **Rechazar**: motivo obligatorio (select + texto): no viable técnicamente, precio, volumen insuficiente, fuera de estrategia, duplicado, otro.
-- En PL, G2–G4 permiten adjuntar la evidencia de aprobación del cliente (email/PDF).
+- En PL, P2–G4 permiten adjuntar la evidencia de aprobación del cliente (email/PDF).
 
 ### 7.4 "Mis tareas"
 Bandeja por usuario/departamento: tareas pendientes, en curso, devueltas y bloqueadas, ordenadas por fecha objetivo.
@@ -398,7 +400,7 @@ projects(
 
 project_departments(project_id, department_id)
 
-gates(id, project_id, gate[G1..G5], status[pending|approved|info_requested|rejected|paused|recycled|forced],
+gates(id, project_id, gate[P1..G5], status[pending|approved|info_requested|rejected|paused|recycled|forced],
       decided_by, decided_at, comment, reason_code, client_evidence_file_id)
 
 info_requests(id, project_id, gate_id, requested_by, requested_at, message, fields_missing[], 
@@ -444,10 +446,10 @@ Notas:
 
 ### V1 — Solicitud y decisión (MVP)
 - SSO con Microsoft, alta de usuarios pendiente de activación.
-- Backoffice: usuarios, roles, departamentos (emails), catálogos básicos, decisores de G1, logs de actividad y errores.
+- Backoffice: usuarios, roles, departamentos (emails), catálogos básicos, decisores de P1, logs de actividad y errores.
 - Asistente de solicitud completo (PL / MP · perfumería / ambientación / cosmética), borradores, adjuntos, completitud.
 - Carpeta SharePoint por proyecto con adjuntos.
-- G1: aprobar (con selección de departamentos → email con detalles) / solicitar info / rechazar / pausar.
+- P1: aprobar (con selección de departamentos → email con detalles) / solicitar info / rechazar / pausar.
 - Dashboard con KPIs y listado filtrable.
 - Ficha de proyecto: cabecera, brief visual (incl. pirámide olfativa), actividad, comentarios con menciones, archivos.
 
@@ -463,7 +465,7 @@ Notas:
 - Plantillas de flujo y editor en backoffice.
 - Tareas por departamento, dependencias, bloqueos, devoluciones e iteraciones.
 - Carriles por departamento, cronograma y bandeja "Mis tareas".
-- Puertas G2–G5 con decisores configurables, devolución a fase anterior y evidencia del cliente en PL.
+- Puertas P2–G5 con decisores configurables, devolución a fase anterior y evidencia del cliente en PL.
 - Estado *En producción* y referencia SAP.
 
 **Criterios de aceptación V2**

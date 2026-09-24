@@ -27,6 +27,7 @@ import {
   PRIORITY_COLOR,
   PRIORITY_LABEL,
   TYPE_LABEL,
+  GATE_LABEL,
 } from "@/lib/labels";
 import { GENDER_LABEL } from "@/lib/brief/display";
 import { canDecideGate, canEditBrief, canManageProject, canSendQuote, canViewProject, requireUser } from "@/lib/server/authz";
@@ -150,7 +151,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
           return {
             ...base,
             group: "decisiones",
-            text: "registró la aprobación del presupuesto por el cliente (G2)",
+            text: "registró la aprobación del presupuesto por el cliente (P2)",
             detail: [ppText, ppd?.note, diff.comment as string].filter(Boolean).join("\n") || null,
           };
         }
@@ -158,7 +159,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
         return {
           ...base,
           group: "decisiones",
-          text: `aprobó la solicitud (G1) · departamentos: ${names?.join(", ") ?? "—"}`,
+          text: `aprobó la solicitud (P1) · departamentos: ${names?.join(", ") ?? "—"}`,
           detail: (diff.comment as string) || null,
         };
       }
@@ -202,7 +203,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
         return {
           ...base,
           group: "decisiones",
-          text: `rechazó el proyecto en ${diff.gate ?? "G1"}`,
+          text: `rechazó el proyecto en ${GATE_LABEL[String(diff.gate ?? "G1")] ?? diff.gate}`,
           detail: [reason, diff.reasonText].filter(Boolean).join(" — "),
         };
       }
@@ -330,7 +331,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
             {canDecide && (
               <GateDialog
                 projectId={p.id}
-                gateLabel="G1 · Aprobación de la solicitud"
+                gateLabel="P1 · Aprobación de la solicitud"
                 summary={{
                   completeness: p.completenessPct,
                   requester: d.requesterName,
@@ -495,7 +496,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
                                 : "bg-white text-slate-500",
                         )}
                       >
-                        {ph.gate} · {ph.gateName}
+                        {GATE_LABEL[ph.gate]} · {ph.gateName}
                       </Badge>
                     </p>
                   )}
@@ -644,7 +645,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
           <Card className="h-full">
             <CardHeader title="Estado por departamento" />
             <CardBody>
-              <p className="text-sm text-slate-500">La ficha técnica de los departamentos se abre cuando se aprueba la solicitud (G1).</p>
+              <p className="text-sm text-slate-500">La ficha técnica de los departamentos se abre cuando se aprueba la solicitud (P1).</p>
             </CardBody>
           </Card>
         )}

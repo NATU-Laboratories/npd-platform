@@ -103,10 +103,10 @@ export function DashboardKpis(k: KpiData) {
         {/* Rendimiento de la aprobación G1 */}
         <div className="rounded-xl border border-slate-200 bg-natu-dark p-5 text-white lg:col-span-4">
           <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-white/70">
-            Aprobación de solicitudes · G1
+            Aprobación de solicitudes · P1
             <InfoTip
               onDark
-              text="G1 es la primera puerta de aprobación: decide si una solicitud es viable y pasa a Cotización. Estos datos miden la agilidad y el resultado de esa decisión."
+              text="P1 (paso 1) es la primera aprobación: decide si una solicitud es viable y pasa a Cotización. Estos datos miden la agilidad y el resultado de esa decisión."
             />
           </h2>
           <div className="mt-3 grid grid-cols-2 gap-4">
@@ -115,7 +115,7 @@ export function DashboardKpis(k: KpiData) {
                 Tiempo medio
                 <InfoTip
                   onDark
-                  text="Media de días entre el envío de la solicitud y su aprobación en G1."
+                  text="Media de días entre el envío de la solicitud y su aprobación en P1."
                 />
               </p>
               <p className="mt-1 text-3xl font-black tabular-nums">
@@ -129,7 +129,7 @@ export function DashboardKpis(k: KpiData) {
                 <InfoTip
                   align="end"
                   onDark
-                  text="Porcentaje de solicitudes aprobadas sobre las ya decididas en G1 (aprobadas + rechazadas). Las pendientes no cuentan."
+                  text="Porcentaje de solicitudes aprobadas sobre las ya decididas en P1 (aprobadas + rechazadas). Las pendientes no cuentan."
                 />
               </p>
               <p className="mt-1 text-3xl font-black tabular-nums">{rate == null ? "—" : `${rate}%`}</p>
@@ -147,16 +147,16 @@ export function DashboardKpis(k: KpiData) {
       <p className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[11px] text-slate-500">
         <span className="font-semibold uppercase tracking-[0.14em] text-slate-400">Leyenda</span>
         <span>
-          <b className="font-semibold text-slate-700">G1</b> · Aprobación de la solicitud (Solicitud → Cotización)
+          <b className="font-semibold text-slate-700">P1</b> · Paso 1: aprobación de la solicitud (Solicitud → Cotización)
         </span>
         <span>
-          <b className="font-semibold text-slate-700">G2</b> · Aprobación del presupuesto por el cliente (Valoración → Desarrollo)
+          <b className="font-semibold text-slate-700">P2</b> · Paso 2: aprobación del presupuesto por el cliente (Valoración → Desarrollo)
         </span>
         <span>
           <b className="font-semibold text-slate-700">Validación</b> · Solicitud, cotización y valoración con cliente
         </span>
         <span>
-          <b className="font-semibold text-slate-700">En curso</b> · Desarrollo, diseño y AAFF, preparación para producción (tras G2)
+          <b className="font-semibold text-slate-700">En curso</b> · Desarrollo, diseño y AAFF, preparación para producción (tras P2)
         </span>
       </p>
     </section>

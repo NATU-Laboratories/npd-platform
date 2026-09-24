@@ -427,7 +427,7 @@ export async function sendQuote(u: CurrentUser, projectId: string, input: { amou
   const extra: [string, string][] = amount != null ? [["Importe cotizado", amount.toLocaleString("es-ES", { style: "currency", currency: "EUR" })]] : [];
   await notifyProjectEvent(projectId, "quote.sent", {
     title: "Cotización enviada al cliente",
-    intro: "El proyecto pasa a Valoración con cliente. Cuando el cliente responda, registra la decisión (G2 · Aprobación del presupuesto).",
+    intro: "El proyecto pasa a Valoración con cliente. Cuando el cliente responda, registra la decisión (P2 · Aprobación del presupuesto).",
     message: comment ? { label: "Comentario", body: comment } : null,
     extraRows: extra,
     to: { requester: true, accountManager: true, deciders: "G2" },
