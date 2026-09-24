@@ -1,5 +1,5 @@
 "use client";
-import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 // Paleta categórica validada (orden fijo): PL = serie 1, MP = serie 2, MDD = serie 3.
 export const SERIES = { pl: "#2a78d6", mp: "#eb6834", mdd: "#1baf7a", single: "#2a78d6" };
@@ -55,38 +55,30 @@ export function MonthlyChart({ data }: { data: { month: string; pl: number; mp: 
   );
 }
 
-/** Barras horizontales de una sola serie con etiqueta directa del valor. */
-export function HBarChart({ data, label }: { data: { name: string; n: number }[]; label: string }) {
-  if (!data.length) return <p className="py-8 text-center text-sm text-slate-400">Sin datos</p>;
-  const h = Math.max(120, data.length * 30 + 10);
-  return (
-    <div style={{ height: h }} role="img" aria-label={label}>
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} layout="vertical" margin={{ top: 0, right: 28, bottom: 0, left: 0 }} barCategoryGap={4}>
-          <XAxis type="number" hide allowDecimals={false} />
-          <YAxis type="category" dataKey="name" width={130} tick={AXIS} tickLine={false} axisLine={false} />
-          <Tooltip content={<TooltipBox />} cursor={{ fill: "#f5f5f4" }} />
-          <Bar dataKey="n" name="Proyectos" fill={SERIES.single} radius={[0, 4, 4, 0]} barSize={16} label={{ position: "right", fontSize: 11, fill: "#0b0b0b" }} />
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-/** Embudo por fase: barras centradas de ancho proporcional. */
-export function PhaseFunnel({ data }: { data: { name: string; n: number }[] }) {
+/** Embudo por fase, agrupado por etapa: barras centradas de ancho proporcional. */
+export function PhaseFunnel({ data }: { data: { name: string; stage: string; n: number }[] }) {
   const max = Math.max(1, ...data.map((d) => d.n));
+  const stages = [...new Set(data.map((d) => d.stage))];
   return (
-    <ol className="flex flex-col gap-1.5" aria-label="Embudo por fase">
-      {data.map((d) => (
-        <li key={d.name} className="grid grid-cols-[9rem_1fr_2rem] items-center gap-2 text-xs" title={`${d.name}: ${d.n}`}>
-          <span className="truncate text-slate-600">{d.name}</span>
-          <span className="flex justify-center">
-            <span className="block h-5 rounded" style={{ width: `${Math.max(2, (d.n / max) * 100)}%`, background: SERIES.single }} />
-          </span>
-          <span className="text-right font-semibold text-slate-900">{d.n}</span>
-        </li>
+    <div className="flex flex-col gap-3" aria-label="Embudo por fase">
+      {stages.map((st) => (
+        <div key={st}>
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{st}</p>
+          <ol className="flex flex-col gap-1.5">
+            {data
+              .filter((d) => d.stage === st)
+              .map((d) => (
+                <li key={d.name} className="grid grid-cols-[9rem_1fr_2rem] items-center gap-2 text-xs" title={`${d.name}: ${d.n}`}>
+                  <span className="truncate text-slate-600">{d.name}</span>
+                  <span className="flex justify-center">
+                    <span className="block h-5 rounded" style={{ width: `${Math.max(2, (d.n / max) * 100)}%`, background: SERIES.single }} />
+                  </span>
+                  <span className="text-right font-semibold text-slate-900">{d.n}</span>
+                </li>
+              ))}
+          </ol>
+        </div>
       ))}
-    </ol>
+    </div>
   );
 }

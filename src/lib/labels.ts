@@ -53,23 +53,37 @@ export const PRIORITY_COLOR = {
 } as const;
 
 /**
- * Fases del proceso. Solo dos puertas de aprobación formales:
- * G1 (Solicitud → Cotización) y G2 (Valoración con cliente → En curso).
+ * Fases del proceso, agrupadas en dos etapas:
+ *  - Validación: Solicitud → Cotización → Valoración con cliente.
+ *  - En curso (tras aprobar el cliente el presupuesto): Desarrollo → Diseño y artes finales → Preparación para producción.
+ * Dos puertas de aprobación formales: G1 (Solicitud → Cotización) y G2 (Valoración con cliente → Desarrollo).
  * El resto de fases avanzan con una acción de "avanzar fase".
  */
-export const PHASES = [
-  { n: 0, name: "Solicitud", short: "Solicitud", gate: "G1", gateName: "Aprobación de la solicitud" },
-  { n: 1, name: "Cotización", short: "Cotización", gate: null, gateName: null },
-  { n: 2, name: "Valoración con cliente", short: "Valoración", gate: "G2", gateName: "Aprobación del presupuesto" },
-  { n: 3, name: "En curso", short: "En curso", gate: null, gateName: null },
-  { n: 4, name: "Desarrollo", short: "Desarrollo", gate: null, gateName: null },
-  { n: 5, name: "Diseño y artes finales", short: "Diseño/AAFF", gate: null, gateName: null },
-  { n: 6, name: "Preparación para producción", short: "Producción", gate: null, gateName: null },
+export const STAGES = [
+  { key: "validacion", name: "Validación", from: 0, to: 2 },
+  { key: "en_curso", name: "En curso", from: 3, to: 5 },
 ] as const;
+export const PHASES = [
+  { n: 0, stage: "validacion", name: "Solicitud", short: "Solicitud", gate: "G1", gateName: "Aprobación de la solicitud" },
+  { n: 1, stage: "validacion", name: "Cotización", short: "Cotización", gate: null, gateName: null },
+  { n: 2, stage: "validacion", name: "Valoración con cliente", short: "Valoración", gate: "G2", gateName: "Aprobación del presupuesto" },
+  { n: 3, stage: "en_curso", name: "Desarrollo", short: "Desarrollo", gate: null, gateName: null },
+  { n: 4, stage: "en_curso", name: "Diseño y artes finales", short: "Diseño/AAFF", gate: null, gateName: null },
+  { n: 5, stage: "en_curso", name: "Preparación para producción", short: "Producción", gate: null, gateName: null },
+] as const;
+export const FIRST_RUNNING_PHASE = 3;
+/** Etiqueta de estado teniendo en cuenta la etapa: un proyecto activo antes de G2 está "En validación". */
+export function statusLabel(status: ProjectStatus, phase?: number | null) {
+  if (status === "in_progress" && phase != null && phase < FIRST_RUNNING_PHASE) return "En validación";
+  return STATUS_LABEL[status];
+}
+export function stageOf(phase: number) {
+  return STAGES.find((s) => phase >= s.from && phase <= s.to) ?? STAGES[0];
+}
 export const LAST_PHASE = PHASES.length - 1;
 export const APPROVAL_GATES = [
   { gate: "G1", name: "Aprobación de la solicitud", phase: 0, description: "Solicitud → Cotización. Decide si el proyecto es viable y se cotiza." },
-  { gate: "G2", name: "Aprobación del presupuesto", phase: 2, description: "Valoración con cliente → En curso. Comercial registra que el cliente aprueba el presupuesto." },
+  { gate: "G2", name: "Aprobación del presupuesto", phase: 2, description: "Valoración con cliente → En curso (Desarrollo). Comercial registra que el cliente aprueba el presupuesto." },
 ] as const;
 
 /** Subcarpetas de SharePoint por fase (§9.1). */
@@ -77,10 +91,9 @@ export const PHASE_FOLDERS = [
   "00 Solicitud",
   "01 Cotización",
   "02 Valoración cliente",
-  "03 En curso",
-  "04 Desarrollo",
-  "05 Diseño-AAFF",
-  "06 Preparación producción",
+  "03 Desarrollo",
+  "04 Diseño-AAFF",
+  "05 Preparación producción",
 ] as const;
 
 export const ROLE_LABEL = {

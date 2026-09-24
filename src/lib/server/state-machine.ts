@@ -15,7 +15,7 @@ import {
   type ProjectStatus,
 } from "@/db/schema";
 import { computeCompleteness, FIELD_BY_KEY, submitErrors } from "@/lib/brief/fields";
-import { LAST_PHASE, PHASES, PREPAYMENT_TYPES } from "@/lib/labels";
+import { FIRST_RUNNING_PHASE, LAST_PHASE, PHASES, PREPAYMENT_TYPES } from "@/lib/labels";
 import { parseBriefLenient, type BriefData } from "@/lib/brief/schema";
 import { logActivity, jsonDiff } from "./activity";
 import { canDecideGate, canEditBrief, canManageProject, canRequest, canSendQuote, type CurrentUser } from "./authz";
@@ -79,7 +79,7 @@ const PHASE_OF: Partial<Record<Transition, (phase: number) => boolean>> = {
   reject: (ph) => ph === 0,
   send_quote: (ph) => ph === 1,
   budget_decision: (ph) => ph === 2,
-  advance: (ph) => ph >= 3 && ph <= LAST_PHASE,
+  advance: (ph) => ph >= FIRST_RUNNING_PHASE && ph <= LAST_PHASE,
 };
 
 export function canTransition(status: ProjectStatus, t: Transition, phase?: number) {
@@ -475,7 +475,7 @@ export async function decideBudget(u: CurrentUser, projectId: string, decision: 
           .update(gates)
           .set({ ...decided, status: "approved", comment: decision.comment?.trim() || null, data: prepayment ? { prepayment } : null })
           .where(eq(gates.id, g!.id));
-        await tx.update(projects).set({ phase: 3, prepayment, updatedAt: now }).where(eq(projects.id, projectId));
+        await tx.update(projects).set({ phase: FIRST_RUNNING_PHASE, prepayment, updatedAt: now }).where(eq(projects.id, projectId));
         await logActivity(
           { projectId, actorId: u.id, action: "gate.approved", entity: "gate", entityId: "G2", diff: { gate: "G2", comment: decision.comment ?? null, prepayment } },
           tx,
@@ -489,7 +489,7 @@ export async function decideBudget(u: CurrentUser, projectId: string, decision: 
         return () =>
           notifyProjectEvent(projectId, "gate.approved.g2", {
             title: "Presupuesto aprobado por el cliente",
-            intro: "El proyecto pasa a En curso.",
+            intro: "El proyecto pasa a En curso · Desarrollo.",
             message: [decision.comment?.trim(), ppText].filter(Boolean).length
               ? { label: "Detalle", body: [ppText, decision.comment?.trim()].filter(Boolean).join("\n") }
               : null,

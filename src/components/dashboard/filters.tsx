@@ -86,7 +86,9 @@ export function Filters({ brands, departments, requesters }: { brands: Opt[]; de
         {sel("category", "Categoría", Object.entries(CATEGORY_LABEL))}
         {sel("status", "Estado", [
           ...Object.entries(STATUS_GROUPS).map(([k, g]) => [`g:${k}`, `▸ ${g.label}`] as [string, string]),
-          ...Object.entries(STATUS_LABEL).filter(([k]) => k !== "draft"),
+          ...Object.entries(STATUS_LABEL)
+            .filter(([k]) => k !== "draft")
+            .map(([k, l]) => [k, k === "in_progress" ? "Activo (validación o en curso)" : l] as [string, string]),
         ])}
         {sel("phase", "Fase", PHASES.map((p) => [String(p.n), `${p.n} · ${p.name}`]))}
         {sel("requester", "Solicitante", requesters.map((r) => [String(r.id), r.name]))}

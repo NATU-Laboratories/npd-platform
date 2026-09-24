@@ -1,14 +1,14 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import { STATUS_COLOR, STATUS_LABEL } from "@/lib/labels";
+import { STATUS_COLOR, statusLabel } from "@/lib/labels";
 import type { ProjectStatus } from "@/db/schema";
 
 export function Badge({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) {
   return <span className={cn("inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset", className)} {...props} />;
 }
 
-export function StatusBadge({ status, className }: { status: ProjectStatus; className?: string }) {
-  return <Badge className={cn(STATUS_COLOR[status], className)}>{STATUS_LABEL[status]}</Badge>;
+export function StatusBadge({ status, phase, className }: { status: ProjectStatus; phase?: number | null; className?: string }) {
+  return <Badge className={cn(STATUS_COLOR[status], className)}>{statusLabel(status, phase)}</Badge>;
 }
 
 export function DeptChip({ name, color }: { name: string; color: string }) {

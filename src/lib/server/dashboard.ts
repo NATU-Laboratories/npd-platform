@@ -178,7 +178,7 @@ export async function dashboardStats(u: CurrentUser, f: ProjectFilters, riskDays
 
   const q = <T extends Record<string, unknown>>(query: SQL) => db.execute<T>(query).then((r) => r.rows);
 
-  const [totalsRows, byStatus, byCategory, byBrand, byRequester, byPhase, monthly] = await Promise.all([
+  const [totalsRows, byStatus, byPhase, monthly] = await Promise.all([
     q<Record<string, string | number | null>>(sql`
       select
         count(*)::int as total,
@@ -194,11 +194,6 @@ export async function dashboardStats(u: CurrentUser, f: ProjectFilters, riskDays
         count(*) filter (where status in ('submitted','info_requested','in_progress','paused') and needed_by <= current_date + ${riskDays}::int)::int as at_risk
       from ${base}`),
     q<{ key: string; n: number }>(sql`select status::text as key, count(*)::int as n from ${base} group by 1 order by 2 desc`),
-    q<{ key: string; n: number }>(sql`select coalesce(category::text, '—') as key, count(*)::int as n from ${base} group by 1 order by 2 desc`),
-    q<{ key: string; n: number }>(
-      sql`select coalesce(brand, case when type = 'PL' then 'Marca privada' when type = 'MDD' then 'Marca de distribuidor' else '—' end) as key, count(*)::int as n from ${base} group by 1 order by 2 desc limit 12`,
-    ),
-    q<{ key: string; n: number }>(sql`select requester as key, count(*)::int as n from ${base} group by 1 order by 2 desc limit 10`),
     q<{ phase: number; n: number }>(
       sql`select phase, count(*)::int as n from ${base} where status in ('submitted','info_requested','in_progress','paused','in_production') group by 1 order by 1`,
     ),
@@ -231,9 +226,6 @@ export async function dashboardStats(u: CurrentUser, f: ProjectFilters, riskDays
       atRisk: n("at_risk"),
     },
     byStatus: byStatus.map((r) => ({ key: r.key, n: Number(r.n) })),
-    byCategory: byCategory.map((r) => ({ key: r.key, n: Number(r.n) })),
-    byBrand: byBrand.map((r) => ({ key: r.key, n: Number(r.n) })),
-    byRequester: byRequester.map((r) => ({ key: r.key, n: Number(r.n) })),
     byPhase: byPhase.map((r) => ({ phase: Number(r.phase), n: Number(r.n) })),
     monthly: monthly.map((r) => ({ month: r.month, pl: Number(r.pl), mp: Number(r.mp), mdd: Number(r.mdd) })),
   };

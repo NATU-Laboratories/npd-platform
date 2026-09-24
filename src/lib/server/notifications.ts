@@ -17,7 +17,7 @@ import {
   type GateKey,
 } from "@/db/schema";
 import { FIELD_BY_KEY } from "@/lib/brief/fields";
-import { CATEGORY_LABEL, PRIORITY_LABEL, STATUS_LABEL, TYPE_LABEL } from "@/lib/labels";
+import { CATEGORY_LABEL, PRIORITY_LABEL, statusLabel, TYPE_LABEL } from "@/lib/labels";
 
 import { sendMail } from "@/lib/graph/mail";
 import { renderEmail, type ProjectSummary } from "./email-template";
@@ -111,7 +111,7 @@ async function loadProject(projectId: string) {
     requesterName: row.requesterName,
     neededBy: p.neededBy,
     priorityLabel: p.priority ? PRIORITY_LABEL[p.priority] : null,
-    statusLabel: STATUS_LABEL[p.status],
+    statusLabel: statusLabel(p.status, p.phase),
   };
   return { ...row, summary };
 }

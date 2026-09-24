@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { AlertTriangle, ArrowDown, ArrowUp, ChevronRight, FileEdit } from "lucide-react";
-import { HBarChart, MonthlyChart, PhaseFunnel } from "@/components/dashboard/charts";
+import { MonthlyChart, PhaseFunnel } from "@/components/dashboard/charts";
 import { Filters } from "@/components/dashboard/filters";
 import { StatusBadge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { requireUser } from "@/lib/server/authz";
 import { dashboardStats, filterOptions, listProjects, myDrafts, PAGE_SIZE, type ProjectFilters } from "@/lib/server/dashboard";
 import { getSettings } from "@/lib/server/settings";
-import { CATEGORY_LABEL, PHASES, PRIORITY_COLOR, PRIORITY_LABEL } from "@/lib/labels";
+import { CATEGORY_LABEL, PHASES, PRIORITY_COLOR, PRIORITY_LABEL, stageOf } from "@/lib/labels";
 import { cn, formatDate } from "@/lib/utils";
 import { NeededBySignal } from "@/components/needed-by";
 
@@ -138,24 +138,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
         <Card>
           <CardHeader title="Embudo por fase" description="Proyectos activos o cerrados" />
           <CardBody>
-            <PhaseFunnel data={PHASES.map((p) => ({ name: `${p.n} · ${p.name}`, n: stats.byPhase.find((x) => x.phase === p.n)?.n ?? 0 }))} />
-          </CardBody>
-        </Card>
-        <Card className="lg:col-span-3">
-          <CardHeader title="Distribución" description="Proyectos por tipo, categoría y solicitante" />
-          <CardBody className="grid gap-6 md:grid-cols-3">
-            <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Tipo / marca</h3>
-              <HBarChart label="Proyectos por tipo y marca" data={stats.byBrand.map((r) => ({ name: r.key, n: r.n }))} />
-            </div>
-            <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Categoría</h3>
-              <HBarChart label="Proyectos por categoría" data={stats.byCategory.map((r) => ({ name: CATEGORY_LABEL[r.key as keyof typeof CATEGORY_LABEL] ?? r.key, n: r.n }))} />
-            </div>
-            <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Solicitante</h3>
-              <HBarChart label="Proyectos por solicitante" data={stats.byRequester.slice(0, 6).map((r) => ({ name: r.key, n: r.n }))} />
-            </div>
+            <PhaseFunnel data={PHASES.map((p) => ({ name: `${p.n} · ${p.name}`, stage: stageOf(p.n).name, n: stats.byPhase.find((x) => x.phase === p.n)?.n ?? 0 }))} />
           </CardBody>
         </Card>
       </section>
@@ -202,7 +185,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
                     <NeededBySignal date={p.neededBy} riskDays={settings.risk_days} status={p.status} compact />
                   </td>
                   <td className="px-3 py-2.5">
-                    <StatusBadge status={p.status} />
+                    <StatusBadge status={p.status} phase={p.phase} />
                   </td>
                   <td className="px-3 py-2.5 text-xs">
                     <span className="whitespace-nowrap">

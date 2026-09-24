@@ -15,7 +15,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { briefSections, formatFormat, type Lookups } from "@/lib/brief/display";
 import { applicableFields, FIELD_BY_KEY, isFieldFilled } from "@/lib/brief/fields";
 import { needsOlfactory } from "@/lib/brief/schema";
-import { ACTION_LABEL, CATEGORY_LABEL, FILE_TAGS, LAST_PHASE, PHASE_FOLDERS, PHASES, PREPAYMENT_TYPES, PRIORITY_COLOR, PRIORITY_LABEL, TYPE_LABEL } from "@/lib/labels";
+import { ACTION_LABEL, CATEGORY_LABEL, FILE_TAGS, LAST_PHASE, PHASE_FOLDERS, PHASES, PREPAYMENT_TYPES, STAGES, PRIORITY_COLOR, PRIORITY_LABEL, TYPE_LABEL } from "@/lib/labels";
 import { GENDER_LABEL } from "@/lib/brief/display";
 import { canDecideGate, canEditBrief, canManageProject, canSendQuote, canViewProject, requireUser } from "@/lib/server/authz";
 import { getActiveUsers, getAllCatalogs, getBrands, getDepartments } from "@/lib/server/catalogs";
@@ -189,7 +189,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-mono text-sm text-slate-500">{p.code}</span>
-              <StatusBadge status={p.status} />
+              <StatusBadge status={p.status} phase={p.phase} />
               {p.priority && <span className={cn("text-xs", PRIORITY_COLOR[p.priority])}>Prioridad {PRIORITY_LABEL[p.priority].toLowerCase()}</span>}
             </div>
             <h1 className="mt-1 text-2xl font-semibold text-slate-900">{p.name}</h1>
@@ -301,7 +301,24 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
       {/* 2. Línea de fases */}
       <Card>
         <CardBody>
-          <ol className="grid grid-cols-7 gap-1" aria-label="Fases del proyecto">
+          <div className="grid grid-cols-6 gap-1" aria-hidden>
+            {STAGES.map((st) => {
+              const active = p.phase >= st.from && p.phase <= st.to && !["rejected", "cancelled", "in_production"].includes(p.status);
+              const done = p.phase > st.to || (p.phase >= st.from && p.status === "in_production" && st.to === LAST_PHASE);
+              return (
+                <p
+                  key={st.key}
+                  className={cn(
+                    "col-span-3 mb-1 border-b pb-1 text-xs font-semibold uppercase tracking-wide",
+                    active ? "border-brand-300 text-brand-800" : done ? "border-slate-300 text-slate-600" : "border-slate-200 text-slate-400",
+                  )}
+                >
+                  {st.name}
+                </p>
+              );
+            })}
+          </div>
+          <ol className="grid grid-cols-6 gap-1" aria-label="Fases del proyecto">
             {PHASES.map((ph) => {
               const g = ph.gate ? d.gates.find((x) => x.g.gate === ph.gate) : undefined;
               const done = ph.n < p.phase || (ph.n === p.phase && p.status === "in_production");
