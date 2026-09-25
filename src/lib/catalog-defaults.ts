@@ -163,3 +163,47 @@ export type AppSettings = {
   requesters_see_all: boolean;
   sheet_departments: Record<string, string>;
 };
+
+/**
+ * Subestados iniciales de cada departamento (editables en el backoffice).
+ * `returns`: subestados a los que se puede volver desde este.
+ * `prompt` / `required`: campos de la ficha («apartado.campo») que se piden / exigen al entrar.
+ */
+export const SUBSTATE_DEFAULTS: Record<string, { name: string; final?: boolean; returns?: string[]; prompt?: string[]; required?: string[] }[]> = {
+  comercial: [
+    { name: "Pendiente de cotizar" },
+    { name: "Cotización enviada", returns: ["Pendiente de cotizar"] },
+    { name: "Negociación con el cliente", returns: ["Cotización enviada"] },
+    { name: "Presupuesto aprobado", final: true, returns: ["Negociación con el cliente"], prompt: ["comercial.finalUnitPrice"] },
+  ],
+  idi: [
+    { name: "Pendiente" },
+    { name: "Desarrollo de muestras" },
+    { name: "Muestras en evaluación", returns: ["Desarrollo de muestras"] },
+    { name: "Referencia aprobada", final: true, returns: ["Desarrollo de muestras"], prompt: ["formula.approvedReference"] },
+  ],
+  marketing: [
+    { name: "Pendiente" },
+    { name: "Envase y packaging" },
+    { name: "Naming y códigos", returns: ["Envase y packaging"] },
+    { name: "Validado", final: true, returns: ["Envase y packaging", "Naming y códigos"] },
+  ],
+  calidad: [
+    { name: "Pendiente" },
+    { name: "Revisión de fórmula y documentación" },
+    { name: "Textos legales de etiqueta", returns: ["Revisión de fórmula y documentación"] },
+    { name: "Validado", final: true, returns: ["Textos legales de etiqueta"] },
+  ],
+  diseno: [
+    { name: "Pendiente" },
+    { name: "Diseño en curso" },
+    { name: "En revisión", returns: ["Diseño en curso"] },
+    { name: "Artes finales aprobadas", final: true, returns: ["Diseño en curso"] },
+  ],
+  operaciones: [
+    { name: "Pendiente" },
+    { name: "Compras lanzadas" },
+    { name: "Planificación de producción", returns: ["Compras lanzadas"] },
+    { name: "Listo para producir", final: true, returns: ["Planificación de producción"] },
+  ],
+};

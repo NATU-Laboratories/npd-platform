@@ -2,8 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { AuthzError, requireActionUser } from "@/lib/server/authz";
 import { logError } from "@/lib/server/errors";
-import { saveSection, setSectionStatus, SheetError } from "@/lib/server/sheet";
-import type { SheetStatus } from "@/lib/sheet/sections";
+import { saveSection, SheetError, transitionDept } from "@/lib/server/sheet";
 import type { ActionResult } from "./projects";
 
 async function run<T>(name: string, projectId: string, fn: () => Promise<T>): Promise<ActionResult<T>> {
@@ -18,13 +17,12 @@ async function run<T>(name: string, projectId: string, fn: () => Promise<T>): Pr
   }
 }
 
-/** Guarda los datos de un apartado de la ficha técnica (solo responsables del departamento). */
+/** Guarda los datos de un apartado de la ficha técnica (miembros del departamento). */
 export async function saveSheetSectionAction(projectId: string, section: string, data: unknown) {
   return run("saveSheetSection", projectId, async () => saveSection(await requireActionUser(), projectId, section, data));
 }
 
-/** Marca un apartado como terminado, no aplicable o lo reabre. */
-export async function setSheetStatusAction(projectId: string, section: string, status: SheetStatus, note?: string | null) {
-  if (!["pending", "done", "na"].includes(status)) return { ok: false, error: "Estado no válido" } satisfies ActionResult;
-  return run("setSheetStatus", projectId, async () => setSectionStatus(await requireActionUser(), projectId, section, status, note));
+/** Avanza o retrocede el subestado de un departamento, con comentario opcional y campos pedidos por el destino. */
+export async function transitionDeptAction(projectId: string, departmentId: number, targetId: number, comment?: string | null, values?: Record<string, unknown>) {
+  return run("transitionDept", projectId, async () => transitionDept(await requireActionUser(), projectId, departmentId, targetId, comment, values));
 }

@@ -1,38 +1,71 @@
-import { CheckCircle2, ChevronDown, Circle, FileText } from "lucide-react";
-import { OlfactoryPyramid } from "@/components/project/olfactory-pyramid";
+import { Check, ChevronDown, FileText, RotateCcw } from "lucide-react";
 import type { UploadedFile } from "@/components/uploader";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PHASES } from "@/lib/labels";
-import type { SheetEntry } from "@/lib/server/sheet";
-import { applicable, formatValue, type SheetCtx, type SheetData, type SheetField } from "@/lib/sheet/sections";
+import type { DeptCard, SheetEntry } from "@/lib/server/sheet";
+import { applicable, checkField, formatValue, resolveFieldRef, sanitizeData, type SheetCtx, type SheetData, type SheetField } from "@/lib/sheet/sections";
 import { cn, formatBytes, formatDate } from "@/lib/utils";
+import { DeptTransition } from "./dept-transition";
 import { SectionEditor } from "./section-editor";
-import { SectionStatusActions } from "./section-status";
 
 const SAGE = "bg-[#eef0e6] text-[#56613f] ring-natu-sage";
+const DAY = 86_400_000;
 
-function statusPill(e: SheetEntry) {
-  if (e.status === "done") return { label: "Terminado", cls: SAGE };
-  if (e.status === "na") return { label: "No aplica", cls: "bg-slate-100 text-slate-600 ring-slate-300" };
-  if (!e.due) return { label: "Próximas fases", cls: "bg-white text-slate-500 ring-slate-200" };
-  if (e.complete) return { label: "Listo para cerrar", cls: "bg-[#f9ede6] text-[#7a4f3b] ring-natu-peach" };
-  return { label: `Pendiente · faltan ${e.total - e.done}`, cls: "bg-brand-50 text-brand-500 ring-brand-200" };
+function daysSince(d: Date | null, now: number) {
+  return d ? Math.max(0, Math.floor((now - d.getTime()) / DAY)) : null;
 }
 
-function Pill({ e }: { e: SheetEntry }) {
-  const s = statusPill(e);
-  return <span className={cn("inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1", s.cls)}>{s.label}</span>;
+/** Estado resumido de una tarjeta (chip). */
+function StateChip({ c }: { c: DeptCard }) {
+  const [label, cls] = c.completed
+    ? ["Completado", SAGE]
+    : !c.due
+      ? ["Próximas fases", "bg-white text-slate-500 ring-slate-200"]
+      : !c.started
+        ? ["Sin empezar", "bg-slate-100 text-slate-600 ring-slate-300"]
+        : [c.current?.name ?? "—", "bg-brand-50 text-brand-500 ring-brand-200"];
+  return <span className={cn("inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1", cls)}>{label}</span>;
 }
 
-function Bar({ e }: { e: SheetEntry }) {
-  const pct = e.status === "na" ? 0 : e.total ? Math.round((e.done / e.total) * 100) : 100;
+function Rounds({ n }: { n: number }) {
+  if (n <= 1) return null;
   return (
-    <div className="flex items-center gap-2">
-      <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100" aria-hidden>
-        <span className={cn("block h-full rounded-full", e.status === "done" ? "bg-[#7f8f63]" : "bg-brand-400")} style={{ width: `${e.status === "done" ? 100 : pct}%` }} />
-      </div>
-      <span className="text-xs tabular-nums text-slate-500">{e.status === "na" ? "—" : `${e.done}/${e.total}`}</span>
-    </div>
+    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-amber-200" title="Veces que se ha vuelto a un estado anterior + 1">
+      <RotateCcw className="size-3" aria-hidden /> Ronda {n}
+    </span>
+  );
+}
+
+/** Stepper horizontal de subestados con fechas de los completados y días en el actual. */
+function Stepper({ c, now }: { c: DeptCard; now: number }) {
+  const curIdx = c.current ? c.steps.findIndex((s) => s.id === c.current!.id) : 0;
+  const days = daysSince(c.enteredAt, now);
+  return (
+    <ol className="flex gap-1 overflow-x-auto pb-1" aria-label={`Estados de ${c.dept.name}`}>
+      {c.steps.map((s, i) => {
+        const done = c.completed ? true : i < curIdx;
+        const current = !c.completed && i === curIdx && c.started;
+        return (
+          <li key={s.id} className="flex min-w-24 flex-1 flex-col gap-1" aria-current={current ? "step" : undefined}>
+            <div className="flex items-center gap-1">
+              <span
+                className={cn(
+                  "flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold",
+                  done ? "bg-[#7f8f63] text-white" : current ? "bg-white text-brand-500 ring-2 ring-brand-400" : "bg-slate-100 text-slate-400",
+                )}
+              >
+                {done ? <Check className="size-3" aria-hidden /> : i + 1}
+              </span>
+              {i < c.steps.length - 1 && <span className={cn("h-0.5 flex-1 rounded-full", done ? "bg-[#7f8f63]" : "bg-slate-200")} aria-hidden />}
+            </div>
+            <p className={cn("text-xs leading-tight", current ? "font-semibold text-slate-900" : done ? "text-slate-700" : "text-slate-400")}>{s.name}</p>
+            <p className="text-[11px] text-slate-500">
+              {done && s.doneAt ? formatDate(s.doneAt) : current ? `${days ?? 0} día${days === 1 ? "" : "s"}` : " "}
+            </p>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -53,60 +86,13 @@ function FileList({ list }: { list: UploadedFile[] }) {
   );
 }
 
-function FieldView({ f, data, ctx, files }: { f: SheetField; data: SheetData; ctx: SheetCtx; files: UploadedFile[] }) {
+function FieldView({ f, data, files }: { f: SheetField; data: SheetData; files: UploadedFile[] }) {
   if (f.type === "files") {
     return (
       <div className="sm:col-span-2">
         <dt className="text-xs text-slate-500">{f.label}</dt>
         <dd className="mt-1">
           <FileList list={files.filter((x) => x.tag === f.tag)} />
-        </dd>
-      </div>
-    );
-  }
-  if (f.type === "list") {
-    const items = (Array.isArray(data[f.key]) ? data[f.key] : []) as SheetData[];
-    const sub = applicable(f.item, ctx);
-    return (
-      <div className="sm:col-span-2">
-        <dt className="mb-2 text-xs text-slate-500">{f.label}</dt>
-        <dd>
-          {!items.length && <span className="text-slate-300">—</span>}
-          <div className="grid gap-3 md:grid-cols-2">
-            {items.map((it, i) => (
-              <div key={i} className={cn("rounded-lg border p-3", it.approved ? "border-natu-sage bg-[#f6f7f1]" : "border-slate-200 bg-white")}>
-                <div className="flex items-start justify-between gap-2">
-                  <p className="font-semibold text-slate-900">
-                    {String(it.name ?? `${f.itemLabel} ${i + 1}`)}
-                    {typeof it.code === "string" && <span className="ml-2 font-mono text-xs font-normal text-slate-500">{it.code}</span>}
-                  </p>
-                  {it.approved === true ? (
-                    <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium ring-1", SAGE)}>
-                      Aprobada{typeof it.approvedAt === "string" ? ` · ${formatValue({ key: "d", label: "", type: "date" }, it.approvedAt)}` : ""}
-                    </span>
-                  ) : (
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500">Sin aprobar</span>
-                  )}
-                </div>
-                {ctx.olfactory && (
-                  <div className="mt-2">
-                    <OlfactoryPyramid top={it.top as string[] | undefined} heart={it.heart as string[] | undefined} base={it.base as string[] | undefined} />
-                  </div>
-                )}
-                {sub
-                  .filter((x) => !["name", "code", "approved", "approvedAt", "top", "heart", "base"].includes(x.key))
-                  .map((x) => {
-                    const v = formatValue(x, it[x.key]);
-                    return v ? (
-                      <p key={x.key} className="mt-2 whitespace-pre-line text-xs text-slate-600">
-                        <span className="text-slate-400">{x.label}: </span>
-                        {v}
-                      </p>
-                    ) : null;
-                  })}
-              </div>
-            ))}
-          </div>
         </dd>
       </div>
     );
@@ -120,51 +106,69 @@ function FieldView({ f, data, ctx, files }: { f: SheetField; data: SheetData; ct
   );
 }
 
-/** Resumen compacto: qué ha terminado cada departamento y qué le falta. */
-export function SheetSummary({ entries }: { entries: SheetEntry[] }) {
-  const closed = entries.filter((e) => e.status !== "pending").length;
+/** Campos exigidos por un subestado que aún no tienen valor válido (sin contar los que se piden en el propio diálogo). */
+function missingFor(refs: string[], prompt: string[], entries: SheetEntry[]) {
+  return refs
+    .filter((ref) => !prompt.includes(ref))
+    .map((ref) => {
+      const r = resolveFieldRef(ref);
+      const e = r && entries.find((x) => x.section.key === r.section.key);
+      if (!r || !e) return null;
+      const res = checkField(r.field, sanitizeData(r.section, e.data));
+      return res.ok ? null : res.label;
+    })
+    .filter((x): x is string => !!x);
+}
+
+/** Resumen lateral: en qué subestado está cada departamento. */
+export function SheetSummary({ cards, now }: { cards: DeptCard[]; now: number }) {
+  const done = cards.filter((c) => c.completed).length;
   return (
     <Card className="h-full">
       <CardHeader
         title="Estado por departamento"
-        description="Qué ha terminado cada departamento y qué le falta."
+        description="En qué punto está cada departamento."
         actions={
           <span className="text-xs text-slate-500">
-            <b className="text-base font-bold tabular-nums text-slate-900">{closed}</b> de {entries.length} terminados
+            <b className="text-base font-bold tabular-nums text-slate-900">{done}</b> de {cards.length} completados
           </span>
         }
       />
       <ul className="divide-y divide-slate-100">
-        {entries.map((e) => {
-          const missing = e.reqs.filter((r) => !r.ok).map((r) => r.label);
+        {cards.map((c) => {
+          const idx = c.current ? c.steps.findIndex((s) => s.id === c.current!.id) : 0;
+          const pos = c.completed ? c.steps.length : c.started ? idx + 1 : 0;
+          const days = daysSince(c.enteredAt, now);
           return (
-            <li key={e.section.key} className={cn("px-5 py-3", !e.due && e.status === "pending" && "opacity-70")}>
+            <li key={c.dept.key} className={cn("px-5 py-3", !c.due && !c.started && "opacity-70")}>
               <div className="flex items-start gap-3">
-                <span className="mt-1.5 size-2.5 shrink-0 rounded-full" style={{ background: e.dept.color }} aria-hidden />
+                <span className="mt-1.5 size-2.5 shrink-0 rounded-full" style={{ background: c.dept.color }} aria-hidden />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <a href={`#ficha-${e.section.key}`} className="font-medium text-slate-900 hover:underline">
-                      {e.title}
+                    <a href={`#dept-${c.dept.key}`} className="font-medium text-slate-900 hover:underline">
+                      {c.dept.name}
                     </a>
-                    <Pill e={e} />
-                  </div>
-                  <div className="mt-0.5 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-                    <span title={e.dept.members.length ? `Miembros: ${e.dept.members.join(", ")}` : "Sin miembros asignados"}>
-                      {e.dept.name} · Fase {e.section.phase} · {PHASES[e.section.phase]?.short}
+                    <span className="flex items-center gap-1.5">
+                      <Rounds n={c.rounds} />
+                      <StateChip c={c} />
                     </span>
-                    <Bar e={e} />
                   </div>
-                  {e.status === "pending" && e.due && missing.length > 0 && (
-                    <p className="mt-1 text-xs text-brand-500">
-                      Falta: {missing.slice(0, 3).join(" · ")}
-                      {missing.length > 3 ? ` (+${missing.length - 3})` : ""}
-                    </p>
-                  )}
-                  {e.status !== "pending" && e.statusAt && (
-                    <p className="mt-1 text-xs text-slate-500">
-                      {e.status === "done" ? "Terminado" : "No aplica"} · {e.statusBy} · {formatDate(e.statusAt)}
-                    </p>
-                  )}
+                  <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+                    <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100" aria-hidden>
+                      <span className={cn("block h-full rounded-full", c.completed ? "bg-[#7f8f63]" : "bg-brand-400")} style={{ width: `${(pos / Math.max(1, c.steps.length)) * 100}%` }} />
+                    </div>
+                    <span className="tabular-nums">
+                      {pos}/{c.steps.length}
+                    </span>
+                    <span>
+                      ·{" "}
+                      {c.completed
+                        ? `completado el ${formatDate(c.completedAt)}`
+                        : c.started
+                          ? `${days} día${days === 1 ? "" : "s"} en este estado`
+                          : `Fase ${c.phase} · ${PHASES[c.phase]?.short}`}
+                    </span>
+                  </div>
                 </div>
               </div>
             </li>
@@ -175,135 +179,165 @@ export function SheetSummary({ entries }: { entries: SheetEntry[] }) {
   );
 }
 
+/** Tarjetas por departamento: stepper de subestados, avance/retroceso y detalles plegables. */
 export function SheetPanel({
   projectId,
+  cards,
   entries,
   ctx,
   files,
   editable,
   maxMb,
-  noteSuggestions,
+  now,
 }: {
   projectId: string;
+  cards: DeptCard[];
   entries: SheetEntry[];
   ctx: SheetCtx;
   files: UploadedFile[];
   editable: Record<string, boolean>;
   maxMb: number;
-  noteSuggestions: string[];
+  now: number;
 }) {
   return (
     <Card id="ficha">
       <CardHeader
-        title="Ficha técnica · detalle por departamento"
-        description="Lo que aporta cada departamento conforme avanza el proyecto. Solo los miembros de cada departamento (y el decisor global) pueden editar su apartado y marcarlo como terminado."
+        title="Departamentos"
+        description="Cada departamento avanza por sus estados. Solo sus miembros (y el decisor global) pueden cambiar el estado y editar sus datos."
       />
-
-      {/* Apartados */}
       <div className="divide-y divide-slate-100">
-        {entries.map((e) => {
-          const canEdit = editable[e.section.key] ?? false;
-          const missing = e.reqs.filter((r) => !r.ok);
+        {cards.map((c) => {
+          const canEdit = editable[c.dept.key] ?? false;
+          const deps = [...new Set(c.entries.flatMap((e) => e.section.dependsOn ?? []))];
+          const promptValues = (refs: string[]) =>
+            Object.fromEntries(
+              refs.map((ref) => {
+                const r = resolveFieldRef(ref);
+                const e = r && entries.find((x) => x.section.key === r.section.key);
+                return [ref, r && e ? e.data[r.field.key] : undefined];
+              }),
+            );
           return (
-            <details key={e.section.key} id={`ficha-${e.section.key}`} open={e.due || e.status !== "pending"} className="group scroll-mt-24">
-              <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-3 hover:bg-slate-50">
-                <ChevronDown className="size-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
-                <span className="size-2.5 shrink-0 rounded-full" style={{ background: e.dept.color }} aria-hidden />
-                <span className="min-w-0 flex-1">
-                  <span className="font-semibold text-slate-900">{e.title}</span>
-                  <span className="ml-2 text-xs text-slate-500">{e.dept.name}</span>
+            <section key={c.dept.key} id={`dept-${c.dept.key}`} className="flex scroll-mt-24 flex-col gap-3 px-5 py-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="flex items-center gap-2 font-semibold text-slate-900">
+                  <span className="size-2.5 rounded-full" style={{ background: c.dept.color }} aria-hidden />
+                  {c.dept.name}
+                  <span className="text-xs font-normal text-slate-500">· {c.entries.map((e) => e.title).join(" · ")}</span>
+                </h3>
+                <span className="flex items-center gap-1.5">
+                  <Rounds n={c.rounds} />
+                  <StateChip c={c} />
                 </span>
-                <Pill e={e} />
-              </summary>
-              <div className="flex flex-col gap-4 px-5 pb-5 pt-1">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <p className="max-w-prose text-sm text-slate-600">{e.section.description}</p>
-                  {canEdit && (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <SectionEditor
-                        projectId={projectId}
-                        sectionKey={e.section.key}
-                        title={e.title}
-                        ctx={ctx}
-                        initial={e.data}
-                        files={files}
-                        maxMb={maxMb}
-                        noteSuggestions={noteSuggestions}
-                      />
-                      <SectionStatusActions projectId={projectId} sectionKey={e.section.key} title={e.title} status={e.status} missing={missing.length} />
-                    </div>
-                  )}
-                </div>
+              </div>
 
-                {!!e.section.dependsOn?.length && (
-                  <div className="rounded-lg border border-slate-200 bg-white p-3">
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Información de partida</p>
-                    <ul className="flex flex-col gap-1.5">
-                      {e.section.dependsOn.map((key) => {
-                        const dep = entries.find((x) => x.section.key === key);
-                        if (!dep) return null;
-                        return (
-                          <li key={key} className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                            <a href={`#ficha-${key}`} className="hover:underline">
-                              <span className="mr-1.5 inline-block size-2 rounded-full align-middle" style={{ background: dep.dept.color }} aria-hidden />
-                              {dep.title} <span className="text-xs text-slate-500">· {dep.dept.name}</span>
-                            </a>
-                            <Pill e={dep} />
-                          </li>
-                        );
-                      })}
-                    </ul>
+              {c.steps.length ? (
+                <Stepper c={c} now={now} />
+              ) : (
+                <p className="text-sm text-slate-500">Este departamento no tiene estados configurados (Backoffice → Estados de departamento).</p>
+              )}
+
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-slate-500">
+                  {c.completed
+                    ? `Completado el ${formatDate(c.completedAt)}.`
+                    : c.started
+                      ? `En «${c.current?.name}» desde el ${formatDate(c.enteredAt)}.`
+                      : c.due
+                        ? "Aún no ha empezado."
+                        : `Empieza en la fase ${c.phase} · ${PHASES[c.phase]?.name}.`}
+                </p>
+                {canEdit && (
+                  <div className="flex items-center gap-2">
+                    {c.backTargets.length > 0 && (
+                      <DeptTransition
+                        projectId={projectId}
+                        departmentId={c.dept.id}
+                        deptName={c.dept.name}
+                        direction="back"
+                        targets={c.backTargets.map((t) => ({ id: t.id, name: t.name, isFinal: t.isFinal, promptFields: [], missing: [] }))}
+                        initialValues={{}}
+                      />
+                    )}
+                    {c.next && (
+                      <DeptTransition
+                        projectId={projectId}
+                        departmentId={c.dept.id}
+                        deptName={c.dept.name}
+                        direction="forward"
+                        targets={[
+                          {
+                            id: c.next.id,
+                            name: c.next.name,
+                            isFinal: c.next.isFinal,
+                            promptFields: c.next.promptFields,
+                            missing: missingFor(c.next.requiredFields, c.next.promptFields, entries),
+                          },
+                        ]}
+                        initialValues={promptValues(c.next.promptFields)}
+                      />
+                    )}
                   </div>
                 )}
-
-                {e.status === "na" && (
-                  <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-600">
-                    No aplica · {e.statusBy} el {formatDate(e.statusAt)}
-                    {e.statusNote ? ` — ${e.statusNote}` : ""}
-                  </p>
-                )}
-
-                {e.status !== "na" && e.reqs.length > 0 && (
-                  <ul className="grid gap-1.5 rounded-lg border border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-2" aria-label="Requisitos del apartado">
-                    {e.reqs.map((r) => (
-                      <li key={r.label} className={cn("flex items-start gap-2 text-sm", r.ok ? "text-slate-700" : "text-slate-900")}>
-                        {r.ok ? (
-                          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-[#7f8f63]" aria-label="Hecho" />
-                        ) : (
-                          <Circle className="mt-0.5 size-4 shrink-0 text-brand-400" aria-label="Falta" />
-                        )}
-                        <span>
-                          {r.label}
-                          {r.detail && <span className="text-xs text-slate-500"> · {r.detail}</span>}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                {e.status !== "na" &&
-                  e.section.groups.map((g, gi) => {
-                    const fields = applicable(g.fields, ctx);
-                    if (!fields.length) return null;
-                    return (
-                      <div key={gi}>
-                        {g.title && <h4 className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{g.title}</h4>}
-                        <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
-                          {fields.map((f) => (
-                            <FieldView key={f.key} f={f} data={e.data} ctx={ctx} files={files} />
-                          ))}
-                        </dl>
-                      </div>
-                    );
-                  })}
-
-                <p className="text-[11px] text-slate-400">
-                  {e.updatedAt ? `Última edición: ${e.updatedBy ?? "—"} · ${formatDate(e.updatedAt, true)}` : "Sin datos todavía."}
-                  {!canEdit && ` Lo completan los miembros de ${e.dept.name}.`}
-                  {e.status === "done" && e.statusAt && ` · Terminado por ${e.statusBy} el ${formatDate(e.statusAt)}.`}
-                </p>
               </div>
-            </details>
+
+              <details className="group rounded-lg border border-slate-200">
+                <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                  <ChevronDown className="size-4 text-slate-400 transition-transform group-open:rotate-180" aria-hidden />
+                  Ver detalles
+                </summary>
+                <div className="flex flex-col gap-5 border-t border-slate-100 p-4">
+                  {deps.length > 0 && (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Información de partida</p>
+                      <ul className="flex flex-col gap-1.5">
+                        {deps.map((key) => {
+                          const dep = entries.find((x) => x.section.key === key);
+                          const depCard = dep && cards.find((x) => x.dept.key === dep.dept.key);
+                          if (!dep) return null;
+                          return (
+                            <li key={key} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                              <a href={`#dept-${dep.dept.key}`} className="hover:underline">
+                                <span className="mr-1.5 inline-block size-2 rounded-full align-middle" style={{ background: dep.dept.color }} aria-hidden />
+                                {dep.title} <span className="text-xs text-slate-500">· {dep.dept.name}</span>
+                              </a>
+                              {depCard && <StateChip c={depCard} />}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
+                  {c.entries.map((e) => (
+                    <div key={e.section.key} className="flex flex-col gap-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h4 className="text-sm font-semibold text-slate-900">{e.title}</h4>
+                        {canEdit && (
+                          <SectionEditor projectId={projectId} sectionKey={e.section.key} title={e.title} ctx={ctx} initial={e.data} files={files} maxMb={maxMb} />
+                        )}
+                      </div>
+                      {e.section.groups.map((g, gi) => {
+                        const fields = applicable(g.fields, ctx);
+                        if (!fields.length) return null;
+                        return (
+                          <div key={gi}>
+                            {g.title && <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{g.title}</p>}
+                            <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+                              {fields.map((f) => (
+                                <FieldView key={f.key} f={f} data={e.data} files={files} />
+                              ))}
+                            </dl>
+                          </div>
+                        );
+                      })}
+                      <p className="text-[11px] text-slate-400">
+                        {e.updatedAt ? `Última edición: ${e.updatedBy ?? "—"} · ${formatDate(e.updatedAt, true)}` : "Sin datos todavía."}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            </section>
           );
         })}
       </div>

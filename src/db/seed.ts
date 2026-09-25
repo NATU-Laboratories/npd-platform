@@ -12,6 +12,7 @@ import {
   DEPARTMENT_DEFAULTS,
   parseCatalogValue,
   SETTINGS_DEFAULTS,
+  SUBSTATE_DEFAULTS,
   type CatalogType,
 } from "../lib/catalog-defaults";
 import * as s from "./schema";
@@ -144,6 +145,23 @@ async function main() {
       if (task.returns && ids[task.returns]) {
         await db.update(s.templateTasks).set({ canReturnToTaskId: ids[task.returns] }).where(eq(s.templateTasks.id, ids[task.key]!));
       }
+    }
+  }
+
+  // Subestados por departamento (solo si el departamento aún no tiene)
+  for (const [key, list] of Object.entries(SUBSTATE_DEFAULTS)) {
+    const deptId = depts[key];
+    if (!deptId) continue;
+    const existing = await db.select({ id: s.deptSubstates.id }).from(s.deptSubstates).where(eq(s.deptSubstates.departmentId, deptId)).limit(1);
+    if (existing.length) continue;
+    const rows = await db
+      .insert(s.deptSubstates)
+      .values(list.map((x, i) => ({ departmentId: deptId, name: x.name, sort: (i + 1) * 10, isFinal: !!x.final, requiredFields: x.required ?? [], promptFields: x.prompt ?? [] })))
+      .returning({ id: s.deptSubstates.id, name: s.deptSubstates.name });
+    for (const x of list.filter((y) => y.returns?.length)) {
+      const id = rows.find((r) => r.name === x.name)!.id;
+      const back = rows.filter((r) => x.returns!.includes(r.name)).map((r) => r.id);
+      await db.update(s.deptSubstates).set({ canReturnTo: back }).where(eq(s.deptSubstates.id, id));
     }
   }
 

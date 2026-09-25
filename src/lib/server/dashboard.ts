@@ -6,7 +6,7 @@ import { brands, clients, departments, projectDepartments, projects, users } fro
 import { FIRST_RUNNING_PHASE, LAST_PHASE, OPEN_STATUSES, SITUATIONS, type SituationKey } from "@/lib/labels";
 import { hasRole, projectVisibility, type CurrentUser } from "./authz";
 import { SHEET_SECTIONS } from "@/lib/sheet/sections";
-import { sectionDeptKeys } from "./sheet";
+import { deptSubstateCounts, sectionDeptKeys } from "./sheet";
 
 export type ProjectFilters = {
   q?: string;
@@ -31,8 +31,8 @@ const requester = alias(users, "requester");
 
 /**
  * "Requieren mi acción": info pedida a mí, aprobaciones G1/G2 pendientes que me
- * tocan, cotizaciones pendientes de enviar de mis cuentas y apartados de la
- * ficha técnica de mis departamentos cuya fase ya ha llegado.
+ * tocan, cotizaciones pendientes de enviar de mis cuentas y proyectos en los
+ * que mi departamento ya debe trabajar y aún no ha llegado a su subestado final.
  */
 function requiresMyAction(u: CurrentUser, sectionDept: Record<string, string>): SQL {
   const mine = or(eq(projects.requesterId, u.id), eq(projects.accountManagerId, u.id))!;
@@ -50,12 +50,24 @@ function requiresMyAction(u: CurrentUser, sectionDept: Record<string, string>): 
     if (typesFor("G1").length) conds.push(and(g1, inArray(projects.type, typesFor("G1")))!);
     if (typesFor("G2").length) conds.push(and(g2, inArray(projects.type, typesFor("G2")))!);
   }
+  // Departamentos del usuario cuya fase ya ha llegado y aún no han alcanzado su subestado final
+  const deptPhase = new Map<string, number>();
   for (const sec of SHEET_SECTIONS) {
-    if (!u.departmentKeys.includes(sectionDept[sec.key] ?? sec.dept)) continue;
-    conds.push(
-      sql`(${projects.status} in ('in_progress', 'paused') and ${projects.phase} >= ${sec.phase} and not exists (select 1 from project_sheet ps where ps.project_id = ${projects.id} and ps.section = ${sec.key} and ps.status <> 'pending'))`,
-    );
+    const k = sectionDept[sec.key] ?? sec.dept;
+    deptPhase.set(k, Math.min(deptPhase.get(k) ?? 99, sec.phase));
   }
+  u.departmentKeys.forEach((key, i) => {
+    const phase = deptPhase.get(key);
+    const deptId = u.departmentIds[i];
+    if (phase == null || deptId == null) return;
+    conds.push(
+      sql`(${projects.status} in ('in_progress', 'paused') and ${projects.phase} >= ${phase}
+        and not exists (select 1 from project_dept_progress pdp where pdp.project_id = ${projects.id} and pdp.department_id = ${deptId} and pdp.completed_at is not null)
+        and (${phase < FIRST_RUNNING_PHASE}
+             or not exists (select 1 from project_departments pd where pd.project_id = ${projects.id})
+             or exists (select 1 from project_departments pd where pd.project_id = ${projects.id} and pd.department_id = ${deptId})))`,
+    );
+  });
   return or(...conds)!;
 }
 
@@ -205,7 +217,7 @@ export async function dashboardStats(u: CurrentUser, f: ProjectFilters, riskDays
 
   const q = <T extends Record<string, unknown>>(query: SQL) => db.execute<T>(query).then((r) => r.rows);
 
-  const [totalsRows, byStatus, byPhase, monthly, p2Rows] = await Promise.all([
+  const [totalsRows, byStatus, byPhase, monthly, p2Rows, activeRows] = await Promise.all([
     q<Record<string, string | number | null>>(sql`
       select
         count(*)::int as total,
@@ -251,7 +263,9 @@ export async function dashboardStats(u: CurrentUser, f: ProjectFilters, riskDays
         where al.project_id = g.project_id and al.action = 'phase.advanced' and al.diff->>'to' = ${String(LAST_PHASE)}
       ) prep on true
       where g.gate = 'G2'`),
+    q<{ id: string; phase: number; status: string }>(sql`select id, phase, status from ${base} where status in ('in_progress', 'paused')`),
   ]);
+  const deptBoard = await deptSubstateCounts(activeRows.map((r) => ({ id: String(r.id), phase: Number(r.phase), status: String(r.status) })));
   const p2 = p2Rows[0] ?? {};
   const t = totalsRows[0] ?? {};
   const n = (k: string) => Number(t[k] ?? 0);
@@ -272,6 +286,7 @@ export async function dashboardStats(u: CurrentUser, f: ProjectFilters, riskDays
       atRisk: n("at_risk"),
     },
     byStatus: byStatus.map((r) => ({ key: r.key, n: Number(r.n) })),
+    deptBoard,
     byPhase: byPhase.map((r) => ({ phase: Number(r.phase), n: Number(r.n) })),
     monthly: monthly.map((r) => ({ month: r.month, pl: Number(r.pl), mp: Number(r.mp), mdd: Number(r.mdd) })),
   };
