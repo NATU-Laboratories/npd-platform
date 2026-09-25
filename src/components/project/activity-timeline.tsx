@@ -17,7 +17,7 @@ const GROUPS: [ActivityItem["group"] | "todo", string][] = [
   ["decisiones", "Decisiones"],
   ["info", "Peticiones de info"],
   ["comentarios", "Comentarios"],
-  ["ficha", "Ficha técnica"],
+  ["ficha", "Departamentos"],
   ["ediciones", "Ediciones"],
   ["archivos", "Archivos"],
 ];

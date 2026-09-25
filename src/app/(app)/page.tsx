@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { ArrowDown, ArrowUp, ChevronRight, FileEdit } from "lucide-react";
 import { MonthlyChart, PhaseFunnel } from "@/components/dashboard/charts";
 import { DashboardKpis } from "@/components/dashboard/kpis";
+import { DeptBoard } from "@/components/dashboard/dept-board";
 import { Filters } from "@/components/dashboard/filters";
 import { StatusBadge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -115,6 +116,8 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
           </CardBody>
         </Card>
       </section>
+
+      {stats.deptBoard.length > 0 && <DeptBoard rows={stats.deptBoard} />}
 
       <Card>
         <CardHeader title="Proyectos" description={`${list.total} resultado${list.total === 1 ? "" : "s"}`} />

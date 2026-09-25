@@ -280,7 +280,7 @@ export function AdvanceDialog({
       >
         {pendingSections.length > 0 && (
           <div className="mb-4 rounded-lg border border-brand-200 bg-brand-50 p-3 text-sm text-slate-800">
-            <p className="font-semibold">La ficha técnica tiene apartados sin terminar:</p>
+            <p className="font-semibold">Hay departamentos que aún no han completado su parte:</p>
             <ul className="mt-1 list-disc pl-5">
               {pendingSections.map((s) => (
                 <li key={s}>{s}</li>
@@ -288,7 +288,7 @@ export function AdvanceDialog({
             </ul>
             <label className="mt-3 flex items-start gap-2">
               <input type="checkbox" className="mt-0.5 size-4 accent-brand-600" checked={force} onChange={(e) => setForce(e.target.checked)} />
-              <span>Avanzar igualmente. Los departamentos podrán completarlos después.</span>
+              <span>Avanzar igualmente. Los departamentos podrán terminar después.</span>
             </label>
           </div>
         )}

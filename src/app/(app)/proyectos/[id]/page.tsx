@@ -83,7 +83,8 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
     loadSheet(p),
   ]);
   const showSheet = p.phase >= 1 || p.status === "in_production";
-  const sheetPending = pendingUpTo(sheet.entries, p.phase).map((e) => `${e.title} (${e.dept.name})`);
+  const sheetPending = pendingUpTo(sheet.cards, p.phase).map((c) => `${c.dept.name} (en «${c.current?.name ?? "—"}»)`);
+  const now = sheet.now;
   const lookups: Lookups = {
     catalog: Object.fromEntries(Object.entries(catalogs).map(([k, v]) => [k, Object.fromEntries(v.map((o) => [o.value, o.label]))])),
     brands: Object.fromEntries(brands.map((x) => [x.id, x.name])),
@@ -255,6 +256,20 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
               .join("\n") || null,
         };
       }
+      case "dept.advanced":
+      case "dept.completed":
+      case "dept.returned":
+        return {
+          ...base,
+          group: "ficha",
+          text:
+            a.action === "dept.returned"
+              ? `devolvió ${diff.department} a «${diff.to}» (ronda ${diff.round})`
+              : a.action === "dept.completed"
+                ? `completó ${diff.department} («${diff.to}»)`
+                : `pasó ${diff.department} de «${diff.from}» a «${diff.to}»`,
+          detail: (diff.comment as string) || null,
+        };
       case "sheet.done":
         return {
           ...base,
@@ -546,11 +561,6 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
                   </p>
                 )}
                 {b.olfactory?.blacklist && <p className="whitespace-pre-line text-xs text-slate-600">Blacklist: {b.olfactory.blacklist}</p>}
-                {showSheet && (
-                  <a href="#ficha-formula" className="text-xs font-medium text-slate-700 underline underline-offset-2 hover:text-slate-900">
-                    Pirámides desarrolladas y aprobadas → ficha técnica
-                  </a>
-                )}
               </div>
             ) : (
               <div className="rounded-lg bg-slate-50 p-4 text-sm text-slate-500">Sin bloque olfativo.</div>
@@ -640,7 +650,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
           </details>
         </Card>
         {showSheet ? (
-          <SheetSummary entries={sheet.entries} />
+          <SheetSummary cards={sheet.cards} now={now} />
         ) : (
           <Card className="h-full">
             <CardHeader title="Estado por departamento" />
@@ -653,12 +663,14 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="flex flex-col gap-6 lg:col-span-2">
-          {/* 4. Ficha técnica: detalle por departamento */}
+          {/* 4. Departamentos: estados y detalles */}
           {showSheet && (
             <SheetPanel
               projectId={p.id}
+              cards={sheet.cards}
               entries={sheet.entries}
               ctx={sheet.ctx}
+              now={now}
               files={d.files.map(({ f }) => ({
                 id: f.id,
                 name: f.name,
@@ -666,9 +678,8 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
                 mime: f.mime,
                 tag: f.tag,
               }))}
-              editable={Object.fromEntries(sheet.entries.map((e) => [e.section.key, canEditSection(u, e.dept.key, p)]))}
+              editable={Object.fromEntries(sheet.cards.map((c) => [c.dept.key, canEditSection(u, c.dept.key, p)]))}
               maxMb={settings.max_file_mb}
-              noteSuggestions={(catalogs.note ?? []).map((n) => n.label)}
             />
           )}
 

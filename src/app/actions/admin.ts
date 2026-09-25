@@ -1,12 +1,14 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
   brands,
   departmentMembers,
   departments,
+  deptSubstates,
+  projectDeptProgress,
   gateDeciders,
   gateKey,
   projectType,
@@ -16,7 +18,8 @@ import {
   users,
 } from "@/db/schema";
 import type { AppSettings } from "@/lib/catalog-defaults";
-import { SHEET_SECTIONS } from "@/lib/sheet/sections";
+import { scalarFields, SHEET_SECTIONS } from "@/lib/sheet/sections";
+import { sectionDeptKeys } from "@/lib/server/sheet";
 import { logActivity } from "@/lib/server/activity";
 import { requireAdminAction } from "@/lib/server/authz";
 import { retryJobs } from "@/lib/server/jobs";
@@ -166,6 +169,70 @@ export async function saveSheetDepartmentsAction(fd: FormData) {
   await setSetting("sheet_departments", map);
   await audit(admin.id, "admin.sheet_departments.updated", "settings", "sheet_departments", map);
   revalidatePath("/admin/departamentos");
+}
+
+// ─── Estados (subestados) por departamento ────────────────────────────────
+
+/** Referencias «apartado.campo» válidas para un departamento (sus apartados en la ficha). */
+async function deptFieldRefs(deptKey: string) {
+  const deptOf = await sectionDeptKeys();
+  return new Set(SHEET_SECTIONS.filter((sec) => deptOf[sec.key] === deptKey).flatMap((sec) => scalarFields(sec).map((f) => `${sec.key}.${f.key}`)));
+}
+
+export async function addSubstateAction(fd: FormData) {
+  const admin = await requireAdminAction();
+  const departmentId = z.coerce.number().int().parse(fd.get("departmentId"));
+  const name = z.string().trim().min(1).max(80).parse(fd.get("name"));
+  const [last] = await db
+    .select({ sort: deptSubstates.sort })
+    .from(deptSubstates)
+    .where(eq(deptSubstates.departmentId, departmentId))
+    .orderBy(desc(deptSubstates.sort))
+    .limit(1);
+  const [row] = await db
+    .insert(deptSubstates)
+    .values({ departmentId, name, sort: (last?.sort ?? 0) + 10 })
+    .returning({ id: deptSubstates.id });
+  await audit(admin.id, "admin.substate.created", "dept_substate", row!.id, { departmentId, name });
+  revalidatePath("/admin/estados");
+}
+
+export async function saveSubstateAction(fd: FormData) {
+  const admin = await requireAdminAction();
+  const id = z.coerce.number().int().parse(fd.get("id"));
+  const [cur] = await db.select().from(deptSubstates).where(eq(deptSubstates.id, id));
+  if (!cur) throw new Error("Estado no encontrado");
+  const [dept] = await db.select({ key: departments.key }).from(departments).where(eq(departments.id, cur.departmentId));
+  const siblings = new Set((await db.select({ id: deptSubstates.id }).from(deptSubstates).where(eq(deptSubstates.departmentId, cur.departmentId))).map((x) => x.id));
+  const refs = await deptFieldRefs(dept?.key ?? "");
+  const data = {
+    name: z.string().trim().min(1).max(80).parse(fd.get("name")),
+    sort: z.coerce.number().int().min(0).max(10000).parse(fd.get("sort")),
+    isFinal: fd.get("isFinal") === "on",
+    canReturnTo: fd.getAll("canReturnTo").map(Number).filter((x) => siblings.has(x) && x !== id),
+    requiredFields: fd.getAll("requiredFields").map(String).filter((x) => refs.has(x)),
+    promptFields: fd.getAll("promptFields").map(String).filter((x) => refs.has(x)),
+  };
+  await db.update(deptSubstates).set(data).where(eq(deptSubstates.id, id));
+  await audit(admin.id, "admin.substate.updated", "dept_substate", id, data);
+  revalidatePath("/admin/estados");
+}
+
+export async function deleteSubstateAction(fd: FormData) {
+  const admin = await requireAdminAction();
+  const id = z.coerce.number().int().parse(fd.get("id"));
+  const [inUse] = await db.select({ n: projectDeptProgress.projectId }).from(projectDeptProgress).where(eq(projectDeptProgress.substateId, id)).limit(1);
+  if (inUse) throw new Error("No se puede eliminar: hay proyectos en este estado");
+  const [row] = await db.delete(deptSubstates).where(eq(deptSubstates.id, id)).returning({ departmentId: deptSubstates.departmentId, name: deptSubstates.name });
+  // Quitarlo de los "puede volver a" del resto
+  if (row) {
+    const others = await db.select().from(deptSubstates).where(eq(deptSubstates.departmentId, row.departmentId));
+    for (const o of others.filter((x) => x.canReturnTo.includes(id))) {
+      await db.update(deptSubstates).set({ canReturnTo: o.canReturnTo.filter((x) => x !== id) }).where(eq(deptSubstates.id, o.id));
+    }
+  }
+  await audit(admin.id, "admin.substate.deleted", "dept_substate", id, row ?? {});
+  revalidatePath("/admin/estados");
 }
 
 // ─── Notificaciones y cola ────────────────────────────────────────────────

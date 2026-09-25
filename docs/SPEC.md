@@ -49,25 +49,43 @@ Subcarpetas SharePoint: `00 Solicitud`, `01 Cotización`, `02 Valoración client
 
 Brief (revisión): género obligatorio con selección múltiple (mujer / hombre / unisex); se eliminan estilo, rango de edad, estacionalidad, alérgenos, % natural, vegano y certificaciones; se añade **Blacklist** (texto pegado y/o adjunto, opcional) y enlace a **Fragrantica** en cada referencia de inspiración. Revisión posterior: se quitan las notas de salida/corazón/fondo del brief (la pirámide la define I+D en la ficha técnica), se permite subir varios archivos de inspiración y se elimina el canal Horeca.
 
-### 2.1 bis Ficha técnica por departamento (revisión 24/09/2026)
+### 2.1 bis Departamentos: estados y ficha técnica (revisión 25/09/2026)
 
-Cada proyecto tiene una **ficha técnica** con un apartado por departamento, que se completa conforme avanza el proyecto y queda a la vista de todos los departamentos implicados:
+Cada departamento con trabajo en el proyecto tiene una **tarjeta** en la ficha del proyecto:
 
-| Apartado | Departamento (por defecto) | Fase | Obligatorio para terminar |
-|---|---|---|---|
-| Cotización y condiciones comerciales | Comercial | 1 Cotización | Cotización enviada y P2 aprobado (automático), precio unitario cotizado y PVP recomendado (opcionales: precio objetivo inicial y documentos de cotización y aprobación) |
-| Fórmula y pirámide olfativa | Laboratorio / I+D | 3 Desarrollo | Al menos una referencia, con su pirámide (perfumería/ambientación), y al menos una aprobada por el cliente |
-| Envase y packaging | Marketing / NPD | 3 Desarrollo | Frasco, tapón y tipo de packaging secundario |
-| Identificación del producto | Marketing / NPD | 3 Desarrollo | Nombre comercial (naming, precargado del brief), tipo y código de barras (EAN-13/EAN-8 validado) y QR (sí/no + destino) |
-| Calidad y regulatorio · requisitos de etiqueta | Calidad y Regulatory | 3 Desarrollo | Denominación legal (precargada del formato), cantidad en ml (fl oz y ℮ opcionales), idiomas (precargados de los mercados), iconos de reciclaje, de peligro y otros (PAO…), INCI, modo de uso, precauciones, responsable (figura, nombre, dirección, país), UFI (no aplica / pendiente / disponible + código) y lote |
-| Etiqueta y artes finales | Diseño | 4 Diseño y AAFF | Troquel (existente con referencia / nuevo con medidas), tipo y ubicación de etiqueta, artes finales y aprobación del cliente. Parte de la información de Identificación, Calidad y regulatorio, Fórmula y Envase: al abrirse su fase, Diseño recibe por email todo lo rellenado en esos apartados |
-| Preparación para producción | Operaciones | 5 Preparación | Fecha prevista, materiales pedidos y escandallo final |
+- **Estados (subestados) configurables** por departamento en *Backoffice → Estados de departamento*: nombre, orden, si es **final**, a qué estados **puede volver**, qué campos de la ficha son **obligatorios para entrar** en él y qué campos se **piden** (opcionales) al pasar a él.
+- La tarjeta muestra un **stepper** con el estado actual, la fecha en que se completó cada estado anterior, los **días en el estado actual** y un contador de **rondas** (suma 1 cada vez que se retrocede).
+- **Avanzar** (al siguiente estado) o **retroceder** (a un estado permitido) con un botón y un comentario opcional; queda en la actividad y se notifica al solicitante, al comercial de la cuenta, a Marketing y al propio departamento. **Alcanzar el estado final completa** la parte del departamento (ya no hay "Marcar como terminado" ni "No aplica").
+- Los datos de cada departamento están en un bloque plegable **«Ver detalles»** (cerrado por defecto). Ningún campo bloquea el avance salvo que el backoffice lo marque como obligatorio para un estado concreto.
+- Solo los **miembros** del departamento, el **decisor global** y los administradores cambian su estado y editan sus datos; el resto lo ve.
+- Se muestran los departamentos de la etapa Validación (Comercial) siempre, y los de En curso si se eligieron al aprobar P1.
+- Al avanzar de fase se avisa si hay departamentos de fases ya alcanzadas que no han llegado a su estado final. Al abrirse una fase se avisa a sus departamentos con los datos que necesitan de otros (p. ej. Diseño recibe identificación, regulatorio, fórmula y envase).
+- "Requieren mi acción" incluye los proyectos en los que mi departamento ya debe trabajar y no ha llegado a su estado final. El panel tiene un widget de **proyectos por estado de cada departamento**.
 
-- Solo los **miembros** del departamento del apartado, el **decisor global** y los administradores editan el apartado; el resto de usuarios solo lo ve. Pueden adjuntar documentos y marcarlo como **terminado** (exige que no falte nada obligatorio) o **no aplica** (con motivo). La asignación apartado → departamento es configurable.
-- La ficha muestra un resumen de lo hecho y lo que falta por departamento. Al avanzar de fase se avisa si quedan apartados sin terminar (se puede avanzar igualmente confirmándolo).
-- Al entrar en una fase se notifica a los departamentos con apartados en ella, con lo ya disponible en la ficha. Al terminar un apartado se notifica al solicitante, al comercial de la cuenta y a Marketing.
-- Los apartados pendientes de los que un usuario es responsable aparecen en "Requieren mi acción".
-- Calidad y Regulatory pasan a ser un único departamento.
+Estados iniciales (semilla, editables):
+
+| Departamento | Estados (✓ = final) |
+|---|---|
+| Comercial | Pendiente de cotizar → Cotización enviada → Negociación con el cliente → Presupuesto aprobado ✓ (pide «precio unitario final») |
+| Laboratorio / I+D | Pendiente → Desarrollo de muestras → Muestras en evaluación → Referencia aprobada ✓ (pide «referencia aprobada») |
+| Marketing / NPD | Pendiente → Envase y packaging → Naming y códigos → Validado ✓ |
+| Calidad y Regulatory | Pendiente → Revisión de fórmula y documentación → Textos legales de etiqueta → Validado ✓ |
+| Diseño | Pendiente → Diseño en curso → En revisión → Artes finales aprobadas ✓ |
+| Operaciones | Pendiente → Compras lanzadas → Planificación de producción → Listo para producir ✓ |
+
+Apartados de datos (en «Ver detalles»):
+
+| Apartado | Departamento (por defecto) | Contenido |
+|---|---|---|
+| Cotización y condiciones comerciales | Comercial | Precio unitario cotizado, precio unitario final, precio objetivo inicial, PVP recomendado, unidades, condiciones |
+| Fórmula | Laboratorio / I+D | Referencia aprobada |
+| Envase y packaging | Marketing / NPD | Frasco, tapón, packaging secundario, fotos/planos |
+| Identificación del producto | Marketing / NPD | Naming, nombre de la fragancia, código de barras (EAN-13/EAN-8 validado), QR |
+| Calidad y regulatorio · requisitos de etiqueta | Calidad y Regulatory | Denominación, cantidad (ml / fl oz / ℮), idiomas, iconos de reciclaje, peligro y otros, INCI, alérgenos, modo de uso, precauciones, responsable, UFI, lote, CPNP, documentación |
+| Etiqueta y artes finales | Diseño | Troquel, tipo y ubicación de etiqueta, materiales, artes finales, aprobación del cliente |
+| Preparación para producción | Operaciones | Fecha prevista, materiales pedidos, lote piloto, escandallo, notas |
+
+Calidad y Regulatory son un único departamento.
 
 ### 2.2 Resultados posibles de una puerta
 

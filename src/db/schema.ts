@@ -565,3 +565,74 @@ export const projectSheet = pgTable(
   (t) => [primaryKey({ columns: [t.projectId, t.section] })],
 );
 export type SheetRow = typeof projectSheet.$inferSelect;
+
+// ─── Subestados por departamento ──────────────────────────────────────────
+
+/**
+ * Lista ordenada de subestados de cada departamento (configurable en el
+ * backoffice). Alcanzar el subestado final completa el trabajo del
+ * departamento en el proyecto.
+ */
+export const deptSubstates = pgTable(
+  "dept_substates",
+  {
+    id: serial("id").primaryKey(),
+    departmentId: integer("department_id")
+      .notNull()
+      .references(() => departments.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    sort: integer("sort").notNull().default(0),
+    isFinal: boolean("is_final").notNull().default(false),
+    /** Subestados anteriores a los que se puede volver desde este (retroceso). */
+    canReturnTo: integer("can_return_to").array().notNull().default(sql`'{}'::int[]`),
+    /** Campos de la ficha («apartado.campo») obligatorios para entrar en este subestado. */
+    requiredFields: text("required_fields").array().notNull().default(sql`'{}'::text[]`),
+    /** Campos de la ficha que se piden (opcionales) al pasar a este subestado. */
+    promptFields: text("prompt_fields").array().notNull().default(sql`'{}'::text[]`),
+  },
+  (t) => [index("dept_substates_dept_idx").on(t.departmentId, t.sort)],
+);
+export type DeptSubstate = typeof deptSubstates.$inferSelect;
+
+/** Subestado actual de cada departamento en cada proyecto. Sin fila = primer subestado, sin empezar. */
+export const projectDeptProgress = pgTable(
+  "project_dept_progress",
+  {
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    departmentId: integer("department_id")
+      .notNull()
+      .references(() => departments.id, { onDelete: "cascade" }),
+    substateId: integer("substate_id")
+      .notNull()
+      .references(() => deptSubstates.id),
+    enteredAt: timestamp("entered_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Ronda de trabajo: empieza en 1 y suma 1 cada vez que se retrocede. */
+    rounds: integer("rounds").notNull().default(1),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.departmentId] })],
+);
+
+/** Historial de avances y retrocesos de subestado (fechas del stepper y actividad). */
+export const projectDeptTransitions = pgTable(
+  "project_dept_transitions",
+  {
+    id: serial("id").primaryKey(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    departmentId: integer("department_id")
+      .notNull()
+      .references(() => departments.id, { onDelete: "cascade" }),
+    fromSubstateId: integer("from_substate_id").references(() => deptSubstates.id, { onDelete: "set null" }),
+    toSubstateId: integer("to_substate_id").references(() => deptSubstates.id, { onDelete: "set null" }),
+    direction: text("direction").$type<"forward" | "back">().notNull(),
+    comment: text("comment"),
+    actorId: uuid("actor_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("project_dept_transitions_idx").on(t.projectId, t.departmentId, t.createdAt)],
+);
