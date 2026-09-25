@@ -55,7 +55,7 @@ Cada proyecto tiene una **ficha técnica** con un apartado por departamento, que
 
 | Apartado | Departamento (por defecto) | Fase | Obligatorio para terminar |
 |---|---|---|---|
-| Cotización y condiciones comerciales | Comercial | 1 Cotización | Cotización enviada y P2 aprobado (automático), precio unitario, precio objetivo y PVP recomendado (los documentos de cotización y aprobación son opcionales) |
+| Cotización y condiciones comerciales | Comercial | 1 Cotización | Cotización enviada y P2 aprobado (automático), precio unitario cotizado y PVP recomendado (opcionales: precio objetivo inicial y documentos de cotización y aprobación) |
 | Fórmula y pirámide olfativa | Laboratorio / I+D | 3 Desarrollo | Al menos una referencia, con su pirámide (perfumería/ambientación), y al menos una aprobada por el cliente |
 | Envase y packaging | Marketing / NPD | 3 Desarrollo | Frasco, tapón y tipo de packaging secundario |
 | Identificación del producto | Marketing / NPD | 3 Desarrollo | Nombre comercial (naming, precargado del brief), tipo y código de barras (EAN-13/EAN-8 validado) y QR (sí/no + destino) |
