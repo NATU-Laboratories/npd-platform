@@ -200,7 +200,7 @@ export const SHEET_SECTIONS: SheetSection[] = [
         title: "Precios",
         fields: [
           { key: "unitPrice", label: "Precio unitario cotizado", type: "money", unit: "€/ud", required: true },
-          { key: "targetPrice", label: "Precio objetivo", type: "money", unit: "€/ud", required: true },
+          { key: "targetPrice", label: "Precio objetivo inicial", type: "money", unit: "€/ud", hint: "El que pidió el cliente en la solicitud (se precarga del brief). Opcional." },
           { key: "rrp", label: "PVP recomendado", type: "money", unit: "€", required: true },
           { key: "units", label: "Unidades del primer pedido", type: "number", unit: "uds" },
           { key: "conditions", label: "Condiciones", type: "textarea", placeholder: "Plazos de entrega, forma de pago, portes, validez de la oferta…" },
