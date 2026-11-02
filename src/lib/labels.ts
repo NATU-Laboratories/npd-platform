@@ -128,7 +128,7 @@ export const PHASE_FOLDERS = [
 
 export const ROLE_LABEL = {
   admin: "Admin",
-  global_decider: "Decisor global (gestor de proyectos)",
+  global_decider: "Gestor de proyectos",
   requester: "Solicitante",
   decider: "Aprobador",
   dept_member: "Miembro de departamento",

@@ -207,7 +207,7 @@ export function SheetPanel({
     <Card id="ficha">
       <CardHeader
         title="Departamentos"
-        description="Cada departamento avanza por sus estados. Solo sus miembros (y el decisor global) pueden cambiar el estado y editar sus datos."
+        description="Cada departamento avanza por sus estados. Solo sus miembros (y el gestor de proyectos) pueden cambiar el estado y editar sus datos."
       />
       <div className="divide-y divide-slate-100">
         {cards.map((c) => {
