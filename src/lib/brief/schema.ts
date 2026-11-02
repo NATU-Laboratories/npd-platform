@@ -143,6 +143,10 @@ export const briefSchema = z.object({
 
   // Paso 4
   notes: optStr,
+
+  // Datos para la etiqueta: opcionales en la solicitud, obligatorios cuando el cliente aprueba la fórmula
+  finalName: optStr,
+  facing: optStr,
 });
 
 export type BriefInput = z.input<typeof briefSchema>;

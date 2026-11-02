@@ -108,3 +108,11 @@ describe("olfactorySchema", () => {
     expect(Object.keys(bad.errors)[0]).toContain("url");
   });
 });
+
+describe("missingLabelInfo", () => {
+  it("pide naming, facing, idiomas y países hasta que estén completos", async () => {
+    const { missingLabelInfo } = await import("./fields");
+    expect(missingLabelInfo({ markets: ["ES"] }).map((f) => f.key)).toEqual(["finalName", "facing", "languages"]);
+    expect(missingLabelInfo({ markets: ["ES"], languages: ["es"], finalName: "Aura", facing: "Logo + Eau de Parfum" })).toEqual([]);
+  });
+});

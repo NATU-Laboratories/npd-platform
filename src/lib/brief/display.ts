@@ -71,7 +71,6 @@ export function briefSections(b: BriefData, l: Lookups): Section[] {
         ["PVP previsto", eur(b.rrp)],
         ["Diseño aporta", b.designBy ? SUPPLIER_LABEL[b.designBy] : null],
         ["Packaging aporta", b.packagingBy ? SUPPLIER_LABEL[b.packagingBy] : null],
-        ["Idiomas de etiquetado", list(b.languages, c.language)],
       ],
     });
   } else if (b.type === "MP") {
@@ -134,6 +133,16 @@ export function briefSections(b: BriefData, l: Lookups): Section[] {
     });
   }
 
+  sections.push({
+    title: "Datos para la etiqueta",
+    step: 4,
+    rows: [
+      ["Naming definitivo", b.finalName ?? null],
+      ["Facing del producto", b.facing ?? null],
+      ["Idiomas de etiquetado", list(b.languages, c.language)],
+      ["Países de venta", list(b.markets, c.market)],
+    ],
+  });
   sections.push({ title: "Notas", step: 4, rows: [["Notas adicionales", b.notes ?? null]] });
   return sections;
 }

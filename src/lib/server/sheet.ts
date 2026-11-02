@@ -18,6 +18,7 @@ import {
   type Project,
 } from "@/db/schema";
 import { briefSections, type Lookups } from "@/lib/brief/display";
+import { missingLabelInfo } from "@/lib/brief/fields";
 import { needsOlfactory, parseBriefLenient } from "@/lib/brief/schema";
 import { FIRST_RUNNING_PHASE, PHASES } from "@/lib/labels";
 import {
@@ -104,6 +105,8 @@ export async function sheetContext(p: Project, tx: DbOrTx = db): Promise<SheetCt
       unitsFirstOrder: p.unitsFirstOrder ?? null,
       capacityMl: p.brief.capacityMl ?? null,
       references: p.brief.references ?? null,
+      finalName: p.brief.finalName ?? null,
+      languages: p.brief.languages ?? [],
     },
     filesByTag: Object.fromEntries(fileRows.map((r) => [r.tag ?? "otro", Number(r.n)])),
   };
@@ -531,11 +534,35 @@ export async function transitionDept(
       title: `${dept.name} ha completado su parte (${target.name})`,
       intro: `${u.name} ha marcado «${target.name}»: ${dept.name} ha terminado su parte del proyecto.`,
       message: text ? { label: "Comentario", body: text } : null,
-      to: { requester: true, accountManager: true, departmentKeys: [...new Set(["marketing", ...dependents].filter((k) => k !== dept.key))] },
+      // Si falta información para la etiqueta, el comercial recibe solo el aviso específico (requestLabelInfo)
+      to: {
+        requester: !(dept.key === "idi" && missingLabelInfo(p.brief).length),
+        accountManager: !(dept.key === "idi" && missingLabelInfo(p.brief).length),
+        departmentKeys: [...new Set(["marketing", ...dependents].filter((k) => k !== dept.key))],
+      },
       exclude: u.email,
     });
   }
+  // Fórmula aprobada por el cliente: se pide al comercial lo que falte para la etiqueta
+  if (direction === "forward" && target.isFinal && dept.key === "idi") await requestLabelInfo(u, projectId);
   return { completed: target.isFinal, direction };
+}
+
+/** Pide al comercial (y al gestor de cuenta) los datos para la etiqueta que faltan en el brief. */
+export async function requestLabelInfo(u: CurrentUser, projectId: string) {
+  const p = await loadProjectRow(projectId);
+  if (!p) return;
+  const missing = missingLabelInfo(p.brief);
+  if (!missing.length) return;
+  await logActivity({ projectId, actorId: u.id, action: "label_info.requested", entity: "project", entityId: projectId, diff: { fields: missing.map((f) => f.label) } });
+  await notifyProjectEvent(projectId, "label_info.requested", {
+    title: "Fórmula aprobada: completa los datos para la etiqueta",
+    intro:
+      "El cliente ha aprobado la fórmula. Para preparar la etiqueta y las artes finales necesitamos estos datos del cliente. Complétalos en el proyecto con el botón «Completar datos para la etiqueta»; hasta entonces el proyecto no puede pasar a Diseño.",
+    extraRows: [["Falta", missing.map((f) => f.label).join("\n")]],
+    to: { requester: true, accountManager: true },
+    exclude: u.email,
+  });
 }
 
 /**

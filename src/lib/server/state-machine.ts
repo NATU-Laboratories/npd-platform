@@ -14,12 +14,12 @@ import {
   type Project,
   type ProjectStatus,
 } from "@/db/schema";
-import { computeCompleteness, FIELD_BY_KEY, submitErrors } from "@/lib/brief/fields";
+import { computeCompleteness, FIELD_BY_KEY, missingLabelInfo, submitErrors } from "@/lib/brief/fields";
 import { FIRST_RUNNING_PHASE, LAST_PHASE, PHASES, PREPAYMENT_TYPES } from "@/lib/labels";
 import { parseBriefLenient, type BriefData } from "@/lib/brief/schema";
 import { quoteSpecGroups } from "@/lib/sheet/sections";
 import { logActivity, jsonDiff } from "./activity";
-import { canDecideGate, canEditBrief, canManageProject, canRequest, canSeeFormulaCost, canSendQuote, type CurrentUser } from "./authz";
+import { canCompleteLabelInfo, canDecideGate, canEditBrief, canManageProject, canRequest, canSeeFormulaCost, canSendQuote, type CurrentUser } from "./authz";
 import { enqueueJob, kickJobs } from "./jobs";
 import { loadProjectRow, loadSheet, notifyPhaseSections, packagingSummary, setFormulaTargetCost, notifyProjectStarted, patchSheetSection, pendingUpTo, syncValidationDepts } from "./sheet";
 import {
@@ -170,6 +170,50 @@ export async function saveBrief(u: CurrentUser, projectId: string, input: unknow
       }
     }
     return { completeness: cols.completenessPct, errors };
+  });
+}
+
+/**
+ * El comercial completa los datos para la etiqueta (naming definitivo, facing,
+ * idiomas, países de venta) tras la aprobación de la fórmula. Solo se tocan esos
+ * campos del brief; se avisa a Marketing, Calidad y Diseño si están implicados.
+ */
+export async function completeLabelInfo(u: CurrentUser, projectId: string, input: { finalName?: string | null; facing?: string | null; languages?: string[]; markets?: string[] }) {
+  const changed = await db.transaction(async (tx) => {
+    const p = await loadForUpdate(tx, projectId);
+    if (!canCompleteLabelInfo(u, p)) throw new ActionError("Solo el comercial del proyecto o un gestor puede completar estos datos");
+    if (!["in_progress", "paused", "in_production"].includes(p.status)) throw new ActionError("Acción no permitida en el estado actual del proyecto");
+    const patch = {
+      finalName: input.finalName?.trim() || undefined,
+      facing: input.facing?.trim() || undefined,
+      languages: input.languages ?? [],
+      markets: input.markets ?? [],
+    };
+    const { data } = parseBriefLenient({ ...p.brief, ...patch });
+    const missing = missingLabelInfo(data);
+    if (missing.length) throw new ActionError(`Falta: ${missing.map((f) => f.label).join(", ")}`, Object.fromEntries(missing.map((f) => [f.key, "Obligatorio"])));
+    const diff = jsonDiff(p.brief, data);
+    if (!Object.keys(diff).length) return false;
+    await tx
+      .update(projects)
+      .set({ ...columnsFromBrief(data), brief: data, updatedAt: new Date() })
+      .where(eq(projects.id, projectId));
+    await logActivity({ projectId, actorId: u.id, action: "brief.label_info", entity: "project", entityId: projectId, diff }, tx);
+    return true;
+  });
+  if (!changed) return;
+  const involved = (
+    await db
+      .select({ key: departments.key })
+      .from(projectDepartments)
+      .innerJoin(departments, eq(departments.id, projectDepartments.departmentId))
+      .where(eq(projectDepartments.projectId, projectId))
+  ).map((r) => r.key);
+  await notifyProjectEvent(projectId, "brief.label_info", {
+    title: "Datos para la etiqueta completados",
+    intro: `${u.name} ha completado el naming definitivo, el facing, los idiomas y los países de venta. Ya están en el brief del proyecto.`,
+    to: { departmentKeys: ["marketing", "calidad", "diseno"].filter((k) => !involved.length || involved.includes(k)) },
+    exclude: u.email,
   });
 }
 
@@ -620,6 +664,9 @@ export async function advancePhase(u: CurrentUser, projectId: string, comment?: 
   if (current) {
     const pending = pendingUpTo((await loadSheet(current)).cards, current.phase);
     if (pending.length) throw new ActionError(`Aún no han terminado: ${pending.map((c) => c.dept.name).join(", ")}`);
+    // Tras aprobarse la fórmula, los datos para la etiqueta son obligatorios
+    const missing = current.phase >= FIRST_RUNNING_PHASE ? missingLabelInfo(current.brief) : [];
+    if (missing.length) throw new ActionError(`Falta que el comercial complete: ${missing.map((f) => f.label).join(", ")}`);
   }
   const result = await db.transaction(async (tx) => {
     const p = await loadForUpdate(tx, projectId);

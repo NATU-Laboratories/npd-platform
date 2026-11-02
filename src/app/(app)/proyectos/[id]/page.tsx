@@ -5,6 +5,7 @@ import { ActivityTimeline, type ActivityItem } from "@/components/project/activi
 import { CommentComposer } from "@/components/project/comment-composer";
 import { GateDialog } from "@/components/project/gate-dialog";
 import { ProjectAction } from "@/components/project/project-actions";
+import { LabelInfoDialog } from "@/components/project/label-info-dialog";
 import { AdvanceDialog, BudgetDialog, PrepaymentReceivedDialog, QuoteDialog } from "@/components/project/phase-dialogs";
 import { NeededBySignal } from "@/components/needed-by";
 import { SheetPanel, SheetSummary } from "@/components/sheet/sheet-panel";
@@ -13,7 +14,7 @@ import { Badge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { briefSections, formatFormat, type Lookups } from "@/lib/brief/display";
-import { applicableFields, FIELD_BY_KEY, isFieldFilled } from "@/lib/brief/fields";
+import { applicableFields, FIELD_BY_KEY, isFieldFilled, missingLabelInfo } from "@/lib/brief/fields";
 import { needsOlfactory } from "@/lib/brief/schema";
 import {
   ACTION_LABEL,
@@ -28,9 +29,10 @@ import {
   PRIORITY_LABEL,
   TYPE_LABEL,
   GATE_LABEL,
+  FIRST_RUNNING_PHASE,
 } from "@/lib/labels";
 import { GENDER_LABEL } from "@/lib/brief/display";
-import { canDecideGate, canEditBrief, canManageProject, canSeeFormulaCost, canSendQuote, canViewProject, requireUser } from "@/lib/server/authz";
+import { canCompleteLabelInfo, canDecideGate, canEditBrief, canManageProject, canSeeFormulaCost, canSendQuote, canViewProject, requireUser } from "@/lib/server/authz";
 import { getActiveUsers, getAllCatalogs, getBrands, getDepartments } from "@/lib/server/catalogs";
 import { loadProjectDetail, templatesWithDepartments, templateScore } from "@/lib/server/project-detail";
 import { getSettings } from "@/lib/server/settings";
@@ -85,7 +87,13 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
   const showSheet = p.phase >= 1 || p.status === "in_production";
   const sheetPending = pendingUpTo(sheet.cards, p.phase).map((c) => `${c.dept.name} (en «${c.current?.name ?? "—"}»)`);
   // La fase solo avanza cuando todos sus departamentos han terminado su parte
-  const advanceWaitingOn = pendingUpTo(sheet.cards, p.phase).map((c) => c.dept.name);
+  // Tras aprobarse la fórmula (Laboratorio completado), el comercial debe completar los datos para la etiqueta
+  const labDone = p.phase > FIRST_RUNNING_PHASE || !!sheet.cards.find((x) => x.dept.key === "idi")?.completed;
+  const missingLabel = p.phase >= FIRST_RUNNING_PHASE && ["in_progress", "paused"].includes(p.status) ? missingLabelInfo(b) : [];
+  const advanceWaitingOn = [
+    ...pendingUpTo(sheet.cards, p.phase).map((c) => c.dept.name),
+    ...(missingLabel.length ? ["el comercial (datos para la etiqueta)"] : []),
+  ];
   const now = sheet.now;
   // Coste objetivo de fórmula: confidencial (Laboratorio, gestor de proyectos, admin y Operaciones)
   const seeFormulaCost = canSeeFormulaCost(u);
@@ -449,6 +457,22 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
               Motivo: {c.rejection_reason?.[rejectedGate.g.reasonCode ?? ""] ?? rejectedGate.g.reasonCode}
               {rejectedGate.g.comment ? ` — ${rejectedGate.g.comment}` : ""}
             </p>
+          </div>
+        )}
+        {labDone && missingLabel.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            <p>
+              <span className="font-semibold">Fórmula aprobada por el cliente.</span> Falta que el comercial complete los datos para la etiqueta:{" "}
+              {missingLabel.map((f) => f.label.replace(/ \(.*\)$/, "")).join(", ")}.
+            </p>
+            {canCompleteLabelInfo(u, p) && (
+              <LabelInfoDialog
+                projectId={p.id}
+                initial={{ finalName: b.finalName ?? "", facing: b.facing ?? "", languages: b.languages ?? [], markets: b.markets ?? [] }}
+                languages={catalogs.language}
+                markets={catalogs.market}
+              />
+            )}
           </div>
         )}
         {needsPrepayment && pp && (

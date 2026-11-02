@@ -181,6 +181,11 @@ export function canManageProject(u: CurrentUser, p: Pick<Project, "type" | "phas
   return isAdmin(u) || isGlobalDecider(u) || isMarketing(u) || isConfiguredDecider(u, p, "G1") || isConfiguredDecider(u, p, "G2");
 }
 
+/** Completar los datos para la etiqueta (naming, facing, idiomas, países): el comercial y los gestores. */
+export function canCompleteLabelInfo(u: CurrentUser, p: Pick<Project, "requesterId" | "accountManagerId">) {
+  return p.requesterId === u.id || p.accountManagerId === u.id || isAdmin(u) || isGlobalDecider(u) || isMarketing(u);
+}
+
 /**
  * Coste objetivo de la fórmula (confidencial): Laboratorio / I+D, el gestor de
  * proyectos (decisor global), admin y Operaciones (quien prepara la cotización).

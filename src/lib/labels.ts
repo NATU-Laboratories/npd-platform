@@ -160,6 +160,8 @@ export const ACTION_LABEL: Record<string, string> = {
   "gate.approved": "aprobó la puerta",
   "gate.recycled": "devolvió el proyecto a cotización",
   "quote.sent": "envió la cotización al comercial",
+  "label_info.requested": "pidió al comercial los datos para la etiqueta",
+  "brief.label_info": "completó los datos para la etiqueta",
   "confidential.updated": "actualizó el coste objetivo de la fórmula (dato confidencial)",
   "phase.advanced": "avanzó de fase",
   "project.in_production": "pasó el proyecto a producción",

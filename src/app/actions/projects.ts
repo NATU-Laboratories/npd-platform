@@ -7,6 +7,7 @@ import {
   ActionError,
   answerInfoRequest,
   cancelProject,
+  completeLabelInfo,
   createDraft,
   decideGate,
   advancePhase,
@@ -145,6 +146,15 @@ export async function markPrepaymentAction(projectId: string, note: string) {
   return run("markPrepayment", async () => {
     const u = await requireActionUser();
     await markPrepaymentReceived(u, projectId, note);
+    revalidatePath(`/proyectos/${projectId}`);
+  });
+}
+
+/** El comercial completa naming, facing, idiomas y países tras aprobarse la fórmula. */
+export async function completeLabelInfoAction(projectId: string, input: { finalName?: string; facing?: string; languages?: string[]; markets?: string[] }) {
+  return run("completeLabelInfo", async () => {
+    const u = await requireActionUser();
+    await completeLabelInfo(u, projectId, input);
     revalidatePath(`/proyectos/${projectId}`);
   });
 }
