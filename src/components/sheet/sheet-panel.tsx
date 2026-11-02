@@ -20,7 +20,7 @@ function StateChip({ c }: { c: DeptCard }) {
   const [label, cls] = c.completed
     ? ["Completado", SAGE]
     : !c.due
-      ? ["Próximas fases", "bg-white text-slate-500 ring-slate-200"]
+      ? [c.waitsP2 ? "Tras P2" : "Próximas fases", "bg-white text-slate-500 ring-slate-200"]
       : !c.started
         ? ["Sin empezar", "bg-slate-100 text-slate-600 ring-slate-300"]
         : [c.current?.name ?? "—", "bg-brand-50 text-brand-500 ring-brand-200"];
@@ -245,7 +245,9 @@ export function SheetPanel({
                       ? `En «${c.current?.name}» desde el ${formatDate(c.enteredAt)}.`
                       : c.due
                         ? "Aún no ha empezado."
-                        : `Empieza en la fase ${c.phase} · ${PHASES[c.phase]?.name}.`}
+                        : c.waitsP2
+                          ? "Se activa cuando el cliente aprueba el presupuesto (P2)."
+                          : `Empieza en la fase ${c.phase} · ${PHASES[c.phase]?.name}.`}
                 </p>
                 {canEdit && (
                   <div className="flex items-center gap-2">

@@ -89,12 +89,15 @@ const TABS: { k: BudgetKind; label: string; icon: React.ElementType; tone: strin
 export function BudgetDialog({
   projectId,
   requiresPrepayment,
+  approveBlocker,
   currentUserName,
   quoteInfo,
   rejectionReasons,
 }: {
   projectId: string;
   requiresPrepayment: boolean;
+  /** Si no es null, P2 aún no puede aprobarse (Comercial sin «Presupuesto aprobado»). */
+  approveBlocker: string | null;
   currentUserName: string;
   quoteInfo: string | null;
   rejectionReasons: Option[];
@@ -113,7 +116,7 @@ export function BudgetDialog({
   const approveReady = !requiresPrepayment || ppMode === "received" || (ppMode === "waived" && responsible.trim() && accepted);
   const disabled =
     busy ||
-    (kind === "approve" && !approveReady) ||
+    (kind === "approve" && (!approveReady || !!approveBlocker)) ||
     ((kind === "changes" || kind === "pause") && !reason.trim()) ||
     (kind === "reject" && (!reasonCode || (reasonCode === "otro" && !reason.trim())));
 
@@ -157,7 +160,12 @@ export function BudgetDialog({
         </div>
 
         <div className="mt-5 flex flex-col gap-4">
-          {kind === "approve" && (
+          {kind === "approve" && approveBlocker && (
+            <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              {approveBlocker} El proyecto no pasa a En curso hasta que el cliente haya aprobado el presupuesto.
+            </p>
+          )}
+          {kind === "approve" && !approveBlocker && (
             <>
               {requiresPrepayment && (
                 <fieldset className={cn("rounded-lg border p-4", errors.prepayment || errors.responsible || errors.accepted ? "border-rose-300" : "border-amber-300 bg-amber-50/50")}>

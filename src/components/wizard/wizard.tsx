@@ -454,7 +454,7 @@ export function Wizard(props: WizardProps) {
                     <Input id="formatOther" value={brief.formatOther ?? ""} onChange={(e) => set("formatOther", e.target.value)} />
                   </Field>
                 )}
-                <Field label="Capacidad (ml)" htmlFor="capacityMl" recommended highlight={hl("capacityMl")}>
+                <Field label="Capacidad (ml)" htmlFor="capacityMl" required error={errorFor("capacityMl")} highlight={hl("capacityMl")}>
                   <Input id="capacityMl" type="number" inputMode="decimal" min={0} value={brief.capacityMl ?? ""} onChange={(e) => set("capacityMl", e.target.value)} />
                 </Field>
                 {parsed.category === "ambient" && (
@@ -719,7 +719,6 @@ function SupplierChips({ value, onChange, label }: { value?: string; onChange: (
       options={[
         { value: "cliente", label: "Cliente" },
         { value: "natu", label: "NATU" },
-        { value: "mixto", label: "Mixto" },
       ]}
       value={value ? [value] : []}
       onChange={(v) => onChange(v[0] as "cliente" | "natu" | "mixto" | undefined)}

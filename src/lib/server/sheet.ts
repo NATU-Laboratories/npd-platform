@@ -63,6 +63,10 @@ export type DeptCard = {
   completedAt: Date | null;
   /** El proyecto ya ha llegado a la fase del departamento. */
   due: boolean;
+  /** Puede trabajar ya (los de En curso, solo tras aprobar P2). */
+  active: boolean;
+  /** Departamento de En curso a la espera de que el cliente apruebe el presupuesto (P2). */
+  waitsP2: boolean;
   next: DeptSubstate | null;
   backTargets: DeptSubstate[];
 };
@@ -184,6 +188,8 @@ export async function loadSheet(p: Project): Promise<{ ctx: SheetCtx; entries: S
       completed: !!prog?.completedAt,
       completedAt: prog?.completedAt ?? null,
       due: p.status === "in_production" || (p.status !== "draft" && p.phase >= phase),
+      active: deptActive(phase, p),
+      waitsP2: phase >= FIRST_RUNNING_PHASE && ["in_progress", "paused"].includes(p.status) && p.phase < FIRST_RUNNING_PHASE,
       next,
       backTargets,
     });
@@ -193,13 +199,34 @@ export async function loadSheet(p: Project): Promise<{ ctx: SheetCtx; entries: S
   return { ctx, entries, cards, now: Date.now() };
 }
 
+/** Fase en la que empieza a trabajar cada departamento (la de su primer apartado). */
+export async function deptStartPhases(): Promise<Record<string, number>> {
+  const deptOf = await sectionDeptKeys();
+  const out: Record<string, number> = {};
+  for (const s of SHEET_SECTIONS) {
+    const k = deptOf[s.key]!;
+    out[k] = Math.min(out[k] ?? 99, s.phase);
+  }
+  return out;
+}
+
+/**
+ * ¿El departamento ya puede trabajar en el proyecto? Los de la etapa En curso
+ * no se activan hasta que el cliente aprueba el presupuesto (P2).
+ */
+export function deptActive(deptPhase: number, p: Pick<Project, "status" | "phase">) {
+  if (p.status === "in_production") return true;
+  if (!["in_progress", "paused"].includes(p.status)) return false;
+  return p.phase >= Math.max(1, Math.min(deptPhase, FIRST_RUNNING_PHASE));
+}
+
 /**
  * ¿Puede editar los datos del departamento y cambiar su subestado? Solo los
- * miembros del departamento, el decisor global y los administradores.
+ * miembros del departamento, el decisor global y los administradores, y solo
+ * cuando el departamento está activo en el proyecto.
  */
-export function canEditSection(u: CurrentUser, deptKey: string, p: Pick<Project, "status" | "phase">) {
-  if (!["in_progress", "paused", "in_production"].includes(p.status)) return false;
-  if (p.status === "in_progress" && p.phase < 1) return false;
+export function canEditSection(u: CurrentUser, deptKey: string, deptPhase: number, p: Pick<Project, "status" | "phase">) {
+  if (!deptActive(deptPhase, p)) return false;
   return u.roles.includes("admin") || u.roles.includes("global_decider") || u.departmentKeys.includes(deptKey);
 }
 
@@ -216,6 +243,40 @@ export async function loadProjectRow(projectId: string, tx: DbOrTx = db) {
 // ─── Mutaciones ───────────────────────────────────────────────────────────
 
 export class SheetError extends Error {}
+
+const LOCKED_MSG = "Este departamento se activa cuando el cliente aprueba el presupuesto (P2)";
+
+/**
+ * Departamentos de la etapa Validación (Comercial) que aún no han llegado a su
+ * subestado final («Presupuesto aprobado»). Mientras haya alguno, P2 no puede
+ * aprobarse ni el proyecto pasar a En curso.
+ */
+export async function validationDeptsPending(projectId: string, tx: DbOrTx = db) {
+  const starts = await deptStartPhases();
+  const keys = Object.keys(starts).filter((k) => starts[k]! < FIRST_RUNNING_PHASE);
+  if (!keys.length) return [];
+  const ds = await tx.select().from(departments).where(inArray(departments.key, keys));
+  if (!ds.length) return [];
+  const ids = ds.map((d) => d.id);
+  const [steps, progress] = await Promise.all([
+    tx.select().from(deptSubstates).where(inArray(deptSubstates.departmentId, ids)).orderBy(asc(deptSubstates.sort), asc(deptSubstates.id)),
+    tx
+      .select()
+      .from(projectDeptProgress)
+      .where(and(eq(projectDeptProgress.projectId, projectId), inArray(projectDeptProgress.departmentId, ids))),
+  ]);
+  return ds.flatMap((d) => {
+    const own = steps.filter((s) => s.departmentId === d.id);
+    const final = own.find((s) => s.isFinal) ?? own.at(-1);
+    if (!final) return [];
+    return progress.some((x) => x.departmentId === d.id && x.completedAt) ? [] : [{ name: d.name, finalName: final.name }];
+  });
+}
+
+/** Texto de error/aviso cuando P2 no puede aprobarse aún. */
+export function validationPendingText(pending: { name: string; finalName: string }[]) {
+  return `Antes de aprobar P2 marca «${pending.map((x) => x.finalName).join("», «")}» en ${pending.map((x) => x.name).join(" y ")}.`;
+}
 
 function changedLabels(section: SheetSection, before: SheetData, after: SheetData) {
   const labels: string[] = [];
@@ -259,7 +320,9 @@ export async function saveSection(u: CurrentUser, projectId: string, sectionKey:
   const p = await loadProjectRow(projectId);
   if (!p) throw new SheetError("Proyecto no encontrado");
   const deptKey = (await sectionDeptKeys())[section.key]!;
-  if (!canEditSection(u, deptKey, p)) throw new SheetError("Solo los miembros del departamento pueden editar este apartado");
+  const deptPhase = (await deptStartPhases())[deptKey] ?? section.phase;
+  if (!deptActive(deptPhase, p)) throw new SheetError(LOCKED_MSG);
+  if (!canEditSection(u, deptKey, deptPhase, p)) throw new SheetError("Solo los miembros del departamento pueden editar este apartado");
   await writeSection(u, p, section, raw, await sheetContext(p));
 }
 
@@ -282,7 +345,9 @@ export async function transitionDept(
   if (!p) throw new SheetError("Proyecto no encontrado");
   const [dept] = await db.select().from(departments).where(eq(departments.id, departmentId));
   if (!dept?.key) throw new SheetError("Departamento no encontrado");
-  if (!canEditSection(u, dept.key, p)) throw new SheetError("Solo los miembros del departamento pueden cambiar su estado");
+  const deptPhase = (await deptStartPhases())[dept.key] ?? FIRST_RUNNING_PHASE;
+  if (!deptActive(deptPhase, p)) throw new SheetError(LOCKED_MSG);
+  if (!canEditSection(u, dept.key, deptPhase, p)) throw new SheetError("Solo los miembros del departamento pueden cambiar su estado");
 
   const steps = await db.select().from(deptSubstates).where(eq(deptSubstates.departmentId, departmentId)).orderBy(asc(deptSubstates.sort), asc(deptSubstates.id));
   const target = steps.find((s) => s.id === targetId);

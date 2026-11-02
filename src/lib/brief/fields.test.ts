@@ -19,6 +19,7 @@ const plBase: BriefData = {
   designBy: "natu",
   packagingBy: "cliente",
   format: "body_mist",
+  capacityMl: 100,
   olfactory: { families: ["Cítrico"], genders: ["unisex"] },
 };
 
@@ -27,10 +28,14 @@ describe("submitErrors", () => {
     expect(submitErrors(plBase)).toEqual({});
   });
 
-  it("exige el bloque olfativo en perfumería (familias y género)", () => {
-    const errs = submitErrors({ ...plBase, olfactory: {} });
-    expect(errs["olfactory.families"]).toBeDefined();
-    expect(errs["olfactory.genders"]).toBeDefined();
+  it("el bloque olfativo es recomendado, no obligatorio", () => {
+    expect(submitErrors({ ...plBase, olfactory: {} })).toEqual({});
+    const rec = missingFields({ ...plBase, olfactory: {} }, "recommended").map((f) => f.key);
+    expect(rec).toEqual(expect.arrayContaining(["olfactory.families", "olfactory.genders"]));
+  });
+
+  it("exige la capacidad (ml) para poder cotizar", () => {
+    expect(submitErrors({ ...plBase, capacityMl: undefined }).capacityMl).toBeDefined();
   });
 
   it("MDD usa los obligatorios de cliente como PL", () => {
@@ -67,7 +72,7 @@ describe("computeCompleteness", () => {
       rrp: 4.99,
       languages: ["es"],
       capacityMl: 250,
-      olfactory: { families: ["Cítrico"], top: ["Limón"], intensity: 3, inspirations: [{ product: "X", brand: "Y", likes: "", url: "" }], genders: ["mujer", "hombre"] },
+      olfactory: { families: ["Cítrico"], top: ["Limón"], intensity: 3, inspirations: [{ product: "X", brand: "Y", likes: "", url: "" }], genders: ["mujer", "hombre"], duration: "Larga" },
     };
     expect(computeCompleteness(full)).toBe(100);
     expect(missingFields(full, "recommended")).toEqual([]);
