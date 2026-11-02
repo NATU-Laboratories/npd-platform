@@ -24,6 +24,7 @@ import { FIRST_RUNNING_PHASE, PHASES } from "@/lib/labels";
 import {
   checkField,
   effectiveData,
+  fieldLabelInSection,
   resolveFieldRef,
   sanitizeData,
   SHEET_SECTIONS,
@@ -469,7 +470,7 @@ export async function transitionDept(
         if (!r) return null;
         const data = effectiveData(r.section, ctx, updates.get(r.section.key) ?? dataOf(r.section.key));
         const res = checkField(r.field, sanitizeData(r.section, data));
-        return res.ok ? null : `${res.label} (${r.section.title})`;
+        return res.ok ? null : `${fieldLabelInSection(r.section, r.field.key)} (${r.section.title})`;
       })
       .filter(Boolean);
     if (missing.length) throw new SheetError(`Para pasar a «${target.name}» falta: ${missing.join("; ")}`);

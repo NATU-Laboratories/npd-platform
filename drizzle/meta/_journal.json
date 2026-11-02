@@ -57,6 +57,13 @@
       "when": 1793624666477,
       "tag": "0007_compras_substates",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793627343241,
+      "tag": "0008_marketing_required",
+      "breakpoints": true
     }
   ]
 }
