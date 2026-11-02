@@ -111,7 +111,7 @@ export async function pauseAction(projectId: string, reason: string) {
   });
 }
 
-export async function sendQuoteAction(projectId: string, input: { amount?: number | null; comment?: string | null }) {
+export async function sendQuoteAction(projectId: string, input: { data?: Record<string, unknown> | null; comment?: string | null }) {
   return run("sendQuote", async () => {
     const u = await requireActionUser();
     await sendQuote(u, projectId, input);

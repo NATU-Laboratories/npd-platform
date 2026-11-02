@@ -406,8 +406,18 @@ export async function pauseProject(u: CurrentUser, projectId: string, reason: st
 
 // ─── Cotización (fase 1 → 2) ──────────────────────────────────────────────
 
-export async function sendQuote(u: CurrentUser, projectId: string, input: { amount?: number | null; comment?: string | null }) {
-  const amount = input.amount != null && Number.isFinite(input.amount) && input.amount >= 0 ? input.amount : null;
+/** Campos de la ficha de Comercial que se rellenan al enviar la cotización (el precio final llega en P2). */
+const QUOTE_FIELDS = ["unitPrice", "targetPrice", "rrp", "units", "conditions"] as const;
+
+/**
+ * Cotización lista (fase 1 → 2): se guardan las condiciones en la ficha de
+ * Comercial y se envía al comercial para que la presente al cliente.
+ */
+export async function sendQuote(u: CurrentUser, projectId: string, input: { data?: Record<string, unknown> | null; comment?: string | null }) {
+  const raw = input.data ?? {};
+  const data = Object.fromEntries(QUOTE_FIELDS.filter((k) => k in raw).map((k) => [k, raw[k]]));
+  const price = typeof data.unitPrice === "number" && Number.isFinite(data.unitPrice) && data.unitPrice >= 0 ? data.unitPrice : null;
+  if (price == null) throw new ActionError("Indica el precio unitario cotizado", { unitPrice: "Obligatorio" });
   const comment = input.comment?.trim() || null;
   await db.transaction(async (tx) => {
     const p = await loadForUpdate(tx, projectId);
@@ -416,22 +426,31 @@ export async function sendQuote(u: CurrentUser, projectId: string, input: { amou
     const now = new Date();
     await tx
       .update(projects)
-      .set({ phase: 2, quoteAmount: amount != null ? String(amount) : null, quotedAt: now, updatedAt: now })
+      .set({ phase: 2, quoteAmount: String(price), quotedAt: now, updatedAt: now })
       .where(eq(projects.id, projectId));
     await tx
       .insert(gates)
       .values({ projectId, gate: "G2", status: "pending", openedAt: now })
       .onConflictDoUpdate({ target: [gates.projectId, gates.gate], set: { status: "pending", openedAt: now, decidedBy: null, decidedAt: null } });
-    await logActivity({ projectId, actorId: u.id, action: "quote.sent", entity: "project", entityId: projectId, diff: { amount, comment } }, tx);
-    if (amount != null) await patchSheetSection(u, p, "comercial", { unitPrice: amount }, tx);
+    await logActivity({ projectId, actorId: u.id, action: "quote.sent", entity: "project", entityId: projectId, diff: { amount: price, comment } }, tx);
+    await patchSheetSection(u, p, "comercial", data, tx);
     await syncValidationDepts(u, projectId, "quoted", comment, tx);
   });
-  const extra: [string, string][] = amount != null ? [["Importe cotizado", amount.toLocaleString("es-ES", { style: "currency", currency: "EUR" })]] : [];
+  const eur = (n: unknown) => (typeof n === "number" ? n.toLocaleString("es-ES", { style: "currency", currency: "EUR" }) : null);
+  const rows: [string, string][] = (
+    [
+      ["Precio unitario cotizado", eur(price)],
+      ["Precio objetivo inicial", eur(data.targetPrice)],
+      ["PVP recomendado", eur(data.rrp)],
+      ["Unidades del primer pedido", typeof data.units === "number" ? `${data.units.toLocaleString("es-ES")} uds` : null],
+      ["Condiciones", typeof data.conditions === "string" && data.conditions.trim() ? data.conditions.trim() : null],
+    ] as [string, string | null][]
+  ).filter((r): r is [string, string] => !!r[1]);
   await notifyProjectEvent(projectId, "quote.sent", {
-    title: "Cotización enviada al cliente",
-    intro: "El proyecto pasa a Valoración con cliente. Cuando el cliente responda, registra la decisión (P2 · Aprobación del presupuesto).",
-    message: comment ? { label: "Comentario", body: comment } : null,
-    extraRows: extra,
+    title: "Cotización lista para presentar al cliente",
+    intro: "Preséntala al cliente (el PDF está en la carpeta 01 Cotización). Cuando responda, registra su decisión en el proyecto: «Registrar respuesta del cliente (P2)».",
+    message: comment ? { label: "Mensaje", body: comment } : null,
+    extraRows: rows,
     to: { requester: true, accountManager: true, deciders: "G2" },
   });
 }

@@ -175,7 +175,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
         return {
           ...base,
           group: "decisiones",
-          text: `envió la cotización al cliente${diff.amount != null ? ` (${Number(diff.amount).toLocaleString("es-ES", { style: "currency", currency: "EUR" })})` : ""}`,
+          text: `envió la cotización al comercial${diff.amount != null ? ` (${Number(diff.amount).toLocaleString("es-ES", { style: "currency", currency: "EUR" })})` : ""}`,
           detail: (diff.comment as string) || null,
         };
       case "phase.advanced":
@@ -374,13 +374,20 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
                 rejectionReasons={catalogs.rejection_reason}
               />
             )}
-            {canQuote && <QuoteDialog projectId={p.id} />}
+            {canQuote && (
+              <QuoteDialog
+                projectId={p.id}
+                initial={sheet.entries.find((e) => e.section.key === "comercial")?.data ?? {}}
+                files={d.files.filter(({ f }) => f.tag === "cotizacion").map(({ f }) => ({ id: f.id, name: f.name, size: f.size, mime: f.mime, tag: f.tag }))}
+                maxMb={settings.max_file_mb}
+              />
+            )}
             {canBudget && (
               <BudgetDialog
                 projectId={p.id}
                 requiresPrepayment={needsPrepayment}
                 currentUserName={u.name}
-                quoteInfo={p.quotedAt ? `Cotización enviada el ${formatDate(p.quotedAt)}${p.quoteAmount ? ` por ${formatEuro(p.quoteAmount)}` : ""}.` : null}
+                quoteInfo={p.quotedAt ? `Cotización enviada al comercial el ${formatDate(p.quotedAt)}${p.quoteAmount ? ` · ${formatEuro(p.quoteAmount)}/ud` : ""}.` : null}
                 rejectionReasons={catalogs.rejection_reason}
               />
             )}

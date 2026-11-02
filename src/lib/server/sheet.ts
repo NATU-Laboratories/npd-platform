@@ -164,10 +164,17 @@ export async function loadSheet(p: Project): Promise<{ ctx: SheetCtx; entries: S
     if (cards.some((c) => c.dept.key === e.dept.key)) continue;
     const deptEntries = entries.filter((x) => x.dept.key === e.dept.key);
     if (involvedIds.size && !involvedIds.has(e.dept.id) && Math.min(...deptEntries.map((x) => x.section.phase)) >= FIRST_RUNNING_PHASE) continue;
-    const steps = substates.filter((s) => s.departmentId === e.dept.id);
-    const prog = progress.find((x) => x.departmentId === e.dept.id);
-    const current = (prog && steps.find((s) => s.id === prog.substateId)) ?? steps[0] ?? null;
     const phase = Math.min(...deptEntries.map((x) => x.section.phase));
+    const prog = progress.find((x) => x.departmentId === e.dept.id);
+    const allSteps = substates.filter((s) => s.departmentId === e.dept.id);
+    // Comercial sigue el flujo (1.º → 2.º → final): no se muestran estados intermedios que nunca se alcanzan
+    const flowSteps = phase < FIRST_RUNNING_PHASE ? [allSteps[0], allSteps[1], allSteps.find((s) => s.isFinal) ?? allSteps.at(-1)] : allSteps;
+    const steps = [...new Set(flowSteps.filter((s): s is DeptSubstate => !!s))];
+    if (prog && phase < FIRST_RUNNING_PHASE && !steps.some((s) => s.id === prog.substateId)) {
+      const extra = allSteps.find((s) => s.id === prog.substateId);
+      if (extra) steps.splice(steps.length - 1, 0, extra);
+    }
+    const current = (prog && steps.find((s) => s.id === prog.substateId)) ?? steps[0] ?? null;
     // Fecha de cada subestado completado: la última vez que se avanzó desde él
     const deptTransitions = transitions.filter((t) => t.departmentId === e.dept.id);
     const curIdx = current ? steps.findIndex((s) => s.id === current.id) : 0;

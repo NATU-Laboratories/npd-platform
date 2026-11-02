@@ -158,7 +158,7 @@ export const ACTION_LABEL: Record<string, string> = {
   "project.edited": "editó el brief",
   "gate.approved": "aprobó la puerta",
   "gate.recycled": "devolvió el proyecto a cotización",
-  "quote.sent": "envió la cotización al cliente",
+  "quote.sent": "envió la cotización al comercial",
   "phase.advanced": "avanzó de fase",
   "project.in_production": "pasó el proyecto a producción",
   "prepayment.received": "registró el anticipo del 30 %",
