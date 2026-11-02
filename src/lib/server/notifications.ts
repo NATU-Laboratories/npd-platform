@@ -17,7 +17,7 @@ import {
   type GateKey,
 } from "@/db/schema";
 import { FIELD_BY_KEY } from "@/lib/brief/fields";
-import { CATEGORY_LABEL, PRIORITY_LABEL, statusLabel, TYPE_LABEL } from "@/lib/labels";
+import { CATEGORY_LABEL, PRIORITY_LABEL, statusLabel, TEST_EMAIL_DOMAIN, TYPE_LABEL } from "@/lib/labels";
 
 import { sendMail } from "@/lib/graph/mail";
 import { renderEmail, type ProjectSummary } from "./email-template";
@@ -27,7 +27,15 @@ import { getSettings } from "./settings";
 // ─── Envío y registro ─────────────────────────────────────────────────────
 
 function uniqEmails(list: (string | null | undefined)[]) {
-  return [...new Set(list.filter((e): e is string => !!e && e.includes("@")).map((e) => e.trim().toLowerCase()))];
+  // Los usuarios de prueba sin email (dominio ficticio) nunca reciben correos
+  return [
+    ...new Set(
+      list
+        .filter((e): e is string => !!e && e.includes("@"))
+        .map((e) => e.trim().toLowerCase())
+        .filter((e) => !e.endsWith(`@${TEST_EMAIL_DOMAIN}`)),
+    ),
+  ];
 }
 
 /**

@@ -2,9 +2,10 @@ import Link from "next/link";
 import { LogOut, Plus, Settings } from "lucide-react";
 import { devLoginEnabled, signOut } from "@/auth";
 import { Logo } from "@/components/logo";
+import { ViewAsBanner } from "@/components/view-as-banner";
 import { Button } from "@/components/ui/button";
 import { canRequest, isAdmin, requireUser } from "@/lib/server/authz";
-import { ROLE_LABEL } from "@/lib/labels";
+import { EDITABLE_ROLES, ROLE_LABEL } from "@/lib/labels";
 import { initials } from "@/lib/utils";
 import { newDraftAction } from "@/app/actions/projects";
 
@@ -12,6 +13,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const u = await requireUser();
   return (
     <div className="flex min-h-dvh flex-col">
+      {u.viewAs && <ViewAsBanner name={u.name} adminName={u.viewAs.adminName} />}
       {devLoginEnabled && (
         <div className="bg-amber-400 px-4 py-1 text-center text-xs font-medium text-amber-950">
           Modo pruebas: acceso provisional sin Microsoft. Los emails no se envían y los archivos no van a SharePoint.
@@ -48,7 +50,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
               <div className="absolute right-0 mt-2 w-64 rounded-lg bg-white p-3 text-sm text-slate-700 shadow-lg ring-1 ring-slate-200">
                 <p className="font-medium text-slate-900">{u.name}</p>
                 <p className="truncate text-xs text-slate-500">{u.email}</p>
-                <p className="mt-2 text-xs text-slate-500">{u.roles.map((r) => ROLE_LABEL[r]).join(" · ")}</p>
+                <p className="mt-2 text-xs text-slate-500">{u.roles.filter((r) => (EDITABLE_ROLES as readonly string[]).includes(r)).map((r) => ROLE_LABEL[r]).join(" · ")}</p>
                 {isAdmin(u) && (
                   <Link href="/admin" className="mt-2 block rounded px-2 py-1.5 hover:bg-slate-50 sm:hidden">
                     Backoffice

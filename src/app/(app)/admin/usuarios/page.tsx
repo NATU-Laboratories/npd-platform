@@ -1,18 +1,22 @@
+import * as React from "react";
 import { asc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { departmentMembers, roles, userRoles, users } from "@/db/schema";
 import { PageTitle, Table, Td, Th } from "@/components/admin";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/form";
-import { createUserAction, updateUserAction } from "@/app/actions/admin";
+import { createUserAction, updateUserAction, viewAsAction } from "@/app/actions/admin";
+import { Eye } from "lucide-react";
 import { getDepartments } from "@/lib/server/catalogs";
-import { ROLE_LABEL } from "@/lib/labels";
+import { requireAdmin } from "@/lib/server/authz";
+import { EDITABLE_ROLES, ROLE_HELP, ROLE_LABEL, TEST_EMAIL_DOMAIN } from "@/lib/labels";
 import { formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Usuarios" };
 
 export default async function UsersPage({ searchParams }: PageProps<"/admin/usuarios">) {
   const { estado } = await searchParams;
+  const me = await requireAdmin();
   const [list, roleRows, memberRows, depts] = await Promise.all([
     db
       .select()
@@ -27,8 +31,26 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/usua
     <>
       <PageTitle
         title="Usuarios"
-        description="Los usuarios se crean al iniciar sesión con Microsoft 365. Sin roles, quedan pendientes de activación y no ven proyectos."
+        description="Los usuarios se crean al iniciar sesión con Microsoft 365. Quedan pendientes hasta que los actives."
       />
+      <details className="mb-4 rounded-lg border border-slate-200 bg-white text-sm">
+        <summary className="cursor-pointer px-4 py-2.5 font-medium text-slate-700">¿Qué da cada rol y cada departamento?</summary>
+        <dl className="grid gap-x-6 gap-y-2 border-t border-slate-100 px-4 py-3 sm:grid-cols-[auto_1fr]">
+          {EDITABLE_ROLES.map((k) => (
+            <React.Fragment key={k}>
+              <dt className="font-medium text-slate-900">{ROLE_LABEL[k]}</dt>
+              <dd className="text-slate-600">{ROLE_HELP[k]}</dd>
+            </React.Fragment>
+          ))}
+          <dt className="font-medium text-slate-900">Departamentos</dt>
+          <dd className="text-slate-600">
+            Ve los proyectos en los que participa su departamento, edita su parte de la ficha, avanza sus estados y recibe sus avisos. Marketing / NPD además ve
+            todos los proyectos y coordina (edita briefs y avanza fases).
+          </dd>
+          <dt className="font-medium text-slate-900">Aprobadores</dt>
+          <dd className="text-slate-600">No es una casilla: se asignan en Backoffice → Aprobadores (quién aprueba P1/P2 de cada tipo de proyecto).</dd>
+        </dl>
+      </details>
       <div className="mb-4 flex flex-wrap gap-2 text-sm">
         {[
           ["", "Todos"],
@@ -64,8 +86,31 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/usua
                   <form id={formId} action={updateUserAction}>
                     <input type="hidden" name="userId" value={u.id} />
                   </form>
-                  <p className="font-medium">{u.name}</p>
-                  <p className="text-xs text-slate-500">{u.email}</p>
+                  <div className="flex items-center gap-1">
+                    <p className="font-medium">{u.name}</p>
+                    {u.id !== me.id && (
+                      <form action={viewAsAction}>
+                        <input type="hidden" name="userId" value={u.id} />
+                        <button
+                          type="submit"
+                          title={`Ver la plataforma como ${u.name} (solo lectura)`}
+                          aria-label={`Ver como ${u.name}`}
+                          className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                        >
+                          <Eye className="size-4" />
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                  <Input
+                    name="email"
+                    type="email"
+                    form={formId}
+                    defaultValue={u.email.endsWith(`@${TEST_EMAIL_DOMAIN}`) ? "" : u.email}
+                    placeholder={u.email.endsWith(`@${TEST_EMAIL_DOMAIN}`) ? "Sin email (pruebas): añade uno" : "email@empresa.com"}
+                    aria-label={`Email de ${u.name}`}
+                    className="mt-1 h-7 w-48 text-xs"
+                  />
                 </Td>
                 <Td>
                   <Select name="status" form={formId} defaultValue={u.status} className="h-8 w-auto text-xs">
@@ -76,9 +121,9 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/usua
                 </Td>
                 <Td>
                   <div className="flex flex-col gap-0.5">
-                    {Object.entries(ROLE_LABEL).map(([k, l]) => (
-                      <label key={k} className="flex items-center gap-1.5 text-xs">
-                        <input type="checkbox" name="roles" value={k} form={formId} defaultChecked={rs.includes(k as never)} className="accent-brand-600" /> {l}
+                    {EDITABLE_ROLES.map((k) => (
+                      <label key={k} className="flex items-center gap-1.5 text-xs" title={ROLE_HELP[k]}>
+                        <input type="checkbox" name="roles" value={k} form={formId} defaultChecked={rs.includes(k as never)} className="accent-brand-600" /> {ROLE_LABEL[k]}
                       </label>
                     ))}
                   </div>
@@ -112,11 +157,14 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/usua
       <form action={createUserAction} className="mt-6 flex flex-wrap items-end gap-2 rounded-xl border border-slate-200 bg-white p-4">
         <p className="w-full text-sm font-medium">Pre-registrar usuario</p>
         <Input name="name" placeholder="Nombre" required className="w-56" />
-        <Input name="email" type="email" placeholder="email@empresa.com" required className="w-64" />
+        <Input name="email" type="email" placeholder="email@empresa.com (opcional)" className="w-64" />
         <Button type="submit" variant="secondary">
           Añadir
         </Button>
-        <p className="w-full text-xs text-slate-500">Útil para asignar roles antes de su primer acceso. El SSO lo vinculará por email.</p>
+        <p className="w-full text-xs text-slate-500">
+          Útil para asignar roles antes de su primer acceso; el SSO lo vinculará por email. Sin email queda como usuario de pruebas (no recibe correos ni puede
+          entrar): úsalo con «Ver como» y añádele el email cuando quieras darle acceso.
+        </p>
       </form>
     </>
   );
