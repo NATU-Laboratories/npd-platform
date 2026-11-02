@@ -1,6 +1,8 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { desc, eq } from "drizzle-orm";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
@@ -13,15 +15,15 @@ import {
   gateKey,
   projectType,
   roles,
-  ROLE_KEYS,
   userRoles,
   users,
 } from "@/db/schema";
 import type { AppSettings } from "@/lib/catalog-defaults";
+import { EDITABLE_ROLES, TEST_EMAIL_DOMAIN } from "@/lib/labels";
 import { scalarFields, SHEET_SECTIONS } from "@/lib/sheet/sections";
 import { sectionDeptKeys } from "@/lib/server/sheet";
 import { logActivity } from "@/lib/server/activity";
-import { requireAdminAction } from "@/lib/server/authz";
+import { AuthzError, getRealUser, requireAdminAction, VIEW_AS_COOKIE } from "@/lib/server/authz";
 import { retryJobs } from "@/lib/server/jobs";
 import { resendNotification } from "@/lib/server/notifications";
 import { getSettings, setSetting } from "@/lib/server/settings";
@@ -36,32 +38,65 @@ export async function updateUserAction(fd: FormData) {
   const userId = z.string().uuid().parse(fd.get("userId"));
   const status = z.enum(["pending", "active", "disabled"]).parse(fd.get("status"));
   const notifPref = z.enum(["immediate", "daily"]).parse(fd.get("notifPref") ?? "immediate");
-  const roleKeys = fd.getAll("roles").map(String).filter((r) => (ROLE_KEYS as readonly string[]).includes(r));
+  // Solo se editan a mano los roles de EDITABLE_ROLES; «Aprobador» y «Miembro de departamento» se deducen
+  const roleKeys = fd.getAll("roles").map(String).filter((r) => (EDITABLE_ROLES as readonly string[]).includes(r));
   const deptIds = fd.getAll("departments").map(Number).filter(Number.isFinite);
+  // Email vacío = sin cambios (los usuarios de prueba siguen con su dirección ficticia)
+  const rawEmail = String(fd.get("email") ?? "").trim().toLowerCase();
+  const newEmail = rawEmail ? z.string().email("Email no válido").parse(rawEmail) : null;
+  if (newEmail) {
+    const [taken] = await db.select({ id: users.id }).from(users).where(eq(users.email, newEmail));
+    if (taken && taken.id !== userId) throw new Error("Ese email ya lo usa otro usuario");
+  }
   if (userId === admin.id && (status !== "active" || !roleKeys.includes("admin"))) {
     throw new Error("No puedes quitarte el rol de admin ni desactivarte a ti mismo");
   }
   const [before] = await db.select().from(users).where(eq(users.id, userId));
   await db.transaction(async (tx) => {
-    await tx.update(users).set({ status, isActive: status === "active", notifPref }).where(eq(users.id, userId));
+    await tx
+      .update(users)
+      .set({ status, isActive: status === "active", notifPref, ...(newEmail ? { email: newEmail } : {}) })
+      .where(eq(users.id, userId));
     const roleRows = await tx.select().from(roles);
-    await tx.delete(userRoles).where(eq(userRoles.userId, userId));
+    const editable = roleRows.filter((r) => (EDITABLE_ROLES as readonly string[]).includes(r.key)).map((r) => r.id);
+    if (editable.length) await tx.delete(userRoles).where(and(eq(userRoles.userId, userId), inArray(userRoles.roleId, editable)));
     const ids = roleRows.filter((r) => roleKeys.includes(r.key)).map((r) => r.id);
     if (ids.length) await tx.insert(userRoles).values(ids.map((roleId) => ({ userId, roleId })));
     await tx.delete(departmentMembers).where(eq(departmentMembers.userId, userId));
     if (deptIds.length) await tx.insert(departmentMembers).values(deptIds.map((departmentId) => ({ userId, departmentId })));
   });
-  await audit(admin.id, "admin.user.updated", "user", userId, { email: before?.email, status: { from: before?.status, to: status }, roles: roleKeys, departments: deptIds });
+  await audit(admin.id, "admin.user.updated", "user", userId, { email: before?.email, ...(newEmail && newEmail !== before?.email ? { newEmail } : {}), status: { from: before?.status, to: status }, roles: roleKeys, departments: deptIds });
   revalidatePath("/admin/usuarios");
 }
 
 export async function createUserAction(fd: FormData) {
   const admin = await requireAdminAction();
-  const email = z.string().trim().toLowerCase().email().parse(fd.get("email"));
   const name = z.string().trim().min(1).parse(fd.get("name"));
+  const rawEmail = String(fd.get("email") ?? "").trim().toLowerCase();
+  // Sin email (pruebas): dirección ficticia que nunca recibe correos; se puede cambiar después
+  const email = rawEmail ? z.string().email().parse(rawEmail) : `pruebas-${crypto.randomUUID().slice(0, 8)}@${TEST_EMAIL_DOMAIN}`;
   const [u] = await db.insert(users).values({ email, name, status: "pending" }).onConflictDoNothing().returning({ id: users.id });
   if (u) await audit(admin.id, "admin.user.created", "user", u.id, { email });
   revalidatePath("/admin/usuarios");
+}
+
+// ─── Vista previa «Ver como» (solo admin, solo lectura) ───────────────────
+
+export async function viewAsAction(fd: FormData) {
+  const real = await getRealUser();
+  if (!real || real.status !== "active" || !real.roles.includes("admin")) throw new AuthzError();
+  const userId = z.string().uuid().parse(fd.get("userId"));
+  if (userId === real.id) return;
+  const [target] = await db.select({ id: users.id, email: users.email }).from(users).where(eq(users.id, userId));
+  if (!target) throw new Error("Usuario no encontrado");
+  (await cookies()).set(VIEW_AS_COOKIE, userId, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 8 * 3600 });
+  await audit(real.id, "admin.view_as", "user", userId, { email: target.email });
+  redirect("/");
+}
+
+export async function stopViewAsAction() {
+  (await cookies()).delete(VIEW_AS_COOKIE);
+  redirect("/admin/usuarios");
 }
 
 // ─── Departamentos ────────────────────────────────────────────────────────

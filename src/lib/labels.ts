@@ -135,6 +135,23 @@ export const ROLE_LABEL = {
   global_reader: "Lectura global",
 } as const;
 
+/** Dominio de los usuarios de prueba preregistrados sin email: nunca reciben correos. */
+export const TEST_EMAIL_DOMAIN = "sin-email.local";
+
+/**
+ * Roles que se asignan a mano en Backoffice → Usuarios. «Aprobador» y «Miembro de
+ * departamento» ya no se marcan: se deducen de Backoffice → Aprobadores y de los
+ * departamentos del usuario.
+ */
+export const EDITABLE_ROLES = ["admin", "global_decider", "requester", "global_reader"] as const;
+
+export const ROLE_HELP: Record<(typeof EDITABLE_ROLES)[number], string> = {
+  admin: "Todo, incluido el Backoffice.",
+  global_decider: "Ve todos los proyectos, decide P1 y P2, edita cualquier departamento y avanza fases.",
+  requester: "Crea solicitudes y registra P2 de sus proyectos.",
+  global_reader: "Ve todos los proyectos sin poder editar.",
+};
+
 export const FILE_TAGS = {
   moodboard: "Moodboard",
   referencia: "Referencia",

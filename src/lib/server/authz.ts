@@ -1,5 +1,6 @@
 import "server-only";
 import { cache } from "react";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { and, eq, inArray, ne, or, sql, type SQL } from "drizzle-orm";
 import { auth } from "@/auth";
@@ -28,6 +29,8 @@ export type CurrentUser = {
   departmentIds: number[];
   departmentKeys: string[];
   deciderFor: { gate: GateKey; projectType: "PL" | "MP" | "MDD" }[];
+  /** Presente cuando un admin está previsualizando la plataforma como este usuario. */
+  viewAs?: { adminName: string };
 };
 
 export class AuthzError extends Error {
@@ -37,11 +40,10 @@ export class AuthzError extends Error {
   }
 }
 
-/** Carga el usuario de la sesión desde BD en cada petición (desactivaciones inmediatas). */
-export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
-  const session = await auth();
-  const id = session?.user?.id;
-  if (!id) return null;
+/** Cookie del modo «Ver como» (solo la honra el servidor si el usuario real es admin). */
+export const VIEW_AS_COOKIE = "npd_view_as";
+
+async function loadUser(id: string): Promise<CurrentUser | null> {
   const [u] = await db.select().from(users).where(eq(users.id, id));
   if (!u) return null;
   const [roleRows, deptRows, deciderRows] = await Promise.all([
@@ -63,10 +65,34 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     departmentKeys: deptRows.map((d) => d.key ?? ""),
     deciderFor: deciderRows,
   };
+}
+
+/** Usuario real de la sesión (ignora el modo «Ver como»). */
+export const getRealUser = cache(async (): Promise<CurrentUser | null> => {
+  const session = await auth();
+  const id = session?.user?.id;
+  return id ? loadUser(id) : null;
 });
 
+/**
+ * Carga el usuario de la sesión desde BD en cada petición (desactivaciones inmediatas).
+ * Si un admin está en modo «Ver como», devuelve el usuario previsualizado con `viewAs`
+ * (solo lectura: requireActionUser rechaza cualquier cambio).
+ */
+export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
+  const real = await getRealUser();
+  if (!real) return null;
+  const viewAs = (await cookies()).get(VIEW_AS_COOKIE)?.value;
+  if (viewAs && viewAs !== real.id && isAdmin(real) && real.status === "active") {
+    const target = await loadUser(viewAs);
+    if (target) return { ...target, viewAs: { adminName: real.name } };
+  }
+  return real;
+});
+
+/** Activo: estado «Activo» y al menos un rol, un departamento o una asignación como aprobador. */
 export function isActive(u: CurrentUser | null): boolean {
-  return !!u && u.status === "active" && u.roles.length > 0;
+  return !!u && u.status === "active" && (u.roles.length > 0 || u.departmentIds.length > 0 || u.deciderFor.length > 0);
 }
 
 /** Para páginas: redirige a login o a "pendiente de activación". */
@@ -80,6 +106,7 @@ export async function requireUser(): Promise<CurrentUser> {
 /** Para server actions / route handlers: lanza en lugar de redirigir. */
 export async function requireActionUser(): Promise<CurrentUser> {
   const u = await getCurrentUser();
+  if (u?.viewAs) throw new AuthzError(`Vista previa como ${u.name}: no se pueden hacer cambios. Sal de la vista previa para continuar.`);
   if (!u || !isActive(u)) throw new AuthzError("Sesión no válida o usuario no activado");
   return u;
 }
@@ -132,11 +159,13 @@ export async function projectVisibility(u: CurrentUser): Promise<SQL> {
     ownDraft,
   ];
   if (hasRole(u, "requester") && (await getSettings()).requesters_see_all) conds.push(notDraft);
-  if (hasRole(u, "decider") && u.deciderFor.length) {
+  // Aprobadores (asignados en Backoffice → Aprobadores): ven los proyectos de los tipos que aprueban
+  if (u.deciderFor.length) {
     const types = [...new Set(u.deciderFor.map((d) => d.projectType))];
     conds.push(and(notDraft, inArray(projects.type, types))!);
   }
-  if (hasRole(u, "dept_member") && u.departmentIds.length) {
+  // Pertenecer a un departamento basta para ver los proyectos en los que está implicado
+  if (u.departmentIds.length) {
     conds.push(
       and(
         notDraft,
@@ -163,7 +192,7 @@ export function canEditBrief(u: CurrentUser, p: Pick<Project, "requesterId" | "s
 
 /** Aprobador configurado en el backoffice para esa puerta y tipo de proyecto. */
 function isConfiguredDecider(u: CurrentUser, p: Pick<Project, "type">, gate: GateKey) {
-  return hasRole(u, "decider") && u.deciderFor.some((d) => d.gate === gate && d.projectType === p.type);
+  return u.deciderFor.some((d) => d.gate === gate && d.projectType === p.type);
 }
 
 /**
