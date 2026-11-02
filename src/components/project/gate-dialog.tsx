@@ -71,7 +71,7 @@ export function GateDialog(props: GateDialogProps) {
       return;
     }
     toast.success(
-      { approve: "Proyecto aprobado. Se ha notificado a los departamentos.", request_info: "Petición de información enviada al solicitante.", reject: "Proyecto rechazado.", pause: "Proyecto en pausa." }[kind],
+      { approve: "Solicitud aprobada: pasa a Cotización. Se ha notificado a los departamentos.", request_info: "Petición de información enviada al solicitante.", reject: "Proyecto rechazado.", pause: "Proyecto en pausa." }[kind],
     );
     setOpen(false);
     router.refresh();
@@ -205,7 +205,7 @@ export function GateDialog(props: GateDialogProps) {
             }
           >
             {busy && <Loader2 className="animate-spin" />}
-            Confirmar {TABS.find((t) => t.k === kind)!.label.toLowerCase()}
+            {kind === "approve" ? "Pasar a cotización" : `Confirmar ${TABS.find((t) => t.k === kind)!.label.toLowerCase()}`}
           </Button>
         </div>
       </DialogContent>
