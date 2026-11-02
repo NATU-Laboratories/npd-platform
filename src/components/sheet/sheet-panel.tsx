@@ -290,7 +290,7 @@ export function SheetPanel({
                 )}
               </div>
 
-              <details className="group rounded-lg border border-slate-200" open={c.auto || undefined}>
+              <details className="group rounded-lg border border-slate-200" open={(c.auto && !c.completed) || undefined}>
                 <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                   <ChevronDown className="size-4 text-slate-400 transition-transform group-open:rotate-180" aria-hidden />
                   Ver detalles
