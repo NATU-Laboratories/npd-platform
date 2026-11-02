@@ -28,7 +28,7 @@ export default async function DepartmentsPage() {
       <Field label="Emails de notificación" hint="Separados por comas o saltos de línea" className="sm:col-span-2">
         <Textarea name="notifyEmails" rows={2} defaultValue={d?.notifyEmails.join(", ")} />
       </Field>
-      <Field label="Miembros" hint="Solo los miembros pueden rellenar el apartado del departamento en la ficha técnica y marcarlo como terminado (además del decisor global y los administradores)." className="sm:col-span-2">
+      <Field label="Miembros" hint="Solo los miembros pueden rellenar el apartado del departamento en la ficha técnica y marcarlo como terminado (además del gestor de proyectos y los administradores)." className="sm:col-span-2">
         <div className="grid max-h-40 gap-1 overflow-y-auto rounded-md border border-slate-200 p-2 sm:grid-cols-3">
           {people.map((p) => (
             <Checkbox key={p.id} name="members" value={p.id} label={p.name} defaultChecked={!!d && isMember(d, p.id)} />
