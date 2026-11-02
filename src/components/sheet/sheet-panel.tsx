@@ -3,7 +3,7 @@ import type { UploadedFile } from "@/components/uploader";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PHASES } from "@/lib/labels";
 import type { DeptCard, SheetEntry } from "@/lib/server/sheet";
-import { applicable, checkField, formatValue, resolveFieldRef, sanitizeData, type SheetCtx, type SheetData, type SheetField } from "@/lib/sheet/sections";
+import { applicable, checkField, fieldLabelInSection, formatValue, resolveFieldRef, sanitizeData, type SheetCtx, type SheetData, type SheetField } from "@/lib/sheet/sections";
 import { cn, formatBytes, formatDate } from "@/lib/utils";
 import { DeptTransition } from "./dept-transition";
 import { FormulaCostBox } from "./formula-cost";
@@ -116,7 +116,7 @@ function missingFor(refs: string[], prompt: string[], entries: SheetEntry[]) {
       const e = r && entries.find((x) => x.section.key === r.section.key);
       if (!r || !e) return null;
       const res = checkField(r.field, sanitizeData(r.section, e.data));
-      return res.ok ? null : res.label;
+      return res.ok ? null : fieldLabelInSection(r.section, r.field.key);
     })
     .filter((x): x is string => !!x);
 }

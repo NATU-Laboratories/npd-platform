@@ -184,8 +184,19 @@ export const SUBSTATE_DEFAULTS: Record<string, { name: string; final?: boolean; 
   marketing: [
     { name: "Pendiente" },
     { name: "Envase y packaging" },
-    { name: "Naming y códigos", returns: ["Envase y packaging"] },
-    { name: "Validado", final: true, returns: ["Envase y packaging", "Naming y códigos"] },
+    {
+      name: "Naming y códigos",
+      returns: ["Envase y packaging"],
+      // No se pasa a naming sin los detalles de envase y packaging
+      required: ["packaging.bottleModel", "packaging.bottleFinish", "packaging.capModel", "packaging.labelPrint", "packaging.secondaryType", "packaging.masterUnits"],
+    },
+    {
+      name: "Validado",
+      final: true,
+      returns: ["Envase y packaging", "Naming y códigos"],
+      // No se valida sin naming y códigos
+      required: ["identificacion.productName", "identificacion.barcodeType", "identificacion.qr"],
+    },
   ],
   calidad: [
     { name: "Pendiente" },

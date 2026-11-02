@@ -105,7 +105,7 @@ export function DeptTransition({
             })}
           {forward && target.missing.length > 0 && (
             <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-              Para pasar a este estado falta: {target.missing.join(" · ")}. Complétalo en «Ver detalles».
+              Para pasar a este estado falta: {target.missing.join("; ")}. Complétalo en «Ver detalles» → «Editar».
             </p>
           )}
           <Field label="Comentario" hint="Opcional" htmlFor="transition-comment">
@@ -116,7 +116,7 @@ export function DeptTransition({
           <Button variant="secondary" onClick={() => setOpen(false)}>
             Cancelar
           </Button>
-          <Button onClick={confirm} disabled={busy}>
+          <Button onClick={confirm} disabled={busy || (forward && target.missing.length > 0)}>
             {busy && <Loader2 className="animate-spin" />} Confirmar
           </Button>
         </div>

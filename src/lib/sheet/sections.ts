@@ -292,6 +292,9 @@ export const SHEET_SECTIONS: SheetSection[] = [
             key: "barcodeType",
             label: "Tipo",
             type: "select",
+            // Si lleva EAN, el código debe estar completo (al exigir el tipo para validar)
+            valid: (v, d) => v === "no" || (v === "ean8" ? digits(8)(d.barcode) : digits(13)(d.barcode)),
+            invalidLabel: "Código de barras (13 dígitos en EAN-13, 8 en EAN-8)",
             options: opts([
               ["ean13", "EAN-13"],
               ["ean8", "EAN-8"],
@@ -314,6 +317,8 @@ export const SHEET_SECTIONS: SheetSection[] = [
             key: "qr",
             label: "¿Lleva QR?",
             type: "select",
+            valid: (v, d) => v !== "si" || (typeof d.qrContent === "string" && d.qrContent.trim().length > 0),
+            invalidLabel: "Destino del QR",
             options: opts([
               ["no", "No"],
               ["si", "Sí"],
@@ -544,6 +549,14 @@ export const SHEET_SECTIONS: SheetSection[] = [
 ];
 
 export const SECTION_BY_KEY: Record<string, SheetSection> = Object.fromEntries(SHEET_SECTIONS.map((s) => [s.key, s]));
+
+/** Etiqueta de un campo con el grupo delante si hace falta para entenderlo («Envase · Modelo»). */
+export function fieldLabelInSection(section: SheetSection, fieldKey: string) {
+  const g = section.groups.find((x) => x.fields.some((f) => f.key === fieldKey));
+  const f = g?.fields.find((x) => x.key === fieldKey);
+  if (!f) return fieldKey;
+  return g?.title && section.groups.filter((x) => x.title).length > 1 ? `${g.title} · ${f.label}` : f.label;
+}
 
 /**
  * Especificaciones que se cotizan (envase/tapón, etiqueta, estuche, caja master):
