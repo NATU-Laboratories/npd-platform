@@ -249,7 +249,10 @@ export function SheetPanel({
                           ? "Se activa cuando el cliente aprueba el presupuesto (P2)."
                           : `Empieza en la fase ${c.phase} · ${PHASES[c.phase]?.name}.`}
                 </p>
-                {canEdit && (
+                {c.auto && !c.completed && c.active && (
+                  <p className="text-xs text-slate-500">Avanza solo con «Enviar cotización» y «Registrar respuesta del cliente (P2)», arriba.</p>
+                )}
+                {canEdit && !c.auto && (
                   <div className="flex items-center gap-2">
                     {c.backTargets.length > 0 && (
                       <DeptTransition
