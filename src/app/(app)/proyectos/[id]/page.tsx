@@ -84,6 +84,8 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
   ]);
   const showSheet = p.phase >= 1 || p.status === "in_production";
   const sheetPending = pendingUpTo(sheet.cards, p.phase).map((c) => `${c.dept.name} (en «${c.current?.name ?? "—"}»)`);
+  // La fase solo avanza cuando todos sus departamentos han terminado su parte
+  const advanceWaitingOn = pendingUpTo(sheet.cards, p.phase).map((c) => c.dept.name);
   const now = sheet.now;
   const lookups: Lookups = {
     catalog: Object.fromEntries(Object.entries(catalogs).map(([k, v]) => [k, Object.fromEntries(v.map((o) => [o.value, o.label]))])),
@@ -392,7 +394,12 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
                 rejectionReasons={catalogs.rejection_reason}
               />
             )}
-            {canAdvance && (
+            {canAdvance && advanceWaitingOn.length > 0 && (
+              <p className="self-center text-sm text-slate-500">
+                Pasará a «{p.phase === LAST_PHASE ? "Producción" : PHASES[p.phase + 1]?.name}» cuando terminen: {advanceWaitingOn.join(", ")}.
+              </p>
+            )}
+            {canAdvance && !advanceWaitingOn.length && (
               <AdvanceDialog
                 projectId={p.id}
                 nextLabel={PHASES[p.phase + 1]?.name ?? ""}

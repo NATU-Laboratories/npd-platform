@@ -140,7 +140,7 @@ export function SheetSummary({ cards, now }: { cards: DeptCard[]; now: number })
           const pos = c.completed ? c.steps.length : c.started ? idx + 1 : 0;
           const days = daysSince(c.enteredAt, now);
           return (
-            <li key={c.dept.key} className={cn("px-5 py-3", !c.due && !c.started && "opacity-70")}>
+            <li key={c.dept.key} className={cn("px-5 py-3", c.completed && "border-l-4 border-l-[#7f8f63] bg-[#f4f6ee]", !c.due && !c.started && "opacity-70")}>
               <div className="flex items-start gap-3">
                 <span className="mt-1.5 size-2.5 shrink-0 rounded-full" style={{ background: c.dept.color }} aria-hidden />
                 <div className="min-w-0 flex-1">
@@ -218,7 +218,11 @@ export function SheetPanel({
               }),
             );
           return (
-            <section key={c.dept.key} id={`dept-${c.dept.key}`} className="flex scroll-mt-24 flex-col gap-3 px-5 py-4">
+            <section
+              key={c.dept.key}
+              id={`dept-${c.dept.key}`}
+              className={cn("flex scroll-mt-24 flex-col gap-3 px-5 py-4", c.completed && "border-l-4 border-l-[#7f8f63] bg-[#f4f6ee]")}
+            >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="flex items-center gap-2 font-semibold text-slate-900">
                   <span className="size-2.5 rounded-full" style={{ background: c.dept.color }} aria-hidden />

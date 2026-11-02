@@ -20,7 +20,7 @@ import { parseBriefLenient, type BriefData } from "@/lib/brief/schema";
 import { logActivity, jsonDiff } from "./activity";
 import { canDecideGate, canEditBrief, canManageProject, canRequest, canSendQuote, type CurrentUser } from "./authz";
 import { enqueueJob, kickJobs } from "./jobs";
-import { notifyPhaseSections, notifyProjectStarted, patchSheetSection, syncValidationDepts } from "./sheet";
+import { loadProjectRow, loadSheet, notifyPhaseSections, notifyProjectStarted, patchSheetSection, pendingUpTo, syncValidationDepts } from "./sheet";
 import {
   notifyApproved,
   notifyProjectEvent,
@@ -594,6 +594,12 @@ export async function markPrepaymentReceived(u: CurrentUser, projectId: string, 
 // ─── Fases 3 → 6 y paso a producción ──────────────────────────────────────
 
 export async function advancePhase(u: CurrentUser, projectId: string, comment?: string) {
+  // Solo se avanza cuando los departamentos de la fase actual (y anteriores) han terminado
+  const current = await loadProjectRow(projectId);
+  if (current) {
+    const pending = pendingUpTo((await loadSheet(current)).cards, current.phase);
+    if (pending.length) throw new ActionError(`Aún no han terminado: ${pending.map((c) => c.dept.name).join(", ")}`);
+  }
   const result = await db.transaction(async (tx) => {
     const p = await loadForUpdate(tx, projectId);
     if (!canManageProject(u, p)) throw new ActionError("No puedes avanzar la fase de este proyecto");
