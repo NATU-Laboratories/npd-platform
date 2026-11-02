@@ -28,14 +28,13 @@ import {
   PRIORITY_LABEL,
   TYPE_LABEL,
   GATE_LABEL,
-  FIRST_RUNNING_PHASE,
 } from "@/lib/labels";
 import { GENDER_LABEL } from "@/lib/brief/display";
 import { canDecideGate, canEditBrief, canManageProject, canSendQuote, canViewProject, requireUser } from "@/lib/server/authz";
 import { getActiveUsers, getAllCatalogs, getBrands, getDepartments } from "@/lib/server/catalogs";
 import { loadProjectDetail, templatesWithDepartments, templateScore } from "@/lib/server/project-detail";
 import { getSettings } from "@/lib/server/settings";
-import { canEditSection, loadSheet, pendingUpTo, validationPendingText } from "@/lib/server/sheet";
+import { canEditSection, loadSheet, pendingUpTo } from "@/lib/server/sheet";
 import { canTransition } from "@/lib/server/state-machine";
 import { cn, formatBytes, formatDate, formatEuro, formatNumber } from "@/lib/utils";
 
@@ -86,10 +85,6 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
   const showSheet = p.phase >= 1 || p.status === "in_production";
   const sheetPending = pendingUpTo(sheet.cards, p.phase).map((c) => `${c.dept.name} (en «${c.current?.name ?? "—"}»)`);
   const now = sheet.now;
-  // P2 solo puede aprobarse cuando Comercial ha marcado «Presupuesto aprobado»
-  const validationPending = sheet.cards
-    .filter((x) => x.phase < FIRST_RUNNING_PHASE && x.steps.length && !x.completed)
-    .map((x) => ({ name: x.dept.name, finalName: (x.steps.find((s) => s.isFinal) ?? x.steps.at(-1))!.name }));
   const lookups: Lookups = {
     catalog: Object.fromEntries(Object.entries(catalogs).map(([k, v]) => [k, Object.fromEntries(v.map((o) => [o.value, o.label]))])),
     brands: Object.fromEntries(brands.map((x) => [x.id, x.name])),
@@ -384,7 +379,6 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
               <BudgetDialog
                 projectId={p.id}
                 requiresPrepayment={needsPrepayment}
-                approveBlocker={validationPending.length ? validationPendingText(validationPending) : null}
                 currentUserName={u.name}
                 quoteInfo={p.quotedAt ? `Cotización enviada el ${formatDate(p.quotedAt)}${p.quoteAmount ? ` por ${formatEuro(p.quoteAmount)}` : ""}.` : null}
                 rejectionReasons={catalogs.rejection_reason}

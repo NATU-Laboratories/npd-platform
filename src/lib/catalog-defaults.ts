@@ -170,11 +170,11 @@ export type AppSettings = {
  * `prompt` / `required`: campos de la ficha («apartado.campo») que se piden / exigen al entrar.
  */
 export const SUBSTATE_DEFAULTS: Record<string, { name: string; final?: boolean; returns?: string[]; prompt?: string[]; required?: string[] }[]> = {
+  // Comercial lo mueve el flujo: «Enviar cotización» → 2.º estado, P2 aprobado → final, «Pide cambios» → 1.º
   comercial: [
     { name: "Pendiente de cotizar" },
     { name: "Cotización enviada", returns: ["Pendiente de cotizar"] },
-    { name: "Negociación con el cliente", returns: ["Cotización enviada"] },
-    { name: "Presupuesto aprobado", final: true, returns: ["Negociación con el cliente"], prompt: ["comercial.finalUnitPrice"] },
+    { name: "Presupuesto aprobado", final: true },
   ],
   idi: [
     { name: "Pendiente" },

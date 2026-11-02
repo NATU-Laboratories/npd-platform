@@ -20,7 +20,7 @@ import { parseBriefLenient, type BriefData } from "@/lib/brief/schema";
 import { logActivity, jsonDiff } from "./activity";
 import { canDecideGate, canEditBrief, canManageProject, canRequest, canSendQuote, type CurrentUser } from "./authz";
 import { enqueueJob, kickJobs } from "./jobs";
-import { notifyPhaseSections, validationDeptsPending, validationPendingText } from "./sheet";
+import { notifyPhaseSections, patchSheetSection, syncValidationDepts } from "./sheet";
 import {
   notifyApproved,
   notifyProjectEvent,
@@ -423,6 +423,8 @@ export async function sendQuote(u: CurrentUser, projectId: string, input: { amou
       .values({ projectId, gate: "G2", status: "pending", openedAt: now })
       .onConflictDoUpdate({ target: [gates.projectId, gates.gate], set: { status: "pending", openedAt: now, decidedBy: null, decidedAt: null } });
     await logActivity({ projectId, actorId: u.id, action: "quote.sent", entity: "project", entityId: projectId, diff: { amount, comment } }, tx);
+    if (amount != null) await patchSheetSection(u, p, "comercial", { unitPrice: amount }, tx);
+    await syncValidationDepts(u, projectId, "quoted", comment, tx);
   });
   const extra: [string, string][] = amount != null ? [["Importe cotizado", amount.toLocaleString("es-ES", { style: "currency", currency: "EUR" })]] : [];
   await notifyProjectEvent(projectId, "quote.sent", {
@@ -440,6 +442,8 @@ export type BudgetDecision =
   | {
       kind: "approve";
       comment?: string | null;
+      /** Precio unitario final acordado (opcional; se guarda en la ficha de Comercial). */
+      finalUnitPrice?: number | null;
       /** Obligatorio en PL. */
       prepayment?: { mode: "received" | "waived"; responsible?: string | null; accepted?: boolean; note?: string | null } | null;
     }
@@ -462,9 +466,6 @@ export async function decideBudget(u: CurrentUser, projectId: string, decision: 
 
     switch (decision.kind) {
       case "approve": {
-        // P2 solo se aprueba cuando Comercial ha marcado «Presupuesto aprobado»
-        const pending = await validationDeptsPending(projectId, tx);
-        if (pending.length) throw new ActionError(validationPendingText(pending));
         let prepayment: Prepayment | null = null;
         if (PREPAYMENT_TYPES.includes(p.type ?? "")) {
           const pp = decision.prepayment;
@@ -483,6 +484,10 @@ export async function decideBudget(u: CurrentUser, projectId: string, decision: 
           .set({ ...decided, status: "approved", comment: decision.comment?.trim() || null, data: prepayment ? { prepayment } : null })
           .where(eq(gates.id, g!.id));
         await tx.update(projects).set({ phase: FIRST_RUNNING_PHASE, prepayment, updatedAt: now }).where(eq(projects.id, projectId));
+        // Comercial pasa a «Presupuesto aprobado» con la misma acción
+        const finalPrice = decision.finalUnitPrice;
+        if (finalPrice != null && Number.isFinite(finalPrice) && finalPrice >= 0) await patchSheetSection(u, p, "comercial", { finalUnitPrice: finalPrice }, tx);
+        await syncValidationDepts(u, projectId, "approved", decision.comment?.trim() || null, tx);
         await logActivity(
           { projectId, actorId: u.id, action: "gate.approved", entity: "gate", entityId: "G2", diff: { gate: "G2", comment: decision.comment ?? null, prepayment } },
           tx,
@@ -510,6 +515,7 @@ export async function decideBudget(u: CurrentUser, projectId: string, decision: 
         if (!reason) throw new ActionError("Indica qué cambios pide el cliente", { reason: "Obligatorio" });
         await tx.update(gates).set({ ...decided, status: "recycled", comment: reason }).where(eq(gates.id, g!.id));
         await tx.update(projects).set({ phase: 1, updatedAt: now }).where(eq(projects.id, projectId));
+        await syncValidationDepts(u, projectId, "restart", reason, tx);
         await logActivity({ projectId, actorId: u.id, action: "gate.recycled", entity: "gate", entityId: "G2", diff: { gate: "G2", reason } }, tx);
         return () =>
           notifyProjectEvent(projectId, "gate.recycled", {

@@ -45,9 +45,9 @@ export function QuoteDialog({ projectId }: { projectId: string }) {
           <Send /> Enviar cotización al cliente
         </Button>
       </DialogTrigger>
-      <DialogContent title="Enviar cotización al cliente" description="El proyecto pasa a «Valoración con cliente». Adjunta el PDF de la cotización en Archivos (carpeta 01 Cotización).">
+      <DialogContent title="Enviar cotización al cliente" description="El proyecto pasa a «Valoración con cliente» y Comercial a «Cotización enviada». Adjunta el PDF de la cotización en Archivos (carpeta 01 Cotización).">
         <div className="flex flex-col gap-4">
-          <Field label="Importe cotizado (€)" hint="Opcional">
+          <Field label="Precio unitario cotizado (€/ud)" hint="Opcional. Se guarda en la ficha de Comercial.">
             <Input type="number" inputMode="decimal" step="0.01" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} />
           </Field>
           <Field label="Comentario" hint="Opcional: condiciones, validez, observaciones…">
@@ -89,15 +89,12 @@ const TABS: { k: BudgetKind; label: string; icon: React.ElementType; tone: strin
 export function BudgetDialog({
   projectId,
   requiresPrepayment,
-  approveBlocker,
   currentUserName,
   quoteInfo,
   rejectionReasons,
 }: {
   projectId: string;
   requiresPrepayment: boolean;
-  /** Si no es null, P2 aún no puede aprobarse (Comercial sin «Presupuesto aprobado»). */
-  approveBlocker: string | null;
   currentUserName: string;
   quoteInfo: string | null;
   rejectionReasons: Option[];
@@ -105,6 +102,7 @@ export function BudgetDialog({
   const [open, setOpen] = React.useState(false);
   const [kind, setKind] = React.useState<BudgetKind>("approve");
   const [comment, setComment] = React.useState("");
+  const [finalPrice, setFinalPrice] = React.useState("");
   const [ppMode, setPpMode] = React.useState<"received" | "waived" | "">("");
   const [responsible, setResponsible] = React.useState(currentUserName);
   const [accepted, setAccepted] = React.useState(false);
@@ -116,7 +114,7 @@ export function BudgetDialog({
   const approveReady = !requiresPrepayment || ppMode === "received" || (ppMode === "waived" && responsible.trim() && accepted);
   const disabled =
     busy ||
-    (kind === "approve" && (!approveReady || !!approveBlocker)) ||
+    (kind === "approve" && !approveReady) ||
     ((kind === "changes" || kind === "pause") && !reason.trim()) ||
     (kind === "reject" && (!reasonCode || (reasonCode === "otro" && !reason.trim())));
 
@@ -126,6 +124,7 @@ export function BudgetDialog({
         ? {
             kind,
             comment,
+            finalUnitPrice: finalPrice ? Number(finalPrice.replace(",", ".")) : null,
             prepayment: requiresPrepayment && ppMode ? { mode: ppMode, responsible, accepted, note: ppNote } : null,
           }
         : kind === "reject"
@@ -160,13 +159,11 @@ export function BudgetDialog({
         </div>
 
         <div className="mt-5 flex flex-col gap-4">
-          {kind === "approve" && approveBlocker && (
-            <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-              {approveBlocker} El proyecto no pasa a En curso hasta que el cliente haya aprobado el presupuesto.
-            </p>
-          )}
-          {kind === "approve" && !approveBlocker && (
+          {kind === "approve" && (
             <>
+              <Field label="Precio unitario final (€/ud)" hint="Opcional: el acordado con el cliente. Se guarda en la ficha de Comercial.">
+                <Input type="number" inputMode="decimal" step="0.01" min={0} value={finalPrice} onChange={(e) => setFinalPrice(e.target.value)} className="max-w-40" />
+              </Field>
               {requiresPrepayment && (
                 <fieldset className={cn("rounded-lg border p-4", errors.prepayment || errors.responsible || errors.accepted ? "border-rose-300" : "border-amber-300 bg-amber-50/50")}>
                   <legend className="flex items-center gap-1.5 px-1 text-sm font-semibold text-amber-900">
@@ -215,7 +212,7 @@ export function BudgetDialog({
             </>
           )}
           {kind === "changes" && (
-            <Field label="¿Qué cambios pide el cliente?" required hint="El proyecto vuelve a la fase de Cotización.">
+            <Field label="¿Qué cambios pide el cliente?" required hint="El proyecto vuelve a Cotización y Comercial abre una nueva ronda.">
               <Textarea rows={4} value={reason} onChange={(e) => setReason(e.target.value)} />
             </Field>
           )}

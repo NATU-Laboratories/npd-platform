@@ -65,6 +65,8 @@ export type DeptCard = {
   due: boolean;
   /** Puede trabajar ya (los de En curso, solo tras aprobar P2). */
   active: boolean;
+  /** Su estado lo mueve el flujo del proyecto (Comercial: cotización y P2), no hay botones. */
+  auto: boolean;
   /** Departamento de En curso a la espera de que el cliente apruebe el presupuesto (P2). */
   waitsP2: boolean;
   next: DeptSubstate | null;
@@ -175,6 +177,31 @@ export async function loadSheet(p: Project): Promise<{ ctx: SheetCtx; entries: S
         (i < curIdx || (current?.isFinal && s.id === current.id) ? deptTransitions.find((t) => t.fromSubstateId === s.id && t.direction === "forward")?.createdAt : null) ??
         (current?.isFinal && s.id === current.id ? (prog?.completedAt ?? null) : null),
     }));
+    const auto = phase < FIRST_RUNNING_PHASE;
+    // Proyectos que pasaron P2 antes de sincronizar Comercial: se muestra como completado
+    const finalStep = steps.find((s) => s.isFinal) ?? steps.at(-1);
+    const pastP2 = p.status === "in_production" || p.phase >= FIRST_RUNNING_PHASE;
+    if (auto && pastP2 && finalStep && !prog?.completedAt) {
+      cards.push({
+        dept: e.dept,
+        entries: deptEntries,
+        phase,
+        steps: stepInfos.map((s) => ({ ...s, doneAt: s.doneAt ?? (s.id === finalStep.id ? (prog?.enteredAt ?? null) : null) })),
+        current: finalStep,
+        started: true,
+        enteredAt: prog?.enteredAt ?? null,
+        rounds: prog?.rounds ?? 1,
+        completed: true,
+        completedAt: prog?.enteredAt ?? null,
+        due: true,
+        active: true,
+        auto,
+        waitsP2: false,
+        next: null,
+        backTargets: [],
+      });
+      continue;
+    }
     const { next, backTargets } = transitionsFrom(steps, prog ? current : null);
     cards.push({
       dept: e.dept,
@@ -189,6 +216,7 @@ export async function loadSheet(p: Project): Promise<{ ctx: SheetCtx; entries: S
       completedAt: prog?.completedAt ?? null,
       due: p.status === "in_production" || (p.status !== "draft" && p.phase >= phase),
       active: deptActive(phase, p),
+      auto,
       waitsP2: phase >= FIRST_RUNNING_PHASE && ["in_progress", "paused"].includes(p.status) && p.phase < FIRST_RUNNING_PHASE,
       next,
       backTargets,
@@ -246,36 +274,72 @@ export class SheetError extends Error {}
 
 const LOCKED_MSG = "Este departamento se activa cuando el cliente aprueba el presupuesto (P2)";
 
-/**
- * Departamentos de la etapa Validación (Comercial) que aún no han llegado a su
- * subestado final («Presupuesto aprobado»). Mientras haya alguno, P2 no puede
- * aprobarse ni el proyecto pasar a En curso.
- */
-export async function validationDeptsPending(projectId: string, tx: DbOrTx = db) {
-  const starts = await deptStartPhases();
-  const keys = Object.keys(starts).filter((k) => starts[k]! < FIRST_RUNNING_PHASE);
-  if (!keys.length) return [];
-  const ds = await tx.select().from(departments).where(inArray(departments.key, keys));
-  if (!ds.length) return [];
-  const ids = ds.map((d) => d.id);
-  const [steps, progress] = await Promise.all([
-    tx.select().from(deptSubstates).where(inArray(deptSubstates.departmentId, ids)).orderBy(asc(deptSubstates.sort), asc(deptSubstates.id)),
-    tx
-      .select()
-      .from(projectDeptProgress)
-      .where(and(eq(projectDeptProgress.projectId, projectId), inArray(projectDeptProgress.departmentId, ids))),
-  ]);
-  return ds.flatMap((d) => {
-    const own = steps.filter((s) => s.departmentId === d.id);
-    const final = own.find((s) => s.isFinal) ?? own.at(-1);
-    if (!final) return [];
-    return progress.some((x) => x.departmentId === d.id && x.completedAt) ? [] : [{ name: d.name, finalName: final.name }];
-  });
+/** Fija campos de un apartado de la ficha desde otra acción (p. ej. precios al cotizar o aprobar P2). */
+export async function patchSheetSection(u: CurrentUser, p: Project, sectionKey: string, patch: SheetData, tx: DbOrTx = db) {
+  const section = SHEET_SECTIONS.find((s) => s.key === sectionKey);
+  if (!section) return;
+  const ctx = await sheetContext(p, tx);
+  const [prev] = await tx
+    .select()
+    .from(projectSheet)
+    .where(and(eq(projectSheet.projectId, p.id), eq(projectSheet.section, sectionKey)));
+  await writeSection(u, p, section, { ...effectiveData(section, ctx, prev?.data), ...patch }, ctx, tx);
 }
 
-/** Texto de error/aviso cuando P2 no puede aprobarse aún. */
-export function validationPendingText(pending: { name: string; finalName: string }[]) {
-  return `Antes de aprobar P2 marca «${pending.map((x) => x.finalName).join("», «")}» en ${pending.map((x) => x.name).join(" y ")}.`;
+/**
+ * Los departamentos de Validación (Comercial) no se mueven a mano: siguen el
+ * flujo del proyecto. «Enviar cotización» → 2.º subestado; P2 aprobado → final;
+ * el cliente pide cambios → vuelta al primero (nueva ronda).
+ */
+export async function syncValidationDepts(u: CurrentUser, projectId: string, to: "quoted" | "approved" | "restart", comment: string | null, tx: DbOrTx = db) {
+  const starts = await deptStartPhases();
+  const keys = Object.keys(starts).filter((k) => starts[k]! < FIRST_RUNNING_PHASE);
+  if (!keys.length) return;
+  const ds = await tx.select().from(departments).where(inArray(departments.key, keys));
+  for (const d of ds) {
+    const steps = await tx.select().from(deptSubstates).where(eq(deptSubstates.departmentId, d.id)).orderBy(asc(deptSubstates.sort), asc(deptSubstates.id));
+    const final = steps.find((s) => s.isFinal) ?? steps.at(-1);
+    if (!final) continue;
+    const target = to === "approved" ? final : to === "restart" ? steps[0]! : (steps[1] ?? final);
+    const [prog] = await tx
+      .select()
+      .from(projectDeptProgress)
+      .where(and(eq(projectDeptProgress.projectId, projectId), eq(projectDeptProgress.departmentId, d.id)));
+    const current = (prog && steps.find((s) => s.id === prog.substateId)) ?? steps[0]!;
+    if (current.id === target.id && (prog || target.id === steps[0]!.id)) continue;
+    const back = steps.indexOf(target) < steps.indexOf(current);
+    const rounds = (prog?.rounds ?? 1) + (back ? 1 : 0);
+    const now = new Date();
+    const completedAt = target.isFinal ? now : null;
+    await tx
+      .insert(projectDeptProgress)
+      .values({ projectId, departmentId: d.id, substateId: target.id, enteredAt: now, rounds, completedAt, updatedBy: u.id })
+      .onConflictDoUpdate({
+        target: [projectDeptProgress.projectId, projectDeptProgress.departmentId],
+        set: { substateId: target.id, enteredAt: now, rounds, completedAt, updatedBy: u.id },
+      });
+    await tx.insert(projectDeptTransitions).values({
+      projectId,
+      departmentId: d.id,
+      fromSubstateId: current.id,
+      toSubstateId: target.id,
+      direction: back ? "back" : "forward",
+      comment,
+      actorId: u.id,
+      createdAt: now,
+    });
+    await logActivity(
+      {
+        projectId,
+        actorId: u.id,
+        action: back ? "dept.returned" : target.isFinal ? "dept.completed" : "dept.advanced",
+        entity: "department",
+        entityId: d.id,
+        diff: { department: d.name, from: current.name, to: target.name, round: rounds, comment },
+      },
+      tx,
+    );
+  }
 }
 
 function changedLabels(section: SheetSection, before: SheetData, after: SheetData) {
@@ -347,6 +411,8 @@ export async function transitionDept(
   if (!dept?.key) throw new SheetError("Departamento no encontrado");
   const deptPhase = (await deptStartPhases())[dept.key] ?? FIRST_RUNNING_PHASE;
   if (!deptActive(deptPhase, p)) throw new SheetError(LOCKED_MSG);
+  if (deptPhase < FIRST_RUNNING_PHASE)
+    throw new SheetError(`El estado de ${dept.name} se actualiza solo al enviar la cotización y al registrar la respuesta del cliente (P2)`);
   if (!canEditSection(u, dept.key, deptPhase, p)) throw new SheetError("Solo los miembros del departamento pueden cambiar su estado");
 
   const steps = await db.select().from(deptSubstates).where(eq(deptSubstates.departmentId, departmentId)).orderBy(asc(deptSubstates.sort), asc(deptSubstates.id));
