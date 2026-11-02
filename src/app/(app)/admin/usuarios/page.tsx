@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/form";
 import { createUserAction, updateUserAction, viewAsAction } from "@/app/actions/admin";
 import { Eye } from "lucide-react";
+import { DeleteUserButton } from "@/components/delete-user-button";
 import { getDepartments } from "@/lib/server/catalogs";
 import { requireAdmin } from "@/lib/server/authz";
 import { EDITABLE_ROLES, ROLE_HELP, ROLE_LABEL, TEST_EMAIL_DOMAIN } from "@/lib/labels";
@@ -101,6 +102,7 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/usua
                         </button>
                       </form>
                     )}
+                    {u.id !== me.id && <DeleteUserButton userId={u.id} name={u.name} />}
                   </div>
                   <Input
                     name="email"
