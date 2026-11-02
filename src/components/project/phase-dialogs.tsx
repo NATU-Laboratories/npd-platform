@@ -7,7 +7,10 @@ import { advancePhaseAction, decideBudgetAction, markPrepaymentAction, sendQuote
 import { Button } from "@/components/ui/button";
 import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { ScalarInput } from "@/components/sheet/section-editor";
+import { Uploader, type UploadedFile } from "@/components/uploader";
 import type { Option } from "@/lib/catalog-defaults";
+import { SECTION_BY_KEY, type SheetData } from "@/lib/sheet/sections";
 import { cn } from "@/lib/utils";
 
 function useAction() {
@@ -33,25 +36,66 @@ function useAction() {
 
 // ─── Fase 1: enviar cotización ────────────────────────────────────────────
 
-export function QuoteDialog({ projectId }: { projectId: string }) {
+export function QuoteDialog({
+  projectId,
+  initial,
+  files,
+  maxMb,
+}: {
+  projectId: string;
+  /** Datos actuales de la ficha de Comercial (precio objetivo, PVP y unidades vienen del brief). */
+  initial: SheetData;
+  /** PDFs ya subidos con la etiqueta «cotizacion». */
+  files: UploadedFile[];
+  maxMb: number;
+}) {
+  const section = SECTION_BY_KEY.comercial!;
+  const fields = section.groups.flatMap((g) => g.fields).filter((f) => f.key !== "finalUnitPrice");
   const [open, setOpen] = React.useState(false);
-  const [amount, setAmount] = React.useState("");
+  const [data, setData] = React.useState<SheetData>(initial);
   const [comment, setComment] = React.useState("");
-  const { busy, run } = useAction();
+  const { busy, errors, run } = useAction();
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (o) setData(initial);
+      }}
+    >
       <DialogTrigger asChild>
         <Button>
-          <Send /> Enviar cotización al cliente
+          <Send /> Enviar cotización al comercial
         </Button>
       </DialogTrigger>
-      <DialogContent title="Enviar cotización al cliente" description="El proyecto pasa a «Valoración con cliente» y Comercial a «Cotización enviada». Adjunta el PDF de la cotización en Archivos (carpeta 01 Cotización).">
-        <div className="flex flex-col gap-4">
-          <Field label="Precio unitario cotizado (€/ud)" hint="Opcional. Se guarda en la ficha de Comercial.">
-            <Input type="number" inputMode="decimal" step="0.01" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} />
+      <DialogContent
+        title="Enviar cotización al comercial"
+        description="Completa la cotización. El comercial recibirá un email con estas condiciones para presentárselas al cliente; el proyecto pasa a «Valoración con cliente»."
+        wide
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          {fields.map((f) => {
+            if (f.type === "files") return null;
+            const id = `quote-${f.key}`;
+            return (
+              <Field
+                key={f.key}
+                label={f.label}
+                hint={f.hint}
+                htmlFor={id}
+                required={f.key === "unitPrice"}
+                error={errors[f.key]}
+                className={cn(f.type === "textarea" && "sm:col-span-2")}
+              >
+                <ScalarInput f={f} id={id} value={data[f.key]} onChange={(v) => setData((d) => ({ ...d, [f.key]: v }))} />
+              </Field>
+            );
+          })}
+          <Field label="PDF de la cotización" hint="Recomendado. Se guarda en la carpeta 01 Cotización." className="sm:col-span-2">
+            <Uploader projectId={projectId} phase={1} initial={files} maxMb={maxMb} defaultTag="cotizacion" showTags={false} compact />
           </Field>
-          <Field label="Comentario" hint="Opcional: condiciones, validez, observaciones…">
-            <Textarea rows={3} value={comment} onChange={(e) => setComment(e.target.value)} />
+          <Field label="Mensaje para el comercial" hint="Opcional" className="sm:col-span-2">
+            <Textarea rows={2} value={comment} onChange={(e) => setComment(e.target.value)} />
           </Field>
         </div>
         <div className="mt-5 flex justify-end gap-2">
@@ -59,16 +103,16 @@ export function QuoteDialog({ projectId }: { projectId: string }) {
             Cancelar
           </Button>
           <Button
-            disabled={busy}
+            disabled={busy || typeof data.unitPrice !== "number"}
             onClick={() =>
               run(
-                () => sendQuoteAction(projectId, { amount: amount ? Number(amount.replace(",", ".")) : null, comment }),
-                "Cotización registrada. El proyecto pasa a Valoración con cliente.",
+                () => sendQuoteAction(projectId, { data, comment }),
+                "Cotización enviada al comercial. El proyecto pasa a Valoración con cliente.",
                 () => setOpen(false),
               )
             }
           >
-            {busy && <Loader2 className="animate-spin" />} Confirmar envío
+            {busy && <Loader2 className="animate-spin" />} Enviar al comercial
           </Button>
         </div>
       </DialogContent>
