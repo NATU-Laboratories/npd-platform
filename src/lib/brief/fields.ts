@@ -59,7 +59,7 @@ export const FIELDS: FieldDef[] = [
 
   // Paso 3 — Producto
   { key: "format", label: "Formato", step: 3, level: "required", when: (d) => !!d.category },
-  { key: "capacityMl", label: "Capacidad (ml)", step: 3, level: "recommended", when: (d) => !!d.category },
+  { key: "capacityMl", label: "Capacidad (ml)", step: 3, level: "required", when: (d) => !!d.category },
   { key: "performance", label: "Duración / rendimiento", step: 3, level: "recommended", when: isCat("ambient") },
   { key: "functions", label: "Función y claims", step: 3, level: "recommended", when: isCat("cosmetic") },
   { key: "skinHairType", label: "Tipo de piel/cabello", step: 3, level: "recommended", when: isCat("cosmetic") },
@@ -77,7 +77,7 @@ export const FIELDS: FieldDef[] = [
   { key: "ingredientsAvoid", label: "Ingredientes a evitar", step: 3, level: "optional", when: isCat("cosmetic") },
 
   // Bloque olfativo
-  { key: "olfactory.families", label: "Familias olfativas", step: 3, level: "required", when: needsOlfactory },
+  { key: "olfactory.families", label: "Familias olfativas", step: 3, level: "recommended", when: needsOlfactory },
   { key: "olfactory.intensity", label: "Intensidad", step: 3, level: "recommended", when: needsOlfactory },
   {
     key: "olfactory.inspirations",
@@ -87,7 +87,8 @@ export const FIELDS: FieldDef[] = [
     when: needsOlfactory,
     filled: (d) => !!d.olfactory?.inspirations?.some((i) => i.product || i.brand || i.url),
   },
-  { key: "olfactory.genders", label: "Género", step: 3, level: "required", when: needsOlfactory },
+  { key: "olfactory.genders", label: "Género", step: 3, level: "recommended", when: needsOlfactory },
+  { key: "olfactory.duration", label: "Duración deseada", step: 3, level: "recommended", when: needsOlfactory },
   { key: "olfactory.blacklist", label: "Blacklist", step: 3, level: "optional", when: needsOlfactory },
 
   // Paso 4

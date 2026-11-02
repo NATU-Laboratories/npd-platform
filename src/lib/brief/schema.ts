@@ -39,6 +39,7 @@ export const PROJECT_TYPES = ["PL", "MP", "MDD"] as const;
 export const GENDERS = ["mujer", "hombre", "unisex"] as const;
 export const CATEGORIES = ["perfume", "ambient", "cosmetic"] as const;
 export const PRIORITIES = ["low", "medium", "high", "urgent"] as const;
+/** «mixto» ya no se ofrece en el formulario; se mantiene para leer solicitudes antiguas. */
 export const SUPPLIER = ["cliente", "natu", "mixto"] as const;
 
 export const inspirationSchema = z.object({

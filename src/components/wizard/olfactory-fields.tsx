@@ -53,11 +53,11 @@ export function OlfactoryFields({
     <fieldset className="flex flex-col gap-5 rounded-xl border border-violet-200 bg-violet-50/40 p-4">
       <legend className="px-2 text-sm font-semibold text-violet-900">Bloque olfativo</legend>
 
-      <Field label="Familia(s) olfativa(s)" required error={errorFor("olfactory.families")} highlight={highlight("olfactory.families")}>
+      <Field label="Familia(s) olfativa(s)" recommended error={errorFor("olfactory.families")} highlight={highlight("olfactory.families")}>
         <ChipGroup options={asOptions(families)} value={value.families ?? []} onChange={(v) => set("families", v)} ariaLabel="Familias olfativas" />
       </Field>
 
-      <Field label="Género" required hint="Puedes elegir varios." error={errorFor("olfactory.genders")} highlight={highlight("olfactory.genders")}>
+      <Field label="Género" recommended hint="Puedes elegir varios." error={errorFor("olfactory.genders")} highlight={highlight("olfactory.genders")}>
         <ChipGroup options={GENDER_OPTIONS} value={value.genders ?? []} onChange={(v) => set("genders", v)} ariaLabel="Género" />
       </Field>
 
@@ -81,7 +81,7 @@ export function OlfactoryFields({
             ))}
           </div>
         </Field>
-        <Field label="Duración deseada">
+        <Field label="Duración deseada" recommended highlight={highlight("olfactory.duration")}>
           <Input value={value.duration ?? ""} onChange={(e) => set("duration", e.target.value)} placeholder="p. ej. 6-8 h en piel" />
         </Field>
       </div>

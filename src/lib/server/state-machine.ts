@@ -20,7 +20,7 @@ import { parseBriefLenient, type BriefData } from "@/lib/brief/schema";
 import { logActivity, jsonDiff } from "./activity";
 import { canDecideGate, canEditBrief, canManageProject, canRequest, canSendQuote, type CurrentUser } from "./authz";
 import { enqueueJob, kickJobs } from "./jobs";
-import { notifyPhaseSections } from "./sheet";
+import { notifyPhaseSections, validationDeptsPending, validationPendingText } from "./sheet";
 import {
   notifyApproved,
   notifyProjectEvent,
@@ -462,6 +462,9 @@ export async function decideBudget(u: CurrentUser, projectId: string, decision: 
 
     switch (decision.kind) {
       case "approve": {
+        // P2 solo se aprueba cuando Comercial ha marcado «Presupuesto aprobado»
+        const pending = await validationDeptsPending(projectId, tx);
+        if (pending.length) throw new ActionError(validationPendingText(pending));
         let prepayment: Prepayment | null = null;
         if (PREPAYMENT_TYPES.includes(p.type ?? "")) {
           const pp = decision.prepayment;
