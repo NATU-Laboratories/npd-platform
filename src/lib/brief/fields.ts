@@ -130,6 +130,22 @@ export function missingFields(d: BriefData, level: FieldLevel) {
 }
 
 /** Errores bloqueantes para enviar: campos obligatorios vacíos. */
+/**
+ * Datos para la etiqueta que el comercial debe completar cuando el cliente aprueba
+ * la fórmula (Laboratorio en «Referencia aprobada»). En la solicitud son opcionales.
+ */
+export const LABEL_INFO_FIELDS: FieldDef[] = [
+  { key: "finalName", label: "Naming definitivo", step: 4, level: "optional" },
+  { key: "facing", label: "Facing del producto (textos, claims y logos de la cara frontal)", step: 4, level: "optional" },
+  { key: "languages", label: "Idiomas de etiquetado", step: 4, level: "optional" },
+  { key: "markets", label: "Países de venta", step: 4, level: "optional" },
+];
+
+/** Datos para la etiqueta que aún faltan en el brief. */
+export function missingLabelInfo(d: BriefData) {
+  return LABEL_INFO_FIELDS.filter((f) => !isFieldFilled(f, d));
+}
+
 export function submitErrors(d: BriefData): Record<string, string> {
   const errors: Record<string, string> = {};
   for (const f of missingFields(d, "required")) errors[f.key] = `${f.label} es obligatorio`;

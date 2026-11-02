@@ -58,6 +58,8 @@ export type SheetCtx = {
     unitsFirstOrder?: number | null;
     capacityMl?: number | null;
     references?: number | null;
+    finalName?: string | null;
+    languages?: string[];
   };
   filesByTag: Record<string, number>;
 };
@@ -279,7 +281,7 @@ export const SHEET_SECTIONS: SheetSection[] = [
     groups: [
       {
         fields: [
-          { key: "productName", label: "Nombre comercial (naming)", type: "text", hint: "Precargado con el nombre del proyecto: confirma el definitivo." },
+          { key: "productName", label: "Nombre comercial (naming)", type: "text", hint: "Precargado con el naming definitivo del comercial (o el nombre del proyecto)." },
           { key: "fragranceName", label: "Nombre de la fragancia", type: "text", hint: "Si es distinto del nombre comercial." },
         ],
       },
@@ -321,7 +323,7 @@ export const SHEET_SECTIONS: SheetSection[] = [
         ],
       },
     ],
-    prefill: (c) => ({ productName: c.brief.name ?? undefined }),
+    prefill: (c) => ({ productName: c.brief.finalName ?? c.brief.name ?? undefined }),
   },
   {
     key: "regulatorio",
@@ -410,7 +412,10 @@ export const SHEET_SECTIONS: SheetSection[] = [
     ],
     prefill: (c) => {
       const ml = c.brief.capacityMl ?? undefined;
-      const languages = [...new Set((c.brief.markets ?? []).flatMap((m) => LANGUAGES_FROM_MARKET[m] ?? []))];
+      // Idiomas indicados por el comercial; si no, los que corresponden a los países de venta
+      const languages = c.brief.languages?.length
+        ? c.brief.languages
+        : [...new Set((c.brief.markets ?? []).flatMap((m) => LANGUAGES_FROM_MARKET[m] ?? []))];
       return {
         denomination: c.brief.format ? DENOMINATION_FROM_FORMAT[c.brief.format] : undefined,
         nominalMl: ml,
