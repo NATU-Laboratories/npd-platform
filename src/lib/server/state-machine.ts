@@ -20,7 +20,7 @@ import { parseBriefLenient, type BriefData } from "@/lib/brief/schema";
 import { logActivity, jsonDiff } from "./activity";
 import { canDecideGate, canEditBrief, canManageProject, canRequest, canSendQuote, type CurrentUser } from "./authz";
 import { enqueueJob, kickJobs } from "./jobs";
-import { notifyPhaseSections, patchSheetSection, syncValidationDepts } from "./sheet";
+import { notifyPhaseSections, notifyProjectStarted, patchSheetSection, syncValidationDepts } from "./sheet";
 import {
   notifyApproved,
   notifyProjectEvent,
@@ -525,11 +525,13 @@ export async function decideBudget(u: CurrentUser, projectId: string, decision: 
             message: [decision.comment?.trim(), ppText].filter(Boolean).length
               ? { label: "Detalle", body: [ppText, decision.comment?.trim()].filter(Boolean).join("\n") }
               : null,
-            to: { requester: true, accountManager: true, departments: true },
+            // Los departamentos reciben un único email: «tienes trabajo» (Desarrollo) o «proyecto en marcha» (el resto)
+            to: { requester: true, accountManager: true },
             // Quien registra la aprobación (normalmente el comercial solicitante) no necesita el aviso
             exclude: u.email,
           });
           await notifyPhaseSections(projectId, FIRST_RUNNING_PHASE);
+          await notifyProjectStarted(projectId);
         };
       }
       case "changes": {
