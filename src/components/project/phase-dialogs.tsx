@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { ScalarInput } from "@/components/sheet/section-editor";
 import { Uploader, type UploadedFile } from "@/components/uploader";
 import type { Option } from "@/lib/catalog-defaults";
-import { SECTION_BY_KEY, type SheetData } from "@/lib/sheet/sections";
+import { quoteSpecGroups, SECTION_BY_KEY, type SheetData } from "@/lib/sheet/sections";
 import { cn } from "@/lib/utils";
 
 function useAction() {
@@ -42,10 +42,16 @@ export function QuoteDialog({
   files,
   maxMb,
   requesterName,
+  specsInitial,
+  formulaCost,
 }: {
   projectId: string;
   /** Comercial que creó la solicitud: único destinatario del aviso. */
   requesterName: string;
+  /** Datos actuales de «Envase y packaging» (Marketing): se rellenan con las especificaciones cotizadas. */
+  specsInitial: SheetData;
+  /** Coste objetivo de la fórmula; undefined si el usuario no puede verlo (Comercial y resto de departamentos). */
+  formulaCost?: number | null;
   /** Datos actuales de la ficha de Comercial (precio objetivo, PVP y unidades vienen del brief). */
   initial: SheetData;
   /** PDFs ya subidos con la etiqueta «cotizacion». */
@@ -57,13 +63,21 @@ export function QuoteDialog({
   const [open, setOpen] = React.useState(false);
   const [data, setData] = React.useState<SheetData>(initial);
   const [comment, setComment] = React.useState("");
+  const [specs, setSpecs] = React.useState<SheetData>(specsInitial);
+  const canSeeCost = formulaCost !== undefined;
+  const [cost, setCost] = React.useState(formulaCost != null ? String(formulaCost) : "");
   const { busy, errors, run } = useAction();
+  const specGroups = quoteSpecGroups();
   return (
     <Dialog
       open={open}
       onOpenChange={(o) => {
         setOpen(o);
-        if (o) setData(initial);
+        if (o) {
+          setData(initial);
+          setSpecs(specsInitial);
+          setCost(formulaCost != null ? String(formulaCost) : "");
+        }
       }}
     >
       <DialogTrigger asChild>
@@ -94,6 +108,47 @@ export function QuoteDialog({
               </Field>
             );
           })}
+          <div className="flex flex-col gap-4 border-t border-slate-100 pt-4 sm:col-span-2">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">Presupuesto desglosado</h3>
+              <p className="text-xs text-slate-500">Especificaciones cotizadas. Se incluyen en el email al comercial y quedan en «Envase y packaging» de Marketing.</p>
+            </div>
+            {specGroups.map((g) => (
+              <fieldset key={g.title} className="flex flex-col gap-3">
+                <legend className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{g.title}</legend>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {g.fields.map((f) => {
+                    const id = `quote-spec-${f.key}`;
+                    return (
+                      <Field key={f.key} label={f.label} htmlFor={id} className={cn((f.type === "textarea" || f.type === "multi") && "sm:col-span-2")}>
+                        <ScalarInput f={f} id={id} value={specs[f.key]} onChange={(v) => setSpecs((d) => ({ ...d, [f.key]: v }))} />
+                      </Field>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            ))}
+          </div>
+          {canSeeCost && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50/60 p-4 sm:col-span-2">
+              <Field
+                label="Coste objetivo de la fórmula (€/ud) · confidencial"
+                htmlFor="quote-formula-cost"
+                hint="Solo lo ven Laboratorio / I+D, el gestor de proyectos y Operaciones. No aparece en la cotización ni le llega al comercial; Laboratorio lo recibe en su aviso para empezar a formular."
+              >
+                <Input
+                  id="quote-formula-cost"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.0001"
+                  min={0}
+                  value={cost}
+                  onChange={(e) => setCost(e.target.value)}
+                  className="max-w-40"
+                />
+              </Field>
+            </div>
+          )}
           <Field label="PDF de la cotización" hint="Recomendado. Se guarda en la carpeta 01 Cotización." className="sm:col-span-2">
             <Uploader projectId={projectId} phase={1} initial={files} maxMb={maxMb} defaultTag="cotizacion" showTags={false} compact />
           </Field>
@@ -109,7 +164,13 @@ export function QuoteDialog({
             disabled={busy || typeof data.unitPrice !== "number"}
             onClick={() =>
               run(
-                () => sendQuoteAction(projectId, { data, comment }),
+                () =>
+                  sendQuoteAction(projectId, {
+                    data,
+                    specs,
+                    comment,
+                    ...(canSeeCost ? { formulaTargetCost: cost.trim() ? Number(cost.replace(",", ".")) : null } : {}),
+                  }),
                 "Cotización enviada al comercial. El proyecto pasa a Valoración con cliente.",
                 () => setOpen(false),
               )

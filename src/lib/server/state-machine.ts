@@ -17,10 +17,11 @@ import {
 import { computeCompleteness, FIELD_BY_KEY, submitErrors } from "@/lib/brief/fields";
 import { FIRST_RUNNING_PHASE, LAST_PHASE, PHASES, PREPAYMENT_TYPES } from "@/lib/labels";
 import { parseBriefLenient, type BriefData } from "@/lib/brief/schema";
+import { quoteSpecGroups } from "@/lib/sheet/sections";
 import { logActivity, jsonDiff } from "./activity";
-import { canDecideGate, canEditBrief, canManageProject, canRequest, canSendQuote, type CurrentUser } from "./authz";
+import { canDecideGate, canEditBrief, canManageProject, canRequest, canSeeFormulaCost, canSendQuote, type CurrentUser } from "./authz";
 import { enqueueJob, kickJobs } from "./jobs";
-import { loadProjectRow, loadSheet, notifyPhaseSections, notifyProjectStarted, patchSheetSection, pendingUpTo, syncValidationDepts } from "./sheet";
+import { loadProjectRow, loadSheet, notifyPhaseSections, packagingSummary, setFormulaTargetCost, notifyProjectStarted, patchSheetSection, pendingUpTo, syncValidationDepts } from "./sheet";
 import {
   notifyApproved,
   notifyProjectEvent,
@@ -413,8 +414,22 @@ const QUOTE_FIELDS = ["unitPrice", "targetPrice", "rrp", "units", "conditions"] 
  * Cotización lista (fase 1 → 2): se guardan las condiciones en la ficha de
  * Comercial y se envía al comercial para que la presente al cliente.
  */
-export async function sendQuote(u: CurrentUser, projectId: string, input: { data?: Record<string, unknown> | null; comment?: string | null }) {
+export async function sendQuote(
+  u: CurrentUser,
+  projectId: string,
+  input: {
+    data?: Record<string, unknown> | null;
+    /** Especificaciones cotizadas (envase/tapón, etiqueta, estuche, caja master) → «Envase y packaging». */
+    specs?: Record<string, unknown> | null;
+    /** Coste objetivo de la fórmula (confidencial; solo si el usuario puede verlo). */
+    formulaTargetCost?: number | null;
+    comment?: string | null;
+  },
+) {
   const raw = input.data ?? {};
+  const specKeys = new Set(quoteSpecGroups().flatMap((g) => g.fields.map((f) => f.key)));
+  const rawSpecs = input.specs ?? {};
+  const specs = Object.fromEntries(Object.keys(rawSpecs).filter((k) => specKeys.has(k)).map((k) => [k, rawSpecs[k]]));
   const data = Object.fromEntries(QUOTE_FIELDS.filter((k) => k in raw).map((k) => [k, raw[k]]));
   const price = typeof data.unitPrice === "number" && Number.isFinite(data.unitPrice) && data.unitPrice >= 0 ? data.unitPrice : null;
   if (price == null) throw new ActionError("Indica el precio unitario cotizado", { unitPrice: "Obligatorio" });
@@ -434,8 +449,13 @@ export async function sendQuote(u: CurrentUser, projectId: string, input: { data
       .onConflictDoUpdate({ target: [gates.projectId, gates.gate], set: { status: "pending", openedAt: now, decidedBy: null, decidedAt: null } });
     await logActivity({ projectId, actorId: u.id, action: "quote.sent", entity: "project", entityId: projectId, diff: { amount: price, comment } }, tx);
     await patchSheetSection(u, p, "comercial", data, tx);
+    if (Object.keys(specs).length) await patchSheetSection(u, p, "packaging", specs, tx);
+    if (canSeeFormulaCost(u) && input.formulaTargetCost !== undefined) await setFormulaTargetCost(u, projectId, input.formulaTargetCost, tx);
     await syncValidationDepts(u, projectId, "quoted", comment, tx);
   });
+  // Especificaciones tal como quedan guardadas, para el email al comercial (sin coste de fórmula)
+  const saved = await loadProjectRow(projectId);
+  const specLines = saved ? await packagingSummary(saved) : [];
   const eur = (n: unknown) => (typeof n === "number" ? n.toLocaleString("es-ES", { style: "currency", currency: "EUR" }) : null);
   const rows: [string, string][] = (
     [
@@ -444,6 +464,7 @@ export async function sendQuote(u: CurrentUser, projectId: string, input: { data
       ["PVP recomendado", eur(data.rrp)],
       ["Unidades del primer pedido", typeof data.units === "number" ? `${data.units.toLocaleString("es-ES")} uds` : null],
       ["Condiciones", typeof data.conditions === "string" && data.conditions.trim() ? data.conditions.trim() : null],
+      ["Especificaciones cotizadas", specLines.length ? specLines.join("\n") : null],
     ] as [string, string | null][]
   ).filter((r): r is [string, string] => !!r[1]);
   await notifyProjectEvent(projectId, "quote.sent", {

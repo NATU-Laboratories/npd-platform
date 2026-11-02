@@ -187,7 +187,7 @@ export const SHEET_SECTIONS: SheetSection[] = [
     phase: 3,
     groups: [
       {
-        title: "Frasco",
+        title: "Envase",
         fields: [
           { key: "bottleModel", label: "Modelo", type: "text" },
           { key: "bottleSupplier", label: "Proveedor", type: "text" },
@@ -205,7 +205,28 @@ export const SHEET_SECTIONS: SheetSection[] = [
         ],
       },
       {
-        title: "Packaging secundario",
+        title: "Etiqueta",
+        fields: [
+          {
+            key: "labelPrint",
+            label: "Tipo de impresión",
+            type: "multi",
+            options: opts([
+              ["digital", "Digital"],
+              ["offset", "Offset"],
+              ["flexo", "Flexografía"],
+              ["serigrafia", "Serigrafía"],
+              ["stamping", "Stamping"],
+              ["relieve", "Relieve / gofrado"],
+              ["barniz", "Barniz UVI / selectivo"],
+            ]),
+          },
+          { key: "labelMaterial", label: "Material y acabado", type: "text", placeholder: "Papel verjurado, PP transparente, metalizado…" },
+          { key: "labelDetail", label: "Medidas y otros detalles", type: "text" },
+        ],
+      },
+      {
+        title: "Estuche",
         fields: [
           {
             key: "secondaryType",
@@ -218,7 +239,29 @@ export const SHEET_SECTIONS: SheetSection[] = [
               { value: "sin", label: "Sin packaging secundario" },
             ],
           },
-          { key: "secondaryDetail", label: "Material, dimensiones y acabados", type: "textarea" },
+          { key: "boxBoard", label: "Cartón y gramaje", type: "text", placeholder: "p. ej. Folding 350 g" },
+          {
+            key: "boxPrint",
+            label: "Impresión y acabados",
+            type: "multi",
+            options: opts([
+              ["cmyk", "CMYK"],
+              ["pantones", "Pantones"],
+              ["stamping", "Stamping"],
+              ["relieve", "Relieve / gofrado"],
+              ["barniz", "Barniz UVI / selectivo"],
+              ["laminado", "Laminado / plastificado"],
+            ]),
+          },
+          { key: "pantones", label: "Pantones / colores", type: "text" },
+          { key: "secondaryDetail", label: "Medidas y otros detalles", type: "textarea" },
+        ],
+      },
+      {
+        title: "Caja master",
+        fields: [
+          { key: "masterUnits", label: "Unidades por caja", type: "number", unit: "uds" },
+          { key: "masterDetail", label: "Tipo, medidas y marcaje", type: "text", placeholder: "Canal simple, 30×20×25 cm, etiqueta con EAN y lote…" },
         ],
       },
       { fields: [{ key: "packagingFiles", label: "Fotos, planos o fichas de los componentes", type: "files", tag: "packaging" }] },
@@ -472,6 +515,17 @@ export const SHEET_SECTIONS: SheetSection[] = [
 
 export const SECTION_BY_KEY: Record<string, SheetSection> = Object.fromEntries(SHEET_SECTIONS.map((s) => [s.key, s]));
 
+/**
+ * Especificaciones que se cotizan (envase/tapón, etiqueta, estuche, caja master):
+ * se piden al enviar la cotización y quedan en «Envase y packaging» de Marketing.
+ * Los proveedores son internos y no se incluyen.
+ */
+export function quoteSpecGroups() {
+  return SECTION_BY_KEY.packaging!.groups
+    .map((g) => ({ title: g.title ?? "", fields: g.fields.filter((f): f is ScalarField => f.type !== "files" && !/Supplier$/.test(f.key)) }))
+    .filter((g) => g.fields.length);
+}
+
 export function applicable<T extends { when?: (c: SheetCtx) => boolean }>(fields: T[], c: SheetCtx) {
   return fields.filter((f) => !f.when || f.when(c));
 }
@@ -579,14 +633,19 @@ export function formatValue(f: ScalarField, v: unknown): string | null {
 /** Resumen legible de lo rellenado en un apartado (emails a los departamentos siguientes). */
 export function summarize(s: SheetSection, c: SheetCtx, data: SheetData): string[] {
   const out: string[] = [];
-  for (const f of allFields(s, c)) {
-    if (f.type === "files") {
-      const n = c.filesByTag[f.tag] ?? 0;
-      if (n) out.push(`${f.label}: ${n} archivo${n === 1 ? "" : "s"}`);
-      continue;
+  // Con varios grupos titulados (Envase, Tapón, Etiqueta…) se antepone el grupo para que se entienda
+  const titled = s.groups.filter((g) => g.title).length > 1;
+  for (const g of s.groups) {
+    const prefix = titled && g.title ? `${g.title} · ` : "";
+    for (const f of applicable(g.fields, c)) {
+      if (f.type === "files") {
+        const n = c.filesByTag[f.tag] ?? 0;
+        if (n) out.push(`${prefix}${f.label}: ${n} archivo${n === 1 ? "" : "s"}`);
+        continue;
+      }
+      const v = formatValue(f, data[f.key]);
+      if (v && !(f.type === "bool" && v === "No")) out.push(`${prefix}${f.label}: ${v}`);
     }
-    const v = formatValue(f, data[f.key]);
-    if (v && !(f.type === "bool" && v === "No")) out.push(`${f.label}: ${v}`);
   }
   return out;
 }
