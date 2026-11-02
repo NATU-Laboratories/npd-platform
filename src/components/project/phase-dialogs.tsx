@@ -41,8 +41,11 @@ export function QuoteDialog({
   initial,
   files,
   maxMb,
+  requesterName,
 }: {
   projectId: string;
+  /** Comercial que creó la solicitud: único destinatario del aviso. */
+  requesterName: string;
   /** Datos actuales de la ficha de Comercial (precio objetivo, PVP y unidades vienen del brief). */
   initial: SheetData;
   /** PDFs ya subidos con la etiqueta «cotizacion». */
@@ -70,7 +73,7 @@ export function QuoteDialog({
       </DialogTrigger>
       <DialogContent
         title="Enviar cotización al comercial"
-        description="Completa la cotización. El comercial recibirá un email con estas condiciones para presentárselas al cliente; el proyecto pasa a «Valoración con cliente»."
+        description={`Completa la cotización. Solo ${requesterName} (quien creó la solicitud) recibirá un email de aviso con estas condiciones para presentárselas al cliente. El proyecto pasa a «Valoración con cliente».`}
         wide
       >
         <div className="grid gap-4 sm:grid-cols-2">
