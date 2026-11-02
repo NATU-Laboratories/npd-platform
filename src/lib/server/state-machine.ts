@@ -451,7 +451,8 @@ export async function sendQuote(u: CurrentUser, projectId: string, input: { data
     intro: "Preséntala al cliente (el PDF está en la carpeta 01 Cotización). Cuando responda, registra su decisión en el proyecto: «Registrar respuesta del cliente (P2)».",
     message: comment ? { label: "Mensaje", body: comment } : null,
     extraRows: rows,
-    to: { requester: true, accountManager: true, deciders: "G2" },
+    // Solo el comercial que creó la solicitud (él registra después la respuesta del cliente, P2)
+    to: { requester: true },
   });
 }
 

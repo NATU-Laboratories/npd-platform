@@ -380,6 +380,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
                 initial={sheet.entries.find((e) => e.section.key === "comercial")?.data ?? {}}
                 files={d.files.filter(({ f }) => f.tag === "cotizacion").map(({ f }) => ({ id: f.id, name: f.name, size: f.size, mime: f.mime, tag: f.tag }))}
                 maxMb={settings.max_file_mb}
+                requesterName={lookups.users[p.requesterId] ?? "el solicitante"}
               />
             )}
             {canBudget && (
