@@ -499,21 +499,31 @@ export async function transitionDept(
     );
   });
 
-  const title =
-    direction === "back"
-      ? `${dept.name} vuelve a «${target.name}»`
-      : target.isFinal
-        ? `${dept.name} ha completado su parte (${target.name})`
-        : `${dept.name}: ${target.name}`;
-  await notifyProjectEvent(projectId, direction === "back" ? "dept.returned" : "dept.advanced", {
-    title,
-    intro:
-      direction === "back"
-        ? `${u.name} ha devuelto el trabajo de ${dept.name} a «${target.name}» (ronda ${(prog?.rounds ?? 1) + 1}).`
-        : `${u.name} ha pasado ${dept.name} de «${current?.name ?? steps[0]?.name ?? "—"}» a «${target.name}».`,
-    message: text ? { label: "Comentario", body: text } : null,
-    to: { requester: true, accountManager: true, departmentKeys: [...new Set(["marketing", dept.key])] },
-  });
+  // Solo se avisa por email cuando el departamento completa su parte; los pasos
+  // intermedios quedan en la actividad del proyecto.
+  if (direction === "forward" && target.isFinal) {
+    // Departamentos implicados que necesitan la información de este (apartados con dependsOn)
+    const ownSections = new Set(Object.keys(deptOf).filter((k) => deptOf[k] === dept.key));
+    const involvedKeys = new Set(
+      (
+        await db
+          .select({ key: departments.key })
+          .from(projectDepartments)
+          .innerJoin(departments, eq(departments.id, projectDepartments.departmentId))
+          .where(eq(projectDepartments.projectId, projectId))
+      ).map((r) => r.key),
+    );
+    const dependents = SHEET_SECTIONS.filter((s) => s.dependsOn?.some((d) => ownSections.has(d)))
+      .map((s) => deptOf[s.key]!)
+      .filter((k) => k !== dept.key && (!involvedKeys.size || involvedKeys.has(k)));
+    await notifyProjectEvent(projectId, "dept.completed", {
+      title: `${dept.name} ha completado su parte (${target.name})`,
+      intro: `${u.name} ha marcado «${target.name}»: ${dept.name} ha terminado su parte del proyecto.`,
+      message: text ? { label: "Comentario", body: text } : null,
+      to: { requester: true, accountManager: true, departmentKeys: [...new Set(["marketing", ...dependents].filter((k) => k !== dept.key))] },
+      exclude: u.email,
+    });
+  }
   return { completed: target.isFinal, direction };
 }
 
