@@ -267,7 +267,7 @@ export function canEditSection(u: CurrentUser, deptKey: string, deptPhase: numbe
 
 /** Departamentos de fases ya alcanzadas que no han llegado a su subestado final (aviso al avanzar de fase). */
 export function pendingUpTo(cards: DeptCard[], phase: number) {
-  return cards.filter((c) => c.phase <= phase && !c.completed);
+  return cards.filter((c) => c.phase <= phase && !c.completed && c.steps.length > 0);
 }
 
 export async function loadProjectRow(projectId: string, tx: DbOrTx = db) {
