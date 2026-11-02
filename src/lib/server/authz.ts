@@ -181,6 +181,15 @@ export function canManageProject(u: CurrentUser, p: Pick<Project, "type" | "phas
   return isAdmin(u) || isGlobalDecider(u) || isMarketing(u) || isConfiguredDecider(u, p, "G1") || isConfiguredDecider(u, p, "G2");
 }
 
+/**
+ * Coste objetivo de la fórmula (confidencial): Laboratorio / I+D, el gestor de
+ * proyectos (decisor global), admin y Operaciones (quien prepara la cotización).
+ * Nunca Comercial ni el resto de departamentos.
+ */
+export function canSeeFormulaCost(u: CurrentUser) {
+  return isAdmin(u) || isGlobalDecider(u) || u.departmentKeys.includes("idi") || u.departmentKeys.includes("operaciones");
+}
+
 /** Enviar la cotización al cliente (fase Cotización): gestores, comercial de la cuenta, Operaciones y Comercial. */
 export function canSendQuote(u: CurrentUser, p: Pick<Project, "type" | "phase" | "accountManagerId" | "requesterId">) {
   return (

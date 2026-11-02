@@ -11,11 +11,14 @@ import {
   projectDeptTransitions,
   projects,
   projectSheet,
+  projectConfidential,
+  clients,
   users,
   type DeptSubstate,
   type Project,
 } from "@/db/schema";
-import { needsOlfactory } from "@/lib/brief/schema";
+import { briefSections, type Lookups } from "@/lib/brief/display";
+import { needsOlfactory, parseBriefLenient } from "@/lib/brief/schema";
 import { FIRST_RUNNING_PHASE, PHASES } from "@/lib/labels";
 import {
   checkField,
@@ -29,8 +32,11 @@ import {
   type SheetSection,
 } from "@/lib/sheet/sections";
 import { transitionsFrom } from "@/lib/sheet/substates";
+
+const SECTION_BY_KEY_SERVER = Object.fromEntries(SHEET_SECTIONS.map((x) => [x.key, x]));
 import { logActivity } from "./activity";
-import type { CurrentUser } from "./authz";
+import { canSeeFormulaCost, type CurrentUser } from "./authz";
+import { getActiveUsers, getBrands, getCatalogLabels } from "./catalogs";
 import { notifyProjectEvent } from "./notifications";
 import { getSettings } from "./settings";
 
@@ -528,10 +534,6 @@ export async function transitionDept(
 }
 
 /**
- * Al entrar en una fase, avisa a cada departamento con apartados que arrancan
- * en ella, con el resumen de la información que necesita de otros departamentos.
- */
-/**
  * Al aprobar P2: los departamentos implicados que entran más adelante (Diseño,
  * Operaciones, Compras…) reciben solo un aviso de que el proyecto está en marcha.
  * Los que empiezan ya en Desarrollo reciben el de notifyPhaseSections.
@@ -560,6 +562,67 @@ export async function notifyProjectStarted(projectId: string) {
   }
 }
 
+// ─── Datos confidenciales (coste objetivo de fórmula) ─────────────────────
+
+/** Coste objetivo de la fórmula. Solo debe llamarse tras comprobar canSeeFormulaCost. */
+export async function getFormulaTargetCost(projectId: string, tx: DbOrTx = db): Promise<number | null> {
+  const [row] = await tx.select().from(projectConfidential).where(eq(projectConfidential.projectId, projectId));
+  return row?.formulaTargetCost != null ? Number(row.formulaTargetCost) : null;
+}
+
+/** Guarda el coste objetivo (sin registrar el valor en la actividad, que ve todo el mundo). */
+export async function setFormulaTargetCost(u: CurrentUser, projectId: string, value: number | null, tx: DbOrTx = db) {
+  if (!canSeeFormulaCost(u)) throw new SheetError("No puedes ver ni editar el coste objetivo de la fórmula");
+  if (value != null && (!Number.isFinite(value) || value < 0)) throw new SheetError("Coste objetivo no válido");
+  const prev = await getFormulaTargetCost(projectId, tx);
+  if (prev === value) return;
+  const now = new Date();
+  await tx
+    .insert(projectConfidential)
+    .values({ projectId, formulaTargetCost: value != null ? String(value) : null, updatedBy: u.id, updatedAt: now })
+    .onConflictDoUpdate({ target: projectConfidential.projectId, set: { formulaTargetCost: value != null ? String(value) : null, updatedBy: u.id, updatedAt: now } });
+  await logActivity({ projectId, actorId: u.id, action: "confidential.updated", entity: "project", entityId: projectId, diff: null }, tx);
+}
+
+/** Especificaciones de «Envase y packaging» en líneas de texto (emails). */
+export async function packagingSummary(p: Project) {
+  const section = SECTION_BY_KEY_SERVER.packaging;
+  if (!section) return [];
+  const ctx = await sheetContext(p);
+  const [row] = await db
+    .select()
+    .from(projectSheet)
+    .where(and(eq(projectSheet.projectId, p.id), eq(projectSheet.section, "packaging")));
+  return summarize(section, ctx, effectiveData(section, ctx, row?.data));
+}
+
+/** Resumen del brief para los emails a departamentos (especificaciones del producto y comerciales). */
+async function briefSummaryRows(p: Project): Promise<[string, string][]> {
+  const [catalog, brandRows, userRows, clientRows] = await Promise.all([
+    getCatalogLabels(),
+    getBrands(false),
+    getActiveUsers(),
+    p.clientId ? db.select({ id: clients.id, name: clients.name }).from(clients).where(eq(clients.id, p.clientId)) : Promise.resolve([]),
+  ]);
+  const lookups: Lookups = {
+    catalog,
+    brands: Object.fromEntries(brandRows.map((x) => [x.id, x.name])),
+    users: Object.fromEntries(userRows.map((x) => [x.id, x.name])),
+    clients: Object.fromEntries(clientRows.map((x) => [x.id, x.name])),
+  };
+  const b = parseBriefLenient(p.brief).data;
+  return briefSections(b, lookups)
+    .filter((sec) => sec.step >= 2)
+    .flatMap((sec) => sec.rows)
+    .filter((r): r is [string, string] => !!r[1]);
+}
+
+/**
+ * Al entrar en una fase, avisa a cada departamento con apartados que arrancan
+ * en ella, con el resumen del proyecto y la información que necesita de otros
+ * departamentos. A Laboratorio / I+D le llega además el coste objetivo de la
+ * fórmula (confidencial: su email solo va a Laboratorio).
+ */
 export async function notifyPhaseSections(projectId: string, phase: number) {
   const p = await loadProjectRow(projectId);
   if (!p) return;
@@ -567,6 +630,9 @@ export async function notifyPhaseSections(projectId: string, phase: number) {
   const starting = cards.filter((c) => c.phase === phase);
   if (!starting.length) return;
   const available = cards.filter((c) => c.completed).map((c) => c.dept.name);
+  const [briefRows, formulaCost] = await Promise.all([briefSummaryRows(p), starting.some((c) => c.dept.key === "idi") ? getFormulaTargetCost(projectId) : null]);
+  const pack = entries.find((e) => e.section.key === "packaging");
+  const specLines = pack ? summarize(pack.section, ctx, pack.data) : [];
   for (const card of starting) {
     const deps = [...new Set(card.entries.flatMap((e) => e.section.dependsOn ?? []))];
     const inputRows: [string, string][] = deps.flatMap((key) => {
@@ -580,7 +646,15 @@ export async function notifyPhaseSections(projectId: string, phase: number) {
     await notifyProjectEvent(projectId, "sheet.phase_opened", {
       title: `Fase «${PHASES[phase]?.name}»: tu departamento tiene trabajo`,
       intro: `El proyecto entra en «${PHASES[phase]?.name}». Actualiza el estado de ${card.dept.name} en la ficha del proyecto conforme avances; al llegar a «${card.steps.find((s) => s.isFinal)?.name ?? "el estado final"}» tu parte queda completada.`,
-      extraRows: [["Departamentos que ya han completado su parte", available.length ? available.join(" · ") : "—"], ...inputRows],
+      extraRows: [
+        ...(card.dept.key === "idi" && formulaCost != null
+          ? ([["Coste objetivo de la fórmula (confidencial)", `${formulaCost.toLocaleString("es-ES", { maximumFractionDigits: 4 })} €/ud`]] as [string, string][])
+          : []),
+        ...briefRows,
+        ...(specLines.length ? ([["Especificaciones cotizadas", specLines.join("\n")]] as [string, string][]) : []),
+        ["Departamentos que ya han completado su parte", available.length ? available.join(" · ") : "—"],
+        ...inputRows,
+      ],
       to: { departmentKeys: [card.dept.key] },
     });
   }

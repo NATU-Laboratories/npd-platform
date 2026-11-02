@@ -43,6 +43,13 @@
       "when": 1790338265813,
       "tag": "0005_loud_arachne",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793623297189,
+      "tag": "0006_jazzy_guardsmen",
+      "breakpoints": true
     }
   ]
 }

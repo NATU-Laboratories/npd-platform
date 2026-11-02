@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { AuthzError, requireActionUser } from "@/lib/server/authz";
 import { logError } from "@/lib/server/errors";
-import { saveSection, SheetError, transitionDept } from "@/lib/server/sheet";
+import { saveSection, setFormulaTargetCost, SheetError, transitionDept } from "@/lib/server/sheet";
 import type { ActionResult } from "./projects";
 
 async function run<T>(name: string, projectId: string, fn: () => Promise<T>): Promise<ActionResult<T>> {
@@ -25,4 +25,9 @@ export async function saveSheetSectionAction(projectId: string, section: string,
 /** Avanza o retrocede el subestado de un departamento, con comentario opcional y campos pedidos por el destino. */
 export async function transitionDeptAction(projectId: string, departmentId: number, targetId: number, comment?: string | null, values?: Record<string, unknown>) {
   return run("transitionDept", projectId, async () => transitionDept(await requireActionUser(), projectId, departmentId, targetId, comment, values));
+}
+
+/** Coste objetivo de la fórmula (confidencial: Laboratorio, gestor de proyectos, admin y Operaciones). */
+export async function saveFormulaCostAction(projectId: string, value: number | null) {
+  return run("saveFormulaCost", projectId, async () => setFormulaTargetCost(await requireActionUser(), projectId, value));
 }

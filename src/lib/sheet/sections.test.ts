@@ -53,3 +53,14 @@ describe("subestados", () => {
     expect(transitionsFrom(steps, steps[3]!)).toEqual({ next: null, backTargets: [steps[1], steps[2]] });
   });
 });
+
+describe("quoteSpecGroups", () => {
+  it("envase/tapón, etiqueta, estuche y caja master, sin proveedores ni archivos", async () => {
+    const { quoteSpecGroups } = await import("./sections");
+    const groups = quoteSpecGroups();
+    expect(groups.map((g) => g.title)).toEqual(["Envase", "Tapón y cierre", "Etiqueta", "Estuche", "Caja master"]);
+    const keys = groups.flatMap((g) => g.fields.map((f) => f.key));
+    expect(keys).toEqual(expect.arrayContaining(["bottleModel", "capModel", "labelPrint", "boxBoard", "boxPrint", "masterUnits"]));
+    expect(keys.some((k) => /Supplier$|Files$/.test(k))).toBe(false);
+  });
+});

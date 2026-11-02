@@ -547,6 +547,20 @@ export const sheetStatus = pgEnum("sheet_status", ["pending", "done", "na"]);
  * (cotización, fórmula, envase, etiqueta, regulatorio, producción).
  * La definición de cada apartado vive en `src/lib/sheet/sections.ts`.
  */
+/**
+ * Datos confidenciales del proyecto, fuera de la ficha y del brief: solo los ven
+ * Laboratorio / I+D, el gestor de proyectos (decisor global), admin y Operaciones.
+ */
+export const projectConfidential = pgTable("project_confidential", {
+  projectId: uuid("project_id")
+    .primaryKey()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  /** Coste objetivo de la fórmula (€/ud). Lo necesita Laboratorio para formular. */
+  formulaTargetCost: numeric("formula_target_cost", { precision: 12, scale: 4 }),
+  updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const projectSheet = pgTable(
   "project_sheet",
   {

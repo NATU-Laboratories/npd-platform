@@ -6,6 +6,7 @@ import type { DeptCard, SheetEntry } from "@/lib/server/sheet";
 import { applicable, checkField, formatValue, resolveFieldRef, sanitizeData, type SheetCtx, type SheetData, type SheetField } from "@/lib/sheet/sections";
 import { cn, formatBytes, formatDate } from "@/lib/utils";
 import { DeptTransition } from "./dept-transition";
+import { FormulaCostBox } from "./formula-cost";
 import { SectionEditor } from "./section-editor";
 
 const SAGE = "bg-[#eef0e6] text-[#56613f] ring-natu-sage";
@@ -189,6 +190,7 @@ export function SheetPanel({
   editable,
   maxMb,
   now,
+  formulaCost,
 }: {
   projectId: string;
   cards: DeptCard[];
@@ -198,6 +200,8 @@ export function SheetPanel({
   editable: Record<string, boolean>;
   maxMb: number;
   now: number;
+  /** Coste objetivo de la fórmula (confidencial); undefined si el usuario no puede verlo. */
+  formulaCost?: number | null;
 }) {
   return (
     <Card id="ficha">
@@ -234,6 +238,8 @@ export function SheetPanel({
                   <StateChip c={c} />
                 </span>
               </div>
+
+              {c.dept.key === "idi" && formulaCost !== undefined && <FormulaCostBox projectId={projectId} value={formulaCost} />}
 
               {c.steps.length ? (
                 <Stepper c={c} now={now} />
