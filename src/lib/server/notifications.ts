@@ -273,6 +273,8 @@ export function notifyProjectEvent(
     message?: { label: string; body: string } | null;
     extraRows?: [string, string][];
     to: { requester?: boolean; accountManager?: boolean; departments?: boolean; departmentKeys?: string[]; deciders?: GateKey };
+    /** Email de quien ha hecho la acción: no se le avisa de lo que acaba de hacer. */
+    exclude?: string | null;
   },
 ) {
   return safely(event, async () => {
@@ -286,10 +288,11 @@ export function notifyProjectEvent(
     }
     if (opts.to.departmentKeys?.length) recipients.push(...(await departmentEmails({ keys: opts.to.departmentKeys })));
     if (opts.to.deciders && p.type) recipients.push(...(await deciderEmails(opts.to.deciders, p.type)));
+    const skip = opts.exclude?.trim().toLowerCase();
     await queueNotification({
       event,
       projectId,
-      recipients,
+      recipients: skip ? recipients.filter((r) => r?.trim().toLowerCase() !== skip) : recipients,
       subject: subjectFor(summary, opts.title),
       html: renderEmail({ title: opts.title, intro: opts.intro, message: opts.message ?? null, extraRows: opts.extraRows, project: summary }),
     });
