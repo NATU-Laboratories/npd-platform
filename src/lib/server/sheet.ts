@@ -59,6 +59,8 @@ export type DeptCard = {
   entries: SheetEntry[];
   /** Fase en la que empieza a trabajar el departamento (su primer apartado). */
   phase: number;
+  /** Fase antes de cuyo cierre debe haber terminado (bloquea el avance a partir de ella). */
+  dueBy: number;
   steps: StepInfo[];
   current: DeptSubstate | null;
   /** Sin fila de progreso: aún no ha empezado (se muestra en el primer subestado). */
@@ -191,6 +193,7 @@ export async function loadSheet(p: Project): Promise<{ ctx: SheetCtx; entries: S
         (current?.isFinal && s.id === current.id ? (prog?.completedAt ?? null) : null),
     }));
     const auto = phase < FIRST_RUNNING_PHASE;
+    const dueBy = Math.max(...deptEntries.map((x) => x.section.dueBy ?? x.section.phase));
     // Proyectos que pasaron P2 antes de sincronizar Comercial: se muestra como completado
     const finalStep = steps.find((s) => s.isFinal) ?? steps.at(-1);
     const pastP2 = p.status === "in_production" || p.phase >= FIRST_RUNNING_PHASE;
@@ -199,6 +202,7 @@ export async function loadSheet(p: Project): Promise<{ ctx: SheetCtx; entries: S
         dept: e.dept,
         entries: deptEntries,
         phase,
+        dueBy,
         steps: stepInfos.map((s) => ({ ...s, doneAt: s.doneAt ?? (s.id === finalStep.id ? (prog?.enteredAt ?? null) : null) })),
         current: finalStep,
         started: true,
@@ -220,6 +224,7 @@ export async function loadSheet(p: Project): Promise<{ ctx: SheetCtx; entries: S
       dept: e.dept,
       entries: deptEntries,
       phase,
+      dueBy,
       steps: stepInfos,
       current,
       started: !!prog,
@@ -273,7 +278,7 @@ export function canEditSection(u: CurrentUser, deptKey: string, deptPhase: numbe
 
 /** Departamentos de fases ya alcanzadas que no han llegado a su subestado final (aviso al avanzar de fase). */
 export function pendingUpTo(cards: DeptCard[], phase: number) {
-  return cards.filter((c) => c.phase <= phase && !c.completed && c.steps.length > 0);
+  return cards.filter((c) => c.dueBy <= phase && !c.completed && c.steps.length > 0);
 }
 
 export async function loadProjectRow(projectId: string, tx: DbOrTx = db) {
@@ -651,7 +656,8 @@ export async function notifyPhaseSections(projectId: string, phase: number) {
           ? ([["Coste objetivo de la fórmula (confidencial)", `${formulaCost.toLocaleString("es-ES", { maximumFractionDigits: 4 })} €/ud`]] as [string, string][])
           : []),
         ...briefRows,
-        ...(specLines.length ? ([["Especificaciones cotizadas", specLines.join("\n")]] as [string, string][]) : []),
+        // Si el departamento depende de «Envase y packaging» ya lo recibe abajo con su estado
+        ...(specLines.length && !deps.includes("packaging") ? ([["Especificaciones cotizadas", specLines.join("\n")]] as [string, string][]) : []),
         ["Departamentos que ya han completado su parte", available.length ? available.join(" · ") : "—"],
         ...inputRows,
       ],

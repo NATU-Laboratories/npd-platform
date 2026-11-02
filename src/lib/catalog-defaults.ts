@@ -201,8 +201,14 @@ export const SUBSTATE_DEFAULTS: Record<string, { name: string; final?: boolean; 
   ],
   operaciones: [
     { name: "Pendiente" },
-    { name: "Compras lanzadas" },
-    { name: "Planificación de producción", returns: ["Compras lanzadas"] },
-    { name: "Listo para producir", final: true, returns: ["Planificación de producción"] },
+    { name: "Planificación de producción" },
+    { name: "Lote piloto", returns: ["Planificación de producción"] },
+    { name: "Listo para producir", final: true, returns: ["Lote piloto"] },
+  ],
+  compras: [
+    { name: "Pendiente" },
+    { name: "Ofertas y muestras de proveedores" },
+    { name: "Pedidos lanzados", returns: ["Ofertas y muestras de proveedores"] },
+    { name: "Materiales recibidos", final: true, returns: ["Pedidos lanzados"] },
   ],
 };
