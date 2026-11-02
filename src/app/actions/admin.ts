@@ -7,6 +7,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import {
   brands,
+  clients,
   departmentMembers,
   departments,
   deptSubstates,
@@ -78,6 +79,34 @@ export async function createUserAction(fd: FormData) {
   const [u] = await db.insert(users).values({ email, name, status: "pending" }).onConflictDoNothing().returning({ id: users.id });
   if (u) await audit(admin.id, "admin.user.created", "user", u.id, { email });
   revalidatePath("/admin/usuarios");
+}
+
+/**
+ * Elimina un usuario sin actividad en proyectos (pruebas, preregistros, altas por
+ * error). Si tiene historial (solicitudes, decisiones, comentarios, archivos,
+ * actividad), no se borra para no perder la trazabilidad: hay que desactivarlo.
+ */
+export async function deleteUserAction(userId: string): Promise<{ ok: boolean; error?: string }> {
+  const admin = await requireAdminAction();
+  const id = z.string().uuid().parse(userId);
+  if (id === admin.id) return { ok: false, error: "No puedes eliminarte a ti mismo" };
+  const [u] = await db.select({ email: users.email, name: users.name }).from(users).where(eq(users.id, id));
+  if (!u) return { ok: false, error: "Usuario no encontrado" };
+  try {
+    await db.transaction(async (tx) => {
+      await tx.update(clients).set({ accountManagerUserId: null }).where(eq(clients.accountManagerUserId, id));
+      await tx.delete(users).where(eq(users.id, id));
+    });
+  } catch (err) {
+    // 23503: violación de clave foránea → el usuario tiene historial en proyectos
+    if ((err as { code?: string; cause?: { code?: string } }).code === "23503" || (err as { cause?: { code?: string } }).cause?.code === "23503") {
+      return { ok: false, error: `${u.name} tiene actividad en proyectos y no se puede eliminar sin perder el historial. Desactívalo en su lugar (Estado → Desactivado).` };
+    }
+    throw err;
+  }
+  await audit(admin.id, "admin.user.deleted", "user", id, { email: u.email, name: u.name });
+  revalidatePath("/admin/usuarios");
+  return { ok: true };
 }
 
 // ─── Vista previa «Ver como» (solo admin, solo lectura) ───────────────────

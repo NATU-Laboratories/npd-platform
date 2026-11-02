@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { db } from "@/db";
 import { clients, files, infoRequests, projects, users } from "@/db/schema";
 import { Wizard } from "@/components/wizard/wizard";
-import { canEditBrief, requireUser } from "@/lib/server/authz";
+import { canEditBrief, canRequestOnBehalf, requireUser } from "@/lib/server/authz";
 import { getActiveUsers, getAllCatalogs, getBrands } from "@/lib/server/catalogs";
 import { getSettings } from "@/lib/server/settings";
 
@@ -53,6 +53,7 @@ export default async function WizardPage({ params }: PageProps<"/solicitudes/[id
           : null
       }
       canAnswer={p.status === "info_requested" && (p.requesterId === u.id || p.accountManagerId === u.id)}
+      canActOnBehalf={canRequestOnBehalf(u)}
     />
   );
 }

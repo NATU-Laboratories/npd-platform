@@ -313,7 +313,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
         return {
           ...base,
           group: "decisiones",
-          text: `envió la solicitud (${diff.code ?? ""})`,
+          text: `envió la solicitud (${diff.code ?? ""})${diff.registeredBy ? ` · registrada por ${diff.registeredBy}` : ""}`,
         };
       default:
         return {

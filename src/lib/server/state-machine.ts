@@ -2,6 +2,7 @@ import "server-only";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db, type Tx } from "@/db";
 import {
+  activityLog,
   clients,
   departments,
   gates,
@@ -9,6 +10,7 @@ import {
   projectCodeCounters,
   projectDepartments,
   projects,
+  users,
   type GateKey,
   type Prepayment,
   type Project,
@@ -19,7 +21,7 @@ import { FIRST_RUNNING_PHASE, LAST_PHASE, PHASES, PREPAYMENT_TYPES } from "@/lib
 import { parseBriefLenient, type BriefData } from "@/lib/brief/schema";
 import { quoteSpecGroups } from "@/lib/sheet/sections";
 import { logActivity, jsonDiff } from "./activity";
-import { canCompleteLabelInfo, canDecideGate, canEditBrief, canManageProject, canRequest, canSeeFormulaCost, canSendQuote, type CurrentUser } from "./authz";
+import { canCompleteLabelInfo, canDecideGate, canEditBrief, canManageProject, canRequest, canRequestOnBehalf, canSeeFormulaCost, canSendQuote, type CurrentUser } from "./authz";
 import { enqueueJob, kickJobs } from "./jobs";
 import { loadProjectRow, loadSheet, notifyPhaseSections, packagingSummary, setFormulaTargetCost, notifyProjectStarted, patchSheetSection, pendingUpTo, syncValidationDepts } from "./sheet";
 import {
@@ -240,7 +242,19 @@ async function nextCode(tx: Tx, type: "PL" | "MP" | "MDD") {
 }
 
 /** Paso 5: envío. Estado → Solicitado, código, carpeta SharePoint, notificación. */
-export async function submitProject(u: CurrentUser, projectId: string) {
+/**
+ * Envía el borrador. Admin y gestor de proyectos pueden enviarlo en nombre de otro
+ * usuario (`onBehalfOf`): queda exactamente como si lo hubiera creado él (solicitante,
+ * avisos, P2…) y la actividad anota quién lo registró.
+ */
+export async function submitProject(u: CurrentUser, projectId: string, onBehalfOf?: string | null) {
+  let behalf: { id: string; name: string } | null = null;
+  if (onBehalfOf && onBehalfOf !== u.id) {
+    if (!canRequestOnBehalf(u)) throw new ActionError("Solo el admin y el gestor de proyectos pueden crear solicitudes en nombre de otro usuario");
+    const [t] = await db.select({ id: users.id, name: users.name, status: users.status }).from(users).where(eq(users.id, onBehalfOf));
+    if (!t || t.status !== "active") throw new ActionError("El usuario elegido no existe o no está activo");
+    behalf = { id: t.id, name: t.name };
+  }
   const result = await db.transaction(async (tx) => {
     const p = await loadForUpdate(tx, projectId);
     if (p.requesterId !== u.id) throw new ActionError("Solo el autor puede enviar el borrador");
@@ -257,10 +271,27 @@ export async function submitProject(u: CurrentUser, projectId: string) {
     const now = new Date();
     await tx
       .update(projects)
-      .set({ ...columnsFromBrief(brief), brief, code, status: "submitted", requestedAt: now, updatedAt: now })
+      .set({ ...columnsFromBrief(brief), brief, code, status: "submitted", requestedAt: now, updatedAt: now, ...(behalf ? { requesterId: behalf.id } : {}) })
       .where(eq(projects.id, projectId));
     await tx.insert(gates).values({ projectId, gate: "G1", status: "pending" }).onConflictDoNothing();
-    await logActivity({ projectId, actorId: u.id, action: "project.submitted", entity: "project", entityId: projectId, diff: { code } }, tx);
+    if (behalf) {
+      // El alta del borrador también pasa a nombre del solicitante
+      await tx
+        .update(activityLog)
+        .set({ actorId: behalf.id, diff: { registeredBy: u.name } })
+        .where(and(eq(activityLog.projectId, projectId), eq(activityLog.action, "project.created")));
+    }
+    await logActivity(
+      {
+        projectId,
+        actorId: behalf?.id ?? u.id,
+        action: "project.submitted",
+        entity: "project",
+        entityId: projectId,
+        diff: { code, ...(behalf ? { registeredBy: u.name } : {}) },
+      },
+      tx,
+    );
     const jobId = await enqueueJob("sharepoint.provision", { projectId }, tx);
     return { code, jobId };
   });
