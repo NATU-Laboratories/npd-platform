@@ -526,6 +526,8 @@ export async function decideBudget(u: CurrentUser, projectId: string, decision: 
               ? { label: "Detalle", body: [ppText, decision.comment?.trim()].filter(Boolean).join("\n") }
               : null,
             to: { requester: true, accountManager: true, departments: true },
+            // Quien registra la aprobación (normalmente el comercial solicitante) no necesita el aviso
+            exclude: u.email,
           });
           await notifyPhaseSections(projectId, FIRST_RUNNING_PHASE);
         };
@@ -543,6 +545,7 @@ export async function decideBudget(u: CurrentUser, projectId: string, decision: 
             intro: "El proyecto vuelve a la fase de Cotización.",
             message: { label: "Cambios solicitados", body: reason },
             to: { requester: true, accountManager: true, departments: true },
+            exclude: u.email,
           });
       }
       case "reject": {
