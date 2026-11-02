@@ -148,6 +148,7 @@ export const FILE_TAGS = {
   arte_final: "Arte final",
   regulatorio: "Documentación regulatoria",
   escandallo: "Escandallo",
+  compras: "Pedido / compras",
   blacklist: "Blacklist",
   otro: "Otro",
 } as const;

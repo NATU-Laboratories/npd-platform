@@ -42,6 +42,8 @@ export type SheetSection = {
   prefill?: (c: SheetCtx) => Record<string, unknown>;
   /** Apartados cuya información necesita este (se le envía al abrirse su fase). */
   dependsOn?: string[];
+  /** Fase hasta la que puede seguir trabajando: no bloquea el avance de fases anteriores (por defecto, su propia fase). */
+  dueBy?: number;
 };
 
 /** Contexto del proyecto necesario para evaluar la ficha. */
@@ -494,16 +496,39 @@ export const SHEET_SECTIONS: SheetSection[] = [
     ],
   },
   {
+    key: "aprovisionamiento",
+    title: "Aprovisionamiento",
+    description: "Compra de frascos, tapones, válvulas, etiquetas, estuches y cajas master para el proyecto.",
+    dept: "compras",
+    phase: 3,
+    // Empieza con Laboratorio pero solo hace falta terminar antes de pasar a producción
+    dueBy: 5,
+    dependsOn: ["packaging", "comercial"],
+    groups: [
+      {
+        title: "Pedidos de materiales",
+        fields: [
+          { key: "suppliersLeadTimes", label: "Proveedores y plazos por componente", type: "textarea", placeholder: "Frasco: proveedor, plazo… · Tapón: … · Etiqueta: … · Estuche: … · Caja master: …" },
+          { key: "ordersPlaced", label: "Pedidos lanzados", type: "bool" },
+          { key: "orderDate", label: "Fecha de pedido", type: "date" },
+          { key: "expectedArrival", label: "Llegada prevista de materiales", type: "date" },
+          { key: "materialsReceived", label: "Materiales recibidos", type: "bool" },
+          { key: "notes", label: "Notas", type: "textarea" },
+        ],
+      },
+      { fields: [{ key: "purchaseFiles", label: "Pedidos y confirmaciones de proveedores", type: "files", tag: "compras" }] },
+    ],
+  },
+  {
     key: "produccion",
     title: "Preparación para producción",
-    description: "Materiales pedidos, escandallo final y fecha prevista de fabricación.",
+    description: "Escandallo final, lote piloto y fecha prevista de fabricación.",
     dept: "operaciones",
     phase: 5,
     groups: [
       {
         fields: [
           { key: "productionDate", label: "Fecha prevista de producción", type: "date" },
-          { key: "materialsOrdered", label: "Materiales y envases pedidos", type: "bool" },
           { key: "pilotApproved", label: "Lote piloto validado", type: "bool" },
           { key: "costFiles", label: "Escandallo final", type: "files", tag: "escandallo" },
           { key: "notes", label: "Notas", type: "textarea" },
