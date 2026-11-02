@@ -140,7 +140,6 @@ export const DEPARTMENT_DEFAULTS: { key: string; name: string; color: string }[]
   { key: "operaciones", name: "Operaciones", color: "#65a30d" },
   { key: "compras", name: "Compras / Aprovisionamiento", color: "#ca8a04" },
   { key: "produccion", name: "Producción", color: "#475569" },
-  { key: "almacen", name: "Almacén", color: "#78716c" },
   { key: "comercial", name: "Comercial", color: "#2563eb" },
   { key: "direccion", name: "Dirección", color: "#111827" },
 ];
