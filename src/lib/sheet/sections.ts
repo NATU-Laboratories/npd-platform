@@ -281,7 +281,7 @@ export const SHEET_SECTIONS: SheetSection[] = [
     groups: [
       {
         fields: [
-          { key: "productName", label: "Nombre comercial (naming)", type: "text", hint: "Precargado con el naming definitivo del comercial (o el nombre del proyecto)." },
+          { key: "productName", label: "Nombre comercial (naming)", type: "text", hint: "Naming del producto con el que se venderá. Se precarga con el naming definitivo que aporta el comercial." },
           { key: "fragranceName", label: "Nombre de la fragancia", type: "text", hint: "Si es distinto del nombre comercial." },
         ],
       },
@@ -328,7 +328,8 @@ export const SHEET_SECTIONS: SheetSection[] = [
         ],
       },
     ],
-    prefill: (c) => ({ productName: c.brief.finalName ?? c.brief.name ?? undefined }),
+    // Solo el naming definitivo del comercial: el nombre del proyecto es provisional y no es el naming
+    prefill: (c) => ({ productName: c.brief.finalName ?? undefined }),
   },
   {
     key: "regulatorio",
