@@ -9,7 +9,7 @@ import { AdvanceDialog, BudgetDialog, PrepaymentReceivedDialog, QuoteDialog } fr
 import { NeededBySignal } from "@/components/needed-by";
 import { SheetPanel, SheetSummary } from "@/components/sheet/sheet-panel";
 import { Uploader } from "@/components/uploader";
-import { Badge, DeptChip, StatusBadge } from "@/components/ui/badge";
+import { Badge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { briefSections, formatFormat, type Lookups } from "@/lib/brief/display";
@@ -527,15 +527,6 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
               );
             })}
           </ol>
-          {d.departments.length > 0 && (
-            <div className="mt-4 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-3">
-              <span className="mr-1 text-xs text-slate-500">Departamentos implicados:</span>
-              {d.departments.map((x) => (
-                <DeptChip key={x.id} name={x.name} color={x.color} />
-              ))}
-              {d.templateName && <span className="ml-2 text-xs text-slate-400">Plantilla: {d.templateName}</span>}
-            </div>
-          )}
         </CardBody>
       </Card>
 
