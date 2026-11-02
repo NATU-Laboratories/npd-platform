@@ -32,6 +32,8 @@ export type WizardProps = {
   settings: { completeness_threshold: number; max_file_mb: number };
   infoRequest: { message: string; fieldsMissing: string[]; requestedBy: string; requestedAt: string } | null;
   canAnswer: boolean;
+  /** Admin y gestor de proyectos: pueden enviar la solicitud en nombre de otro usuario. */
+  canActOnBehalf?: boolean;
 };
 
 const STEP_TITLES = ["Datos básicos", "Cliente y mercado", "Producto", "Adjuntos y notas", "Resumen y envío"];
@@ -110,6 +112,8 @@ export function Wizard(props: WizardProps) {
     clients: Object.fromEntries(Object.values(clients).map((c) => [c.id, c.name])),
   };
 
+  const [onBehalfOf, setOnBehalfOf] = React.useState(props.requester.id);
+
   async function handleSubmit() {
     setShowErrors(true);
     if (Object.keys(reqErrors).length) {
@@ -119,7 +123,7 @@ export function Wizard(props: WizardProps) {
     setSubmitting(true);
     try {
       if (!(await persist())) return;
-      const res = await submitAction(project.id);
+      const res = await submitAction(project.id, onBehalfOf !== props.requester.id ? onBehalfOf : null);
       if (!res.ok) {
         setServerErrors(res.fieldErrors ?? {});
         toast.error(res.error);
@@ -560,6 +564,23 @@ export function Wizard(props: WizardProps) {
 
           {step === 5 && (
             <section className="flex flex-col gap-5">
+              {isDraft && props.canActOnBehalf && (
+                <div className="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm">
+                  <Field
+                    label="Solicitante"
+                    htmlFor="on-behalf"
+                    hint="Puedes darla de alta en nombre de otra persona: quedará exactamente como si la hubiera creado ella (solicitante, avisos y P2). En la actividad constará que la registraste tú."
+                  >
+                    <Select id="on-behalf" value={onBehalfOf} onChange={(e) => setOnBehalfOf(e.target.value)} className="max-w-sm">
+                      {props.users.map((x) => (
+                        <option key={x.id} value={x.id}>
+                          {x.id === props.requester.id ? `${x.name} (yo)` : x.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                </div>
+              )}
               {Object.keys(reqErrors).length > 0 && (
                 <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
                   <p className="font-semibold">Faltan campos obligatorios para enviar:</p>

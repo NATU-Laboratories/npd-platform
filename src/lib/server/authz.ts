@@ -142,7 +142,12 @@ export async function requireAdminAction() {
 
 /** ¿Puede crear solicitudes? */
 export function canRequest(u: CurrentUser) {
-  return hasRole(u, "requester", "admin");
+  return hasRole(u, "requester", "admin", "global_decider");
+}
+
+/** Admin y gestor de proyectos pueden dar de alta solicitudes en nombre de otro usuario. */
+export function canRequestOnBehalf(u: CurrentUser) {
+  return isAdmin(u) || isGlobalDecider(u);
 }
 
 /**

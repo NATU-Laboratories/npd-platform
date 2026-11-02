@@ -54,10 +54,10 @@ export async function saveBriefAction(projectId: string, brief: unknown) {
   });
 }
 
-export async function submitAction(projectId: string) {
+export async function submitAction(projectId: string, onBehalfOf?: string | null) {
   return run("submit", async () => {
     const u = await requireActionUser();
-    const code = await submitProject(u, projectId);
+    const code = await submitProject(u, projectId, onBehalfOf);
     revalidatePath("/");
     return { code };
   });
