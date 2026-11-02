@@ -521,6 +521,35 @@ export async function transitionDept(
  * Al entrar en una fase, avisa a cada departamento con apartados que arrancan
  * en ella, con el resumen de la información que necesita de otros departamentos.
  */
+/**
+ * Al aprobar P2: los departamentos implicados que entran más adelante (Diseño,
+ * Operaciones, Compras…) reciben solo un aviso de que el proyecto está en marcha.
+ * Los que empiezan ya en Desarrollo reciben el de notifyPhaseSections.
+ */
+export async function notifyProjectStarted(projectId: string) {
+  const [starts, involved] = await Promise.all([
+    deptStartPhases(),
+    db
+      .select({ key: departments.key, name: departments.name })
+      .from(projectDepartments)
+      .innerJoin(departments, eq(departments.id, projectDepartments.departmentId))
+      .where(eq(projectDepartments.projectId, projectId)),
+  ]);
+  for (const d of involved) {
+    if (!d.key) continue;
+    const start = starts[d.key];
+    if (start != null && start <= FIRST_RUNNING_PHASE) continue; // Comercial ya lo sabe; Desarrollo recibe «tienes trabajo»
+    await notifyProjectEvent(projectId, "project.started", {
+      title: "Nuevo proyecto en marcha",
+      intro:
+        start != null
+          ? `El cliente ha aprobado el presupuesto y el proyecto arranca en «${PHASES[FIRST_RUNNING_PHASE]?.name}». ${d.name} entra más adelante, en la fase ${start} · ${PHASES[start]?.name}: os avisaremos cuando os toque.`
+          : `El cliente ha aprobado el presupuesto y el proyecto arranca en «${PHASES[FIRST_RUNNING_PHASE]?.name}». ${d.name} está implicado en el proyecto; de momento no tenéis nada que hacer.`,
+      to: { departmentKeys: [d.key] },
+    });
+  }
+}
+
 export async function notifyPhaseSections(projectId: string, phase: number) {
   const p = await loadProjectRow(projectId);
   if (!p) return;
