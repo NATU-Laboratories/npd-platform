@@ -48,6 +48,10 @@ function Rich({ text }: { text: string }) {
             <span aria-hidden>•</span>
             <span>{inline(l.replace(/^\s*[-*•]\s+/, ""), String(idx))}</span>
           </p>
+        ) : /^\s*>\s?/.test(l) ? (
+          <p key={idx} className="border-l-2 border-natu-sage pl-2 italic text-slate-600">
+            {inline(l.replace(/^\s*>\s?/, ""), String(idx))}
+          </p>
         ) : l.trim() ? (
           <p key={idx}>{inline(l.replace(/^#+\s*/, ""), String(idx))}</p>
         ) : null,
