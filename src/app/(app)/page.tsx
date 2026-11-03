@@ -7,7 +7,7 @@ import { DeptBoard } from "@/components/dashboard/dept-board";
 import { Filters } from "@/components/dashboard/filters";
 import { StatusBadge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { requireUser } from "@/lib/server/authz";
+import { hasRole, requireUser } from "@/lib/server/authz";
 import { dashboardStats, filterOptions, listProjects, myDrafts, PAGE_SIZE, pendingNewRequests, type ProjectFilters } from "@/lib/server/dashboard";
 import { getSettings } from "@/lib/server/settings";
 import { CATEGORY_LABEL, PHASES, PRIORITY_COLOR, PRIORITY_LABEL, stageOf } from "@/lib/labels";
@@ -15,6 +15,27 @@ import { cn, formatDate } from "@/lib/utils";
 import { NeededBySignal } from "@/components/needed-by";
 
 export const metadata = { title: "Panel" };
+
+/** Saludo según la hora en España. */
+function greeting() {
+  const h = Number(new Date().toLocaleString("en-GB", { timeZone: "Europe/Madrid", hour: "2-digit", hour12: false }));
+  return h < 6 ? "Buenas noches" : h < 14 ? "Buenos días" : h < 21 ? "Buenas tardes" : "Buenas noches";
+}
+
+/** Frase del día (cambia cada día, igual para todos). */
+const MOTTOS = [
+  "Cada gran producto empezó como una buena idea. Vamos a por la siguiente.",
+  "Lo que hoy es un brief, mañana estará en el lineal.",
+  "Pequeños avances cada día hacen grandes lanzamientos.",
+  "Hoy es un buen día para dar vida a un nuevo producto.",
+  "Detrás de cada fragancia hay un equipo que la hace posible. Gracias por ser parte.",
+  "Un paso más cerca de producción. ¡Seguimos!",
+  "Las mejores ideas se convierten en productos cuando trabajamos juntos.",
+];
+function dailyMotto() {
+  const day = Math.floor(Date.now() / 86_400_000);
+  return MOTTOS[day % MOTTOS.length];
+}
 
 function sortHref(f: ProjectFilters, key: string) {
   const sp = new URLSearchParams(Object.entries(f).filter(([, v]) => v) as [string, string][]);
@@ -63,7 +84,9 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Nuevos desarrollos</h1>
-          <p className="text-sm text-slate-500">Hola, {u.name.split(" ")[0]}. Los indicadores reflejan los filtros activos.</p>
+          <p className="text-sm text-slate-500">
+            {greeting()}, {u.name.split(" ")[0]}. {dailyMotto()}
+          </p>
         </div>
       </div>
 
@@ -133,7 +156,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
       )}
 
       <Suspense>
-        <Filters {...options} />
+        <Filters {...options} showDepartment={hasRole(u, "admin", "global_decider")} />
       </Suspense>
 
       <DashboardKpis
