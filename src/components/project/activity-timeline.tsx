@@ -25,8 +25,8 @@ const GROUPS: [ActivityItem["group"] | "todo", string][] = [
 const DOT: Record<ActivityItem["group"], string> = {
   decisiones: "bg-brand-600",
   info: "bg-amber-500",
-  comentarios: "bg-sky-500",
-  ediciones: "bg-violet-500",
+  comentarios: "bg-natu-salmon",
+  ediciones: "bg-natu-peach",
   ficha: "bg-[#7f8f63]",
   archivos: "bg-slate-400",
   otros: "bg-slate-300",
@@ -35,17 +35,21 @@ const DOT: Record<ActivityItem["group"], string> = {
 /** Timeline único y filtrable de actividad (§7.2 punto 6). */
 export function ActivityTimeline({ items }: { items: ActivityItem[] }) {
   const [filter, setFilter] = React.useState<ActivityItem["group"] | "todo">("todo");
-  const shown = filter === "todo" ? items : items.filter((i) => i.group === filter);
+  const [limit, setLimit] = React.useState(12);
+  const all = filter === "todo" ? items : items.filter((i) => i.group === filter);
+  const shown = all.slice(0, limit);
   return (
     <div>
-      <div className="mb-4 flex flex-wrap gap-1.5" role="tablist" aria-label="Filtrar actividad">
+      <div className="mb-4 flex flex-wrap gap-1.5" role="group" aria-label="Filtrar actividad">
         {GROUPS.map(([k, l]) => (
           <button
             key={k}
             type="button"
-            role="tab"
-            aria-selected={filter === k}
-            onClick={() => setFilter(k)}
+            aria-pressed={filter === k}
+            onClick={() => {
+              setFilter(k);
+              setLimit(12);
+            }}
             className={cn("rounded-full px-2.5 py-1 text-xs ring-1", filter === k ? "bg-slate-900 text-white ring-slate-900" : "bg-white text-slate-600 ring-slate-200")}
           >
             {l}
@@ -65,7 +69,7 @@ export function ActivityTimeline({ items }: { items: ActivityItem[] }) {
                 {i.changes.map((c) => (
                   <li key={c.field}>
                     <span className="font-medium text-slate-700">{c.field}:</span> <span className="line-through decoration-rose-400">{c.from || "∅"}</span> →{" "}
-                    <span className="text-emerald-800">{c.to || "∅"}</span>
+                    <span className="text-[#56613f]">{c.to || "∅"}</span>
                   </li>
                 ))}
               </ul>
@@ -77,6 +81,11 @@ export function ActivityTimeline({ items }: { items: ActivityItem[] }) {
         ))}
         {!shown.length && <li className="ml-4 text-sm text-slate-400">Sin actividad</li>}
       </ol>
+      {all.length > shown.length && (
+        <button type="button" onClick={() => setLimit((l) => l + 20)} className="ml-6 text-xs font-medium text-brand-600 hover:text-brand-800">
+          Ver más ({all.length - shown.length})
+        </button>
+      )}
     </div>
   );
 }

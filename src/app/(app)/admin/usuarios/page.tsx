@@ -131,10 +131,10 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/usua
                   </div>
                 </Td>
                 <Td>
-                  <div className="grid max-h-32 grid-cols-1 gap-0.5 overflow-y-auto pr-2">
+                  <div className="grid max-h-36 min-w-48 grid-cols-1 gap-0.5 overflow-y-auto pr-2">
                     {depts.map((d) => (
-                      <label key={d.id} className="flex items-center gap-1.5 whitespace-nowrap text-xs">
-                        <input type="checkbox" name="departments" value={d.id} form={formId} defaultChecked={ds.includes(d.id)} className="accent-brand-600" /> {d.name}
+                      <label key={d.id} className="flex items-start gap-1.5 text-xs leading-snug">
+                        <input type="checkbox" name="departments" value={d.id} form={formId} defaultChecked={ds.includes(d.id)} className="mt-0.5 accent-brand-600" /> {d.name}
                       </label>
                     ))}
                   </div>
@@ -147,7 +147,7 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/usua
                 </Td>
                 <Td className="whitespace-nowrap text-xs text-slate-500">{formatDate(u.lastLoginAt, true)}</Td>
                 <Td>
-                  <Button size="sm" type="submit" form={formId}>
+                  <Button size="sm" variant="secondary" type="submit" form={formId}>
                     Guardar
                   </Button>
                 </Td>
@@ -158,8 +158,8 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/usua
       </Table>
       <form action={createUserAction} className="mt-6 flex flex-wrap items-end gap-2 rounded-xl border border-slate-200 bg-white p-4">
         <p className="w-full text-sm font-medium">Pre-registrar usuario</p>
-        <Input name="name" placeholder="Nombre" required className="w-56" />
-        <Input name="email" type="email" placeholder="email@empresa.com (opcional)" className="w-64" />
+        <Input name="name" placeholder="Nombre…" required className="w-56" />
+        <Input name="email" type="email" placeholder="email@empresa.com (opcional)…" className="w-64" />
         <Button type="submit" variant="secondary">
           Añadir
         </Button>

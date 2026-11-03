@@ -13,7 +13,8 @@ export function InfoTip({ text, className, align = "center", onDark = false }: {
       <span
         aria-hidden
         className={cn(
-          "pointer-events-none absolute top-full z-40 mt-2 w-64 rounded-md px-3 py-2 text-left text-xs leading-snug font-normal tracking-normal normal-case opacity-0 shadow-lg transition-opacity group-focus-within/tip:opacity-100 group-hover/tip:opacity-100",
+          // Oculto (sin ocupar sitio) hasta pasar el ratón o enfocar: así no desborda la página en el móvil
+          "pointer-events-none absolute top-full z-40 mt-2 hidden w-64 max-w-[calc(100vw-2rem)] rounded-md px-3 py-2 text-left text-xs leading-snug font-normal tracking-normal normal-case shadow-lg group-focus-within/tip:block group-hover/tip:block",
           onDark ? "bg-white text-natu-dark ring-1 ring-slate-200" : "bg-natu-dark text-white",
           align === "end" ? "right-0" : "left-1/2 -translate-x-1/2",
         )}
@@ -95,7 +96,7 @@ export function DashboardKpis(k: KpiData) {
               <InfoTip text={`Proyectos abiertos cuya fecha de entrega requerida vence en menos de ${k.riskDays} días o ya ha vencido. Pulsa para verlos.`} />
             </h2>
             <p className={cn("mt-1 flex items-center gap-2 text-4xl font-black tabular-nums", k.atRisk > 0 ? "text-[#b0675b]" : "text-natu-dark")}>
-              {k.atRisk > 0 ? <AlertTriangle className="size-7" aria-hidden /> : <CheckCircle2 className="size-7 text-emerald-600" aria-hidden />}
+              {k.atRisk > 0 ? <AlertTriangle className="size-7" aria-hidden /> : <CheckCircle2 className="size-7 text-brand-400" aria-hidden />}
               {k.atRisk}
             </p>
           </div>
@@ -159,21 +160,6 @@ export function DashboardKpis(k: KpiData) {
         </div>
       </div>
 
-      <p className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[11px] text-slate-500">
-        <span className="font-semibold uppercase tracking-[0.14em] text-slate-400">Leyenda</span>
-        <span>
-          <b className="font-semibold text-slate-700">P1</b> · Paso 1: aprobación de la solicitud (Solicitud → Cotización)
-        </span>
-        <span>
-          <b className="font-semibold text-slate-700">P2</b> · Paso 2: aprobación del presupuesto por el cliente (Valoración → Desarrollo)
-        </span>
-        <span>
-          <b className="font-semibold text-slate-700">Validación</b> · Solicitud, cotización y valoración con cliente
-        </span>
-        <span>
-          <b className="font-semibold text-slate-700">En curso</b> · Desarrollo, diseño y AAFF, preparación para producción (tras P2)
-        </span>
-      </p>
     </section>
   );
 }

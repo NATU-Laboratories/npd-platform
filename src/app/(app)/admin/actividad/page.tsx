@@ -24,7 +24,7 @@ export default async function ActivityPage({ searchParams }: PageProps<"/admin/a
         }
       />
       <form className="mb-4 flex flex-wrap gap-2">
-        <Input name="q" defaultValue={f.q} placeholder="Código de proyecto o texto" className="h-8 w-56 text-xs" />
+        <Input name="q" defaultValue={f.q} placeholder="Código de proyecto o texto…" className="h-8 w-56 text-xs" />
         <Select name="action" defaultValue={f.action ?? ""} className="h-8 w-auto text-xs">
           <option value="">Todas las acciones</option>
           {["project", "gate", "info", "comment", "file", "admin", "sharepoint"].map((a) => (

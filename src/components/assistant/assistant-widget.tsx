@@ -178,7 +178,7 @@ export function AssistantWidget({ firstName }: { firstName: string }) {
         <button
           type="button"
           onClick={openPanel}
-          className="fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full bg-natu-dark px-4 py-3 text-sm font-semibold text-white shadow-lg ring-2 ring-natu-sage hover:bg-brand-700"
+          className="fixed bottom-4 right-4 z-30 flex items-center gap-2 rounded-full bg-natu-dark p-3 text-sm font-semibold text-white shadow-lg ring-2 ring-natu-sage hover:bg-brand-700 sm:bottom-5 sm:right-5 sm:px-3.5 sm:py-2.5"
           aria-label="Abrir Alexia, el asistente virtual"
         >
           <MessageCircle className="size-5" aria-hidden /> <span className="hidden sm:inline">Alexia</span>

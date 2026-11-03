@@ -5,7 +5,7 @@ export function NeededBySignal({ date, riskDays, status, compact }: { date: stri
   const d = daysUntil(date);
   if (d === null) return <span className="text-slate-400">—</span>;
   const closed = !["submitted", "info_requested", "in_progress", "paused"].includes(status);
-  const tone = closed ? "bg-slate-300" : d < 0 ? "bg-rose-500" : d <= riskDays ? "bg-amber-400" : "bg-emerald-500";
+  const tone = closed ? "bg-slate-300" : d < 0 ? "bg-rose-500" : d <= riskDays ? "bg-amber-400" : "bg-brand-400";
   const text = closed ? "" : d < 0 ? `vencida hace ${-d} d` : d === 0 ? "hoy" : `en ${d} d`;
   const textCls = cn("text-xs", d < 0 ? "text-rose-600" : d <= riskDays ? "text-amber-700" : "text-slate-400");
   if (compact) {

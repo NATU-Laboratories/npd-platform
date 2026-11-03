@@ -48,7 +48,7 @@ export function ClientPicker({
           </button>
         </div>
         <div className="grid gap-2 sm:grid-cols-3">
-          <Input id={id} placeholder="Nombre *" value={newClient.name} onChange={(e) => onNewClient({ ...newClient, name: e.target.value })} aria-label="Nombre del cliente" />
+          <Input id={id} placeholder="Nombre del cliente…" value={newClient.name} onChange={(e) => onNewClient({ ...newClient, name: e.target.value })} aria-label="Nombre del cliente" />
           <select
             className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm"
             value={newClient.country ?? ""}

@@ -1,5 +1,5 @@
 "use client";
-import { Search, X } from "lucide-react";
+import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import * as React from "react";
 import { Input, Select } from "@/components/ui/form";
@@ -75,6 +75,9 @@ export function Filters({
   );
 
   const active = [...sp.keys()].filter((k) => !["sort", "dir", "page"].includes(k)).length > 0;
+  const ADVANCED = ["type", "brand", "category", "status", "phase", "requester", "department", "from", "to"];
+  const advancedCount = ADVANCED.filter((k) => sp.get(k)).length;
+  const [more, setMore] = React.useState(advancedCount > 0);
 
   return (
     <div className="flex flex-col gap-2">
@@ -86,13 +89,26 @@ export function Filters({
         {toggle("action", "Requieren mi acción")}
         {toggle("mine", "Mis proyectos")}
         {toggle("risk", "Solo en riesgo")}
+        <button
+          type="button"
+          onClick={() => setMore((m) => !m)}
+          aria-expanded={more || advancedCount > 0}
+          aria-controls="more-filters"
+          className={cn(
+            "inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-xs font-medium ring-1",
+            advancedCount ? "bg-brand-50 text-slate-800 ring-brand-400" : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50",
+          )}
+        >
+          <SlidersHorizontal className="size-3.5" aria-hidden /> Más filtros{advancedCount ? ` (${advancedCount})` : ""}
+          <ChevronDown className={cn("size-3.5 transition-transform", (more || advancedCount > 0) && "rotate-180")} aria-hidden />
+        </button>
         {active && (
           <button type="button" onClick={() => router.replace(pathname)} className="inline-flex h-8 items-center gap-1 px-2 text-xs text-slate-500 hover:text-slate-800">
             <X className="size-3.5" /> Limpiar
           </button>
         )}
       </div>
-      <div className="flex flex-wrap items-center gap-2">
+      <div id="more-filters" className={cn("flex-wrap items-center gap-2", more || advancedCount > 0 ? "flex" : "hidden")}>
         {sel(
           "type",
           "Tipo",

@@ -200,11 +200,11 @@ export function Wizard(props: WizardProps) {
             <div className="flex-1">
               <div className="flex justify-between text-[11px] text-slate-500">
                 <span>Completitud del brief</span>
-                <span className={cn("font-semibold", completeness >= props.settings.completeness_threshold ? "text-emerald-700" : "text-amber-700")}>{completeness}%</span>
+                <span className={cn("font-semibold", completeness >= props.settings.completeness_threshold ? "text-[#56613f]" : "text-amber-700")}>{completeness}%</span>
               </div>
               <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuenow={completeness} aria-valuemin={0} aria-valuemax={100} aria-label="Completitud">
                 <div
-                  className={cn("h-full rounded-full transition-all", completeness >= props.settings.completeness_threshold ? "bg-emerald-500" : "bg-amber-400")}
+                  className={cn("h-full rounded-full transition-all", completeness >= props.settings.completeness_threshold ? "bg-brand-400" : "bg-amber-400")}
                   style={{ width: `${completeness}%` }}
                 />
               </div>
@@ -282,7 +282,7 @@ export function Wizard(props: WizardProps) {
                 />
               </Field>
               <Field label="Nombre provisional del proyecto" htmlFor="name" required error={errorFor("name")} highlight={hl("name")} className="sm:col-span-2">
-                <Input id="name" value={brief.name ?? ""} onChange={(e) => set("name", e.target.value)} placeholder="p. ej. Body mist verano cítrico" maxLength={200} />
+                <Input id="name" value={brief.name ?? ""} onChange={(e) => set("name", e.target.value)} placeholder="p. ej. Body mist verano cítrico…" maxLength={200} />
               </Field>
               <Field label="Fecha de entrega requerida" htmlFor="neededBy" required error={errorFor("neededBy")} highlight={hl("neededBy")}>
                 <Input id="neededBy" type="date" value={brief.neededBy ?? ""} onChange={(e) => set("neededBy", e.target.value)} />
@@ -308,7 +308,7 @@ export function Wizard(props: WizardProps) {
                 </Select>
               </Field>
               <Field label="Detalle del motivo" htmlFor="neededByReasonText" required={brief.neededByReason === "otro"} error={errorFor("neededByReasonText")}>
-                <Input id="neededByReasonText" value={brief.neededByReasonText ?? ""} onChange={(e) => set("neededByReasonText", e.target.value)} placeholder="p. ej. Feria Cosmoprof Bolonia" />
+                <Input id="neededByReasonText" value={brief.neededByReasonText ?? ""} onChange={(e) => set("neededByReasonText", e.target.value)} placeholder="p. ej. Feria Cosmoprof Bolonia…" />
               </Field>
             </section>
           )}
@@ -463,7 +463,7 @@ export function Wizard(props: WizardProps) {
                 </Field>
                 {parsed.category === "ambient" && (
                   <Field label="Duración / rendimiento deseado" htmlFor="performance" recommended highlight={hl("performance")}>
-                    <Input id="performance" value={brief.performance ?? ""} onChange={(e) => set("performance", e.target.value)} placeholder="p. ej. 8 semanas" />
+                    <Input id="performance" value={brief.performance ?? ""} onChange={(e) => set("performance", e.target.value)} placeholder="p. ej. 8 semanas…" />
                   </Field>
                 )}
               </div>
@@ -472,13 +472,13 @@ export function Wizard(props: WizardProps) {
                 <div className="grid gap-5 sm:grid-cols-2">
                   <Field label="Función y claims deseados" recommended highlight={hl("functions")} className="sm:col-span-2">
                     <ChipGroup options={opts("cosmetic_function").map((o) => ({ value: o.label, label: o.label }))} value={brief.functions ?? []} onChange={(v) => set("functions", v)} ariaLabel="Funciones" />
-                    <Input className="mt-2" value={brief.claimsText ?? ""} onChange={(e) => set("claimsText", e.target.value)} placeholder="Otros claims (texto libre)" aria-label="Otros claims" />
+                    <Input className="mt-2" value={brief.claimsText ?? ""} onChange={(e) => set("claimsText", e.target.value)} placeholder="Otros claims (texto libre)…" aria-label="Otros claims" />
                   </Field>
                   <Field label="Tipo de piel / cabello" htmlFor="skin" recommended highlight={hl("skinHairType")}>
-                    <Input id="skin" value={brief.skinHairType ?? ""} onChange={(e) => set("skinHairType", e.target.value)} placeholder="p. ej. piel sensible" />
+                    <Input id="skin" value={brief.skinHairType ?? ""} onChange={(e) => set("skinHairType", e.target.value)} placeholder="p. ej. piel sensible…" />
                   </Field>
                   <Field label="Textura deseada" htmlFor="texture" recommended highlight={hl("texture")}>
-                    <Input id="texture" value={brief.texture ?? ""} onChange={(e) => set("texture", e.target.value)} placeholder="p. ej. ligera, no grasa" />
+                    <Input id="texture" value={brief.texture ?? ""} onChange={(e) => set("texture", e.target.value)} placeholder="p. ej. ligera, no grasa…" />
                   </Field>
                   <Field label="Público" recommended highlight={hl("audience")}>
                     <ChipGroup
@@ -734,7 +734,7 @@ function SaveIndicator({ state, dirty, isDraft }: { state: SaveState; dirty: boo
     );
   if (state === "saved" && !dirty)
     return (
-      <span className="flex items-center gap-1 text-xs text-emerald-700">
+      <span className="flex items-center gap-1 text-xs text-[#56613f]">
         <Check className="size-3" /> Borrador guardado
       </span>
     );

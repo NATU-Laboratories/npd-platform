@@ -362,7 +362,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
               Entrega requerida: <NeededBySignal date={p.neededBy} riskDays={settings.risk_days} status={p.status} />
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             {canDecide && (
               <GateDialog
                 projectId={p.id}
@@ -427,11 +427,6 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
                 rejectionReasons={catalogs.rejection_reason}
                 priceReferences={sheet.refPrices.map((x) => ({ id: x.ref.id, title: refTitleOf(x.ref), quoted: x.unitPrice }))}
               />
-            )}
-            {canAdvance && advanceWaitingOn.length > 0 && (
-              <p className="self-center text-sm text-slate-500">
-                Pasará a «{p.phase === LAST_PHASE ? "Producción" : PHASES[p.phase + 1]?.name}» cuando terminen: {advanceWaitingOn.join(", ")}.
-              </p>
             )}
             {canAdvance && !advanceWaitingOn.length && (
               <AdvanceDialog
@@ -506,7 +501,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
           <div
             className={cn(
               "flex flex-wrap items-center gap-3 rounded-lg border p-3 text-sm",
-              pp.status === "received" ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-amber-300 bg-amber-50 text-amber-900",
+              pp.status === "received" ? "border-natu-sage bg-[#eef0e6] text-[#56613f]" : "border-amber-300 bg-amber-50 text-amber-900",
             )}
           >
             <span className="font-semibold">Anticipo del 30 %:</span>
@@ -564,7 +559,8 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
                     )}
                   >
                     <span className="hidden lg:inline">{ph.n} · </span>
-                    <span className="lg:hidden">{ph.short}</span>
+                    <span className="sm:hidden">{ph.n}</span>
+                    <span className="hidden sm:inline lg:hidden">{ph.short}</span>
                     <span className="hidden lg:inline">{ph.name}</span>
                   </p>
                   <p className="hidden text-[11px] text-slate-500 md:block">{inDate && (done || current) ? `Desde ${formatDate(inDate)}` : " "}</p>
@@ -590,6 +586,14 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
               );
             })}
           </ol>
+          <p className="mt-2 text-xs text-slate-600 sm:hidden">
+            Fase {p.phase} de {LAST_PHASE} · <span className="font-medium text-brand-800">{PHASES[p.phase]?.name}</span>
+          </p>
+          {canAdvance && advanceWaitingOn.length > 0 && (
+            <p className="mt-3 border-t border-slate-100 pt-3 text-sm text-slate-600">
+              Pasará a «{p.phase === LAST_PHASE ? "Producción" : PHASES[p.phase + 1]?.name}» cuando terminen: <span className="font-medium text-slate-800">{advanceWaitingOn.join(", ")}</span>.
+            </p>
+          )}
         </CardBody>
       </Card>
 
@@ -602,6 +606,9 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
             {needsOlfactory(b) ? (
               <div className="flex flex-col gap-3 rounded-lg bg-slate-50 p-4">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Perfil olfativo solicitado</h3>
+                {!(b.olfactory?.families?.length || b.olfactory?.genders?.length || b.olfactory?.intensity || inspirations.length) && (
+                  <p className="text-sm text-slate-500">Todavía no se ha indicado el perfil olfativo.</p>
+                )}
                 <div className="flex flex-wrap gap-1.5">
                   {b.olfactory?.families?.map((f) => (
                     <span key={f} className="rounded-full bg-white px-2.5 py-0.5 text-xs text-slate-800 ring-1 ring-slate-300">
@@ -657,7 +664,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
                 <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Inspiración y referencias</h3>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                   {inspirations.map((i, idx) => (
-                    <div key={`i${idx}`} className="rounded-lg border border-slate-200 bg-gradient-to-br from-violet-50 to-white p-3 text-sm">
+                    <div key={`i${idx}`} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
                       <p className="font-medium text-slate-900">{i.product || "—"}</p>
                       <p className="text-xs text-slate-500">{i.brand}</p>
                       {i.likes && <p className="mt-1 text-xs text-slate-700">“{i.likes}”</p>}
@@ -724,7 +731,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="flex flex-col gap-6 lg:col-span-2">
+        <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
           {/* Referencias (variantes) del proyecto */}
           {p.status !== "draft" && (multiRef || (canManageReferences(u, p) && (b.references ?? 0) >= 2)) && (
             <ReferencesCard
@@ -797,7 +804,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
           </Card>
         </div>
 
-        <div className="flex flex-col gap-6">
+        <div className="flex min-w-0 flex-col gap-6">
           {/* 8. Archivos */}
           <Card>
             <CardHeader

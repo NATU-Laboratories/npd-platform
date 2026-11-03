@@ -45,19 +45,43 @@ export function Field({
   className?: string;
   children: React.ReactNode;
 }) {
+  // Asocia la etiqueta al control aunque no se pase htmlFor: si el hijo es un Input/Select/Textarea
+  // sin id, se le asigna uno; y la ayuda o el error quedan enlazados con aria-describedby.
+  const autoId = React.useId();
+  let id = htmlFor;
+  let control = children;
+  const describedBy = error ? `${autoId}-error` : hint ? `${autoId}-hint` : undefined;
+  if (React.isValidElement<{ id?: string; "aria-describedby"?: string; "aria-invalid"?: boolean }>(children) && AUTO_CONTROLS.has(children.type)) {
+    id = htmlFor ?? children.props.id ?? `${autoId}-control`;
+    control = React.cloneElement(children, {
+      id,
+      ...(describedBy && !children.props["aria-describedby"] ? { "aria-describedby": describedBy } : {}),
+      ...(error && children.props["aria-invalid"] === undefined ? { "aria-invalid": true } : {}),
+    });
+  }
   return (
     <div className={cn("flex flex-col gap-1.5", highlight && "field-highlight p-2", className)}>
-      <Label htmlFor={htmlFor} className="flex items-center gap-1.5">
+      <Label htmlFor={id} className="flex items-center gap-1.5">
         {label}
         {required && <span className="text-rose-600" aria-label="obligatorio">*</span>}
         {recommended && <span className="rounded bg-[#eef0e6] px-1.5 text-[10px] font-medium uppercase tracking-wide text-[#56613f]">recomendado</span>}
       </Label>
-      {children}
-      {hint && !error && <p className="text-xs text-slate-500">{hint}</p>}
-      {error && <p className="text-xs text-rose-600">{error}</p>}
+      {control}
+      {hint && !error && (
+        <p id={`${autoId}-hint`} className="text-xs text-slate-500">
+          {hint}
+        </p>
+      )}
+      {error && (
+        <p id={`${autoId}-error`} className="text-xs text-rose-600">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
+
+const AUTO_CONTROLS = new Set<unknown>([Input, Select, Textarea]);
 
 export function Checkbox({ label, className, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: React.ReactNode }) {
   return (
