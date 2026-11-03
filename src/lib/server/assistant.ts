@@ -14,7 +14,7 @@ import { getSettings } from "./settings";
 import { getFormulaTargetCost, loadSheet, pendingUpTo } from "./sheet";
 
 /** Modelo del asistente (OpenAI). Se puede cambiar con OPENAI_MODEL sin tocar código. */
-const MODEL = process.env.OPENAI_MODEL || "gpt-5.5";
+const MODEL = process.env.OPENAI_MODEL || "gpt-6.1-terra";
 
 /**
  * Guía de la plataforma (estable: va en el prefijo cacheado). Describe el
@@ -55,10 +55,10 @@ function jsonSchema(schema: z.ZodType) {
 }
 
 /** Herramienta de consulta: esquema Zod (validado antes de ejecutar) + función. */
-type AssistantTool = { def: OpenAI.Chat.Completions.ChatCompletionFunctionTool; schema: z.ZodType; run: (input: never) => Promise<string> };
+type AssistantTool = { def: OpenAI.Responses.FunctionTool; schema: z.ZodType; run: (input: never) => Promise<string> };
 function defineTool<S extends z.ZodType>(t: { name: string; description: string; inputSchema: S; run: (input: z.infer<S>) => Promise<string> }): AssistantTool {
   return {
-    def: { type: "function", function: { name: t.name, description: t.description, parameters: jsonSchema(t.inputSchema) } },
+    def: { type: "function", name: t.name, description: t.description, parameters: jsonSchema(t.inputSchema), strict: false },
     schema: t.inputSchema,
     run: t.run as (input: never) => Promise<string>,
   };
@@ -211,36 +211,39 @@ export async function askAssistant(u: CurrentUser, history: ChatTurn[]) {
     u.departmentKeys.join(", ") || "ninguno"
   }. Hoy es ${new Date().toLocaleDateString("es-ES", { timeZone: "Europe/Madrid", weekday: "long", day: "numeric", month: "long", year: "numeric" })}.`;
   const tools = toolsFor(u);
-  // La guía va primero y sin cambios para aprovechar la caché de prompts de OpenAI
-  const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-    { role: "system", content: GUIDE },
-    { role: "system", content: who },
+  // API Responses (la de Chat Completions no admite herramientas con razonamiento en los
+  // modelos nuevos). Sin guardar nada en OpenAI: el razonamiento viaja cifrado entre vueltas.
+  // La guía va primero y sin cambios para aprovechar la caché de prompts.
+  const input: OpenAI.Responses.ResponseInputItem[] = [
+    { role: "developer", content: who },
     ...history.slice(-20).map((t) => ({ role: t.role, content: t.content })),
   ];
   for (let i = 0; i < 6; i++) {
-    const res = await getClient().chat.completions.create({
+    const res = await getClient().responses.create({
       model: MODEL,
-      messages,
+      instructions: GUIDE,
+      input,
       tools: tools.map((t) => t.def),
-      reasoning_effort: "low",
-      max_completion_tokens: 4000,
+      reasoning: { effort: "low" },
+      max_output_tokens: 4000,
+      store: false,
+      include: ["reasoning.encrypted_content"],
     });
-    const msg = res.choices[0]?.message;
-    if (!msg) break;
-    if (msg.refusal) return "Lo siento, no puedo ayudarte con esa petición.";
-    const calls = (msg.tool_calls ?? []).filter((c) => c.type === "function");
-    if (!calls.length) return msg.content?.trim() || "No he podido generar una respuesta. ¿Puedes reformular la pregunta?";
-    messages.push(msg);
+    const refused = res.output.some((o) => o.type === "message" && o.content.some((c) => c.type === "refusal"));
+    if (refused) return "Lo siento, no puedo ayudarte con esa petición.";
+    const calls = res.output.filter((o): o is OpenAI.Responses.ResponseFunctionToolCall => o.type === "function_call");
+    if (!calls.length) return res.output_text?.trim() || "No he podido generar una respuesta. ¿Puedes reformular la pregunta?";
+    input.push(...(res.output as OpenAI.Responses.ResponseInputItem[]));
     for (const call of calls) {
-      const tool = tools.find((t) => t.def.function.name === call.function.name);
-      let content: string;
+      const tool = tools.find((t) => t.def.name === call.name);
+      let output: string;
       try {
-        const input = tool?.schema.safeParse(JSON.parse(call.function.arguments || "{}"));
-        content = !tool ? "Herramienta desconocida." : input?.success ? await tool.run(input.data as never) : "Parámetros no válidos.";
+        const parsed = tool?.schema.safeParse(JSON.parse(call.arguments || "{}"));
+        output = !tool ? "Herramienta desconocida." : parsed?.success ? await tool.run(parsed.data as never) : "Parámetros no válidos.";
       } catch {
-        content = "Parámetros no válidos.";
+        output = "Parámetros no válidos.";
       }
-      messages.push({ role: "tool", tool_call_id: call.id, content });
+      input.push({ type: "function_call_output", call_id: call.call_id, output });
     }
   }
   return "La consulta es demasiado compleja. ¿Puedes concretar un poco más la pregunta?";
