@@ -1,6 +1,5 @@
 import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
-import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
+import OpenAI from "openai";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
@@ -14,8 +13,8 @@ import { labelInfoMissing, refTitle } from "./references";
 import { getSettings } from "./settings";
 import { getFormulaTargetCost, loadSheet, pendingUpTo } from "./sheet";
 
-/** Modelo del asistente. */
-const MODEL = "claude-opus-5-5";
+/** Modelo del asistente (OpenAI). Se puede cambiar con OPENAI_MODEL sin tocar código. */
+const MODEL = process.env.OPENAI_MODEL || "gpt-5.5";
 
 /**
  * Guía de la plataforma (estable: va en el prefijo cacheado). Describe el
@@ -46,10 +45,26 @@ Cómo funciona la plataforma:
 - Roles: Admin (todo, incluido Backoffice), Gestor de proyectos (ve todo, decide P1 y P2, edita cualquier departamento, avanza fases), Solicitante (crea solicitudes y registra P2 de las suyas), Lectura global (solo consulta). Pertenecer a un departamento permite ver sus proyectos y trabajar su parte. Los aprobadores se asignan en Backoffice → Aprobadores.
 - Backoffice (solo admin): usuarios, departamentos, estados de departamento (con campos obligatorios), aprobadores, marcas propias, plantillas, configuración, registro de actividad, errores y notificaciones.`;
 
-let client: Anthropic | null = null;
-const getClient = () => (client ??= new Anthropic());
+let client: OpenAI | null = null;
+const getClient = () => (client ??= new OpenAI());
 
-export const assistantEnabled = () => !!process.env.ANTHROPIC_API_KEY;
+function jsonSchema(schema: z.ZodType) {
+  const { $schema: _ignored, ...rest } = z.toJSONSchema(schema) as Record<string, unknown>;
+  void _ignored;
+  return rest;
+}
+
+/** Herramienta de consulta: esquema Zod (validado antes de ejecutar) + función. */
+type AssistantTool = { def: OpenAI.Chat.Completions.ChatCompletionFunctionTool; schema: z.ZodType; run: (input: never) => Promise<string> };
+function defineTool<S extends z.ZodType>(t: { name: string; description: string; inputSchema: S; run: (input: z.infer<S>) => Promise<string> }): AssistantTool {
+  return {
+    def: { type: "function", function: { name: t.name, description: t.description, parameters: jsonSchema(t.inputSchema) } },
+    schema: t.inputSchema,
+    run: t.run as (input: never) => Promise<string>,
+  };
+}
+
+export const assistantEnabled = () => !!process.env.OPENAI_API_KEY;
 
 async function lookups(clientId: number | null): Promise<Lookups> {
   const [catalog, brandRows, userRows, clientRows] = await Promise.all([
@@ -68,7 +83,7 @@ async function lookups(clientId: number | null): Promise<Lookups> {
 
 /** Herramientas de consulta: todas respetan lo que el usuario puede ver. */
 function toolsFor(u: CurrentUser) {
-  const searchProjects = betaZodTool({
+  const searchProjects = defineTool({
     name: "buscar_proyectos",
     description:
       "Busca proyectos visibles para el usuario. Úsala para encontrar un proyecto por código, nombre o cliente, listar proyectos por situación o tipo, ver los del usuario o los que requieren su acción. Devuelve como máximo 25.",
@@ -115,7 +130,7 @@ function toolsFor(u: CurrentUser) {
     },
   });
 
-  const getProject = betaZodTool({
+  const getProject = defineTool({
     name: "ver_proyecto",
     description:
       "Detalle de un proyecto por código (p. ej. 2026-PL-0007) o id: situación y fase, brief resumido, estado de cada departamento (y de cada referencia), qué falta para avanzar, cotización y actividad reciente.",
@@ -195,27 +210,38 @@ export async function askAssistant(u: CurrentUser, history: ChatTurn[]) {
   const who = `Usuario actual: ${u.name}. Roles: ${u.roles.map((r) => ROLE_LABEL[r] ?? r).join(", ") || "ninguno"}. Departamentos: ${
     u.departmentKeys.join(", ") || "ninguno"
   }. Hoy es ${new Date().toLocaleDateString("es-ES", { timeZone: "Europe/Madrid", weekday: "long", day: "numeric", month: "long", year: "numeric" })}.`;
-  const messages: Anthropic.Beta.BetaMessageParam[] = history.slice(-20).map((t) => ({ role: t.role, content: t.content }));
-  const final = await getClient().beta.messages.toolRunner({
-    model: MODEL,
-    max_tokens: 4000,
-    output_config: { effort: "low" },
-    // Si un clasificador rechaza la petición, se reintenta en el modelo recomendado
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
-    max_iterations: 6,
-    system: [
-      { type: "text", text: GUIDE, cache_control: { type: "ephemeral" } },
-      { type: "text", text: who },
-    ],
-    tools: toolsFor(u),
-    messages,
-  });
-  if (final.stop_reason === "refusal") return "Lo siento, no puedo ayudarte con esa petición.";
-  const text = final.content
-    .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("\n")
-    .trim();
-  return text || "No he podido generar una respuesta. ¿Puedes reformular la pregunta?";
+  const tools = toolsFor(u);
+  // La guía va primero y sin cambios para aprovechar la caché de prompts de OpenAI
+  const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+    { role: "system", content: GUIDE },
+    { role: "system", content: who },
+    ...history.slice(-20).map((t) => ({ role: t.role, content: t.content })),
+  ];
+  for (let i = 0; i < 6; i++) {
+    const res = await getClient().chat.completions.create({
+      model: MODEL,
+      messages,
+      tools: tools.map((t) => t.def),
+      reasoning_effort: "low",
+      max_completion_tokens: 4000,
+    });
+    const msg = res.choices[0]?.message;
+    if (!msg) break;
+    if (msg.refusal) return "Lo siento, no puedo ayudarte con esa petición.";
+    const calls = (msg.tool_calls ?? []).filter((c) => c.type === "function");
+    if (!calls.length) return msg.content?.trim() || "No he podido generar una respuesta. ¿Puedes reformular la pregunta?";
+    messages.push(msg);
+    for (const call of calls) {
+      const tool = tools.find((t) => t.def.function.name === call.function.name);
+      let content: string;
+      try {
+        const input = tool?.schema.safeParse(JSON.parse(call.function.arguments || "{}"));
+        content = !tool ? "Herramienta desconocida." : input?.success ? await tool.run(input.data as never) : "Parámetros no válidos.";
+      } catch {
+        content = "Parámetros no válidos.";
+      }
+      messages.push({ role: "tool", tool_call_id: call.id, content });
+    }
+  }
+  return "La consulta es demasiado compleja. ¿Puedes concretar un poco más la pregunta?";
 }

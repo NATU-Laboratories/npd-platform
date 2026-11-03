@@ -74,7 +74,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         </div>
       </header>
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">{children}</main>
-      {/* Asistente virtual (solo si está configurada la clave de la API de Claude) */}
+      {/* Asistente virtual (solo si está configurada la clave de la API de OpenAI) */}
       {assistantEnabled() && <AssistantWidget firstName={u.name.split(" ")[0] ?? u.name} />}
     </div>
   );
