@@ -16,6 +16,8 @@ export type ProjectFilters = {
   status?: string; // situación (SITUATIONS)
   phase?: string;
   requester?: string;
+  /** Solo los creados por este usuario (id), sin contar los de su cartera como comercial */
+  createdBy?: string;
   department?: string;
   from?: string;
   to?: string;
@@ -120,6 +122,7 @@ export async function buildWhere(u: CurrentUser, f: ProjectFilters, riskDays: nu
   if (situation) conds.push(situationCondition(situation.key));
   if (f.phase && /^\d$/.test(f.phase) && Number(f.phase) <= LAST_PHASE) conds.push(eq(projects.phase, Number(f.phase)));
   if (f.requester) conds.push(or(eq(projects.requesterId, f.requester), eq(projects.accountManagerId, f.requester))!);
+  if (f.createdBy) conds.push(eq(projects.requesterId, f.createdBy));
   if (f.department)
     conds.push(sql`exists (select 1 from ${projectDepartments} pd where pd.project_id = ${projects.id} and pd.department_id = ${Number(f.department)})`);
   if (f.from && /^\d{4}-\d{2}-\d{2}$/.test(f.from)) conds.push(gte(projects.requestedAt, new Date(`${f.from}T00:00:00`)));
