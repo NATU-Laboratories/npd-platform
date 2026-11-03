@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { z } from "zod";
 import { getCurrentUser, isActive } from "@/lib/server/authz";
-import { askAssistant, assistantEnabled } from "@/lib/server/assistant";
+import { askAssistant, assistantEnabled, currentSubject } from "@/lib/server/assistant";
 import { logError } from "@/lib/server/errors";
 
 // Las respuestas con varias consultas pueden tardar: margen hasta el límite del plan
@@ -12,6 +12,8 @@ const bodySchema = z.object({
     .array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().trim().min(1).max(4000) }))
     .min(1)
     .max(40),
+  /** Ruta de la página en la que está la persona (para saber de qué proyecto habla). */
+  page: z.string().max(300).optional(),
 });
 
 /** Asistente virtual: solo consulta (no hace cambios) y solo ve lo que ve el usuario. */
@@ -22,7 +24,8 @@ export async function POST(req: Request) {
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success || parsed.data.messages.at(-1)?.role !== "user") return Response.json({ error: "Mensaje no válido" }, { status: 400 });
   try {
-    const { text, actions } = await askAssistant(u, parsed.data.messages);
+    const current = await currentSubject(u, parsed.data.page);
+    const { text, actions } = await askAssistant(u, parsed.data.messages, { channel: "web", current });
     return Response.json({ text, actions });
   } catch (err) {
     if (err instanceof OpenAI.RateLimitError) return Response.json({ error: "El asistente está muy solicitado ahora mismo. Prueba en unos segundos." }, { status: 429 });

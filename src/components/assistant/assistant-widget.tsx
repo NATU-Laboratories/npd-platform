@@ -1,6 +1,7 @@
 "use client";
 import { Check, Loader2, MessageCircle, RotateCcw, Send, Sparkles, X } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
@@ -76,6 +77,8 @@ export function AssistantWidget({ firstName }: { firstName: string }) {
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [notices, setNotices] = React.useState<Notice[]>([]);
+  // Página en la que está la persona: si es un proyecto o una reposición, Alexia sabe de cuál se habla
+  const pathname = usePathname();
   const endRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLTextAreaElement>(null);
 
@@ -155,7 +158,7 @@ export function AssistantWidget({ firstName }: { firstName: string }) {
       const res = await fetch("/api/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: next.map(({ role, content }) => ({ role, content })).slice(-40) }),
+        body: JSON.stringify({ messages: next.map(({ role, content }) => ({ role, content })).slice(-40), page: pathname }),
       });
       const data = (await res.json().catch(() => ({}))) as { text?: string; error?: string; actions?: ActionCard[] };
       if (!res.ok || !data.text) {

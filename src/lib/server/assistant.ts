@@ -36,7 +36,8 @@ Personalidad:
 
 Cómo responder:
 - Responde siempre en español, de forma breve y clara. Usa listas cortas cuando ayuden.
-- Para datos de proyectos usa SIEMPRE las herramientas; nunca inventes códigos, fechas, estados ni personas. Si no encuentras algo, dilo.
+- Para datos de proyectos usa SIEMPRE las herramientas; nunca inventes códigos, fechas, estados ni personas.
+- La gente no escribe los nombres exactos: busca con lo que te digan (la búsqueda tolera tildes, espacios y orden de palabras) y, si no sale, prueba con una o dos palabras clave antes de decir que no existe. En las acciones puedes pasar el nombre aproximado en «sobre» y la herramienta lo resuelve (o te dice si hay varios).
 - Solo puedes ver los proyectos que esta persona tiene permiso para ver: las herramientas ya lo filtran. Si un proyecto no aparece, indica que no existe o que no tiene acceso.
 - Cuando menciones un proyecto, enlázalo así: [2026-PL-0007 · Nombre](/proyectos/<id>).
 - Acciones que puedes hacer por la persona: enviar un aviso a un departamento o persona (preparar_aviso) y dejar un comentario en un proyecto o reposición (preparar_comentario): se hacen AL MOMENTO, sin confirmación, así que antes de llamarlas asegúrate de que está claro a quién va, sobre qué proyecto o reposición y qué dice; si hay cualquier duda (varias personas con ese nombre, proyecto ambiguo, mensaje poco claro), pregunta primero y no llames a la herramienta. Cuando la herramienta diga que está hecho, confírmalo en una frase (sin repetir todo el mensaje).
@@ -105,7 +106,7 @@ function toolsFor(u: CurrentUser, ctx: ActionChannel & { prepared: PreparedActio
     description:
       "Busca y cuenta proyectos visibles para el usuario: por código, nombre o cliente, situación, tipo, quién creó la solicitud (solicitante), fechas de solicitud, los del usuario o los que requieren su acción. Devuelve el total y como máximo 25 proyectos.",
     inputSchema: z.object({
-      texto: z.string().optional().describe("Código, nombre o cliente a buscar"),
+      texto: z.string().optional().describe("Código, nombre o cliente a buscar. Admite nombres aproximados: no distingue tildes, espacios ni orden de las palabras («bodymist citrico verano»)."),
       situacion: z.enum(SITUATIONS.map((s) => s.key) as [string, ...string[]]).optional().describe(`Una de: ${SITUATIONS.map((s) => `${s.key} (${s.label})`).join(", ")}`),
       tipo: z.enum(["PL", "MP", "MDD"]).optional().describe("PL marca privada, MP marca propia, MDD marca de distribuidor"),
       solicitante: z.string().max(100).optional().describe("Nombre o email de la persona que creó la solicitud (p. ej. «Comercial 1»)"),
@@ -387,7 +388,26 @@ export type ChatTurn = { role: "user" | "assistant"; content: string };
 export type AssistantReply = { text: string; actions: PreparedAction[] };
 
 /** Responde a la conversación; devuelve el texto y las acciones preparadas pendientes de confirmar. */
-export async function askAssistant(u: CurrentUser, history: ChatTurn[], channel: ActionChannel = { channel: "web" }): Promise<AssistantReply> {
+/** Proyecto o reposición que la persona tiene abierto en la web (si puede verlo). */
+export async function currentSubject(u: CurrentUser, page?: string | null): Promise<CurrentSubject | undefined> {
+  const m = page?.match(/^\/(proyectos|reposiciones)\/([0-9a-f-]{36})(?:\/|$)/i);
+  if (!m) return undefined;
+  if (m[1] === "proyectos") {
+    if (!(await canViewProject(u, m[2]!))) return undefined;
+    const [p] = await db.select({ code: projects.code, name: projects.name, status: projects.status, phase: projects.phase }).from(projects).where(eq(projects.id, m[2]!));
+    return p?.code ? { kind: "proyecto", id: m[2]!, code: p.code, name: p.name, extra: `${statusLabel(p.status, p.phase)}, fase ${p.phase} · ${PHASES[p.phase]?.name}` } : undefined;
+  }
+  if (!canAccessReplenishments(u)) return undefined;
+  const [r] = await db.select({ code: replenishments.code, title: replenishments.title, status: replenishments.status }).from(replenishments).where(eq(replenishments.id, m[2]!));
+  return r ? { kind: "reposición", id: m[2]!, code: r.code, name: r.title, extra: REP_STATUS_LABEL[r.status] } : undefined;
+}
+export type CurrentSubject = { kind: "proyecto" | "reposición"; id: string; code: string; name: string; extra: string };
+
+export async function askAssistant(
+  u: CurrentUser,
+  history: ChatTurn[],
+  channel: ActionChannel & { current?: CurrentSubject } = { channel: "web" },
+): Promise<AssistantReply> {
   const ctx = { ...channel, prepared: [] as PreparedAction[] };
   const done = (text: string): AssistantReply => ({ text, actions: ctx.prepared });
   const who = `Usuario actual: ${u.name}. Roles: ${u.roles.map((r) => ROLE_LABEL[r] ?? r).join(", ") || "ninguno"}. Departamentos: ${
@@ -397,6 +417,10 @@ ${
   channel.channel === "teams"
     ? "Canal: Microsoft Teams. Si preparas una acción pendiente de confirmar, el detalle se añade solo debajo de tu respuesta: no lo repitas; termina pidiendo que responda «sí» para hacerlo o «no» para cancelarlo. No menciones botones."
     : "Canal: chat de la plataforma web. Debajo de tu respuesta aparece una tarjeta con el detalle de cada acción (hecha o pendiente, con botones «Confirmar» y «Cancelar» si está pendiente): no repitas el detalle ni el mensaje. No menciones Teams ni responder «sí»."
+}${
+  channel.current
+    ? `\nAhora mismo la persona tiene abierto ${channel.current.kind === "proyecto" ? "el proyecto" : "la reposición"} ${channel.current.code} · ${channel.current.name} (${channel.current.extra}; id ${channel.current.id}). Si pregunta o pide algo sin decir de qué proyecto o reposición se trata («este proyecto», «avisa a Diseño de que corre prisa»…), se refiere a esta: usa su código en las herramientas sin preguntárselo.`
+    : ""
 }`;
   const tools = toolsFor(u, ctx);
   // API Responses (la de Chat Completions no admite herramientas con razonamiento en los
