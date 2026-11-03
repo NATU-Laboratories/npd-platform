@@ -13,6 +13,20 @@ export type FieldDef = {
   filled?: (d: BriefData) => boolean;
 };
 
+/** ¿Se vende fuera de España? */
+export const isInternational = (d: BriefData) => (d.markets ?? []).some((m) => m !== "ES");
+
+/** Blacklist pegada, adjunta o «no hay blacklist» marcado. */
+export function blacklistProvided(d: BriefData) {
+  const o = d.olfactory;
+  return !!(o?.blacklist?.trim() || o?.noBlacklist || o?.blacklistAttached);
+}
+
+/** Aviso (no bloquea): mercados internacionales sin blacklist ni «no hay blacklist». */
+export function blacklistPending(d: BriefData, hasFiles = false) {
+  return needsOlfactory(d) && isInternational(d) && !blacklistProvided(d) && !hasFiles;
+}
+
 /** PL y MDD comparten el bloque de cliente. */
 const isPL = (d: BriefData) => d.type === "PL" || d.type === "MDD";
 const isMP = (d: BriefData) => d.type === "MP";
@@ -89,7 +103,15 @@ export const FIELDS: FieldDef[] = [
   },
   { key: "olfactory.genders", label: "Género", step: 3, level: "recommended", when: needsOlfactory },
   { key: "olfactory.duration", label: "Duración deseada", step: 3, level: "recommended", when: needsOlfactory },
-  { key: "olfactory.blacklist", label: "Blacklist", step: 3, level: "optional", when: needsOlfactory },
+  // Con mercados fuera de España la blacklist es necesaria para cotizar (no bloquea el envío)
+  {
+    key: "olfactory.blacklist",
+    label: "Blacklist",
+    step: 3,
+    level: "recommended",
+    when: (d) => needsOlfactory(d) && isInternational(d),
+    filled: blacklistProvided,
+  },
 
   // Paso 4
   { key: "notes", label: "Notas adicionales", step: 4, level: "optional" },

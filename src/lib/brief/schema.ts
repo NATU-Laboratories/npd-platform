@@ -81,6 +81,10 @@ export const olfactorySchema = z.preprocess(
       .max(20000)
       .transform((v) => (v === "" ? undefined : v))
       .optional(),
+    /** El cliente confirma que no hay blacklist (cuenta como completado en mercados internacionales). */
+    noBlacklist: z.boolean().optional(),
+    /** Hay documento de blacklist adjunto (lo marca el formulario al subirlo). */
+    blacklistAttached: z.boolean().optional(),
   }),
 );
 

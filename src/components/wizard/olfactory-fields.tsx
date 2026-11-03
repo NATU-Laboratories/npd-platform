@@ -16,6 +16,8 @@ export type OlfactoryState = {
   inspirations?: Inspiration[];
   genders?: string[];
   blacklist?: string;
+  noBlacklist?: boolean;
+  blacklistAttached?: boolean;
 };
 
 const asOptions = (xs: Option[]) => xs.map((o) => ({ value: o.label, label: o.label }));
@@ -35,7 +37,10 @@ export function OlfactoryFields({
   errorFor,
   blacklistUpload,
   inspirationUpload,
+  international = false,
 }: {
+  /** Mercados fuera de España: la blacklist se marca como obligatoria (sin bloquear). */
+  international?: boolean;
   value: OlfactoryState;
   onChange: (v: OlfactoryState) => void;
   families: Option[];
@@ -127,9 +132,34 @@ export function OlfactoryFields({
         </div>
       </Field>
 
-      <Field label="Blacklist" hint="Ingredientes o materias primas que no se pueden usar. Pega la lista o adjunta el documento del cliente (opcional).">
-        <Textarea rows={3} value={value.blacklist ?? ""} onChange={(e) => set("blacklist", e.target.value)} placeholder="Pega aquí la lista…" aria-label="Blacklist" />
-        {blacklistUpload}
+      <Field
+        label="Blacklist"
+        required={international}
+        highlight={highlight("olfactory.blacklist")}
+        hint={
+          international
+            ? "Se vende fuera de España: para cotizar correctamente necesitamos la blacklist del cliente si la hay. Pega la lista, adjunta el documento o marca «No hay blacklist». Puedes continuar sin ella, pero la cotización puede no ser correcta."
+            : "Ingredientes o materias primas que no se pueden usar. Pega la lista o adjunta el documento del cliente (opcional)."
+        }
+      >
+        <Textarea
+          rows={3}
+          value={value.blacklist ?? ""}
+          onChange={(e) => set("blacklist", e.target.value)}
+          placeholder="Pega aquí la lista…"
+          aria-label="Blacklist"
+          disabled={value.noBlacklist === true}
+        />
+        {!value.noBlacklist && blacklistUpload}
+        <label className="mt-1 flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="size-4 accent-brand-600"
+            checked={value.noBlacklist === true}
+            onChange={(e) => onChange({ ...value, noBlacklist: e.target.checked || undefined, ...(e.target.checked ? { blacklist: undefined } : {}) })}
+          />
+          No hay blacklist
+        </label>
       </Field>
     </fieldset>
   );
