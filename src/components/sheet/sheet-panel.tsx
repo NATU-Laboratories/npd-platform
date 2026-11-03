@@ -1,4 +1,4 @@
-import { Check, ChevronDown, FileText, RotateCcw } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, ExternalLink, FileText, RotateCcw } from "lucide-react";
 import type { ReactNode } from "react";
 import type { UploadedFile } from "@/components/uploader";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { applicable, checkField, fieldLabelInSection, formatValue, resolveFieldR
 import { cn, formatBytes, formatDate } from "@/lib/utils";
 import { DeptTransition } from "./dept-transition";
 import { FormulaCostBox } from "./formula-cost";
+import { Button } from "@/components/ui/button";
 import { SectionEditor } from "./section-editor";
 
 const SAGE = "bg-[#7f8f63] text-white ring-[#7f8f63]";
@@ -115,6 +116,23 @@ function FieldView({ f, data, files }: { f: SheetField; data: SheetData; files: 
     );
   }
   const v = formatValue(f, data[f.key]);
+  if (f.type === "url") {
+    return (
+      <div className="min-w-0 sm:col-span-2">
+        <dt className="text-xs text-slate-500">{f.label}</dt>
+        <dd className="text-sm">
+          {v ? (
+            <a href={v} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-full items-center gap-1 font-medium text-brand-600 underline underline-offset-2 hover:text-brand-800">
+              <ExternalLink className="size-3.5 shrink-0" aria-hidden />
+              <span className="truncate">{/sharepoint\.com/i.test(v) ? "Abrir en SharePoint" : /onedrive|1drv\.ms/i.test(v) ? "Abrir en OneDrive" : v}</span>
+            </a>
+          ) : (
+            <span className="text-slate-300">—</span>
+          )}
+        </dd>
+      </div>
+    );
+  }
   return (
     <div className={cn("min-w-0", (f.type === "textarea" || f.type === "multi") && "sm:col-span-2")}>
       <dt className="text-xs text-slate-500">{f.label}</dt>
@@ -127,7 +145,7 @@ function FieldView({ f, data, files }: { f: SheetField; data: SheetData; files: 
 const entriesFor = (entries: SheetEntry[], refId: number) => entries.filter((e) => e.refId === 0 || e.refId === refId);
 
 /** Campos exigidos por un subestado que aún no tienen valor válido (sin contar los que se piden en el propio diálogo). */
-function missingFor(refs: string[], prompt: string[], entries: SheetEntry[]) {
+function missingRefs(refs: string[], prompt: string[], entries: SheetEntry[]) {
   return refs
     .filter((ref) => !prompt.includes(ref))
     .map((ref) => {
@@ -135,9 +153,9 @@ function missingFor(refs: string[], prompt: string[], entries: SheetEntry[]) {
       const e = r && entries.find((x) => x.section.key === r.section.key);
       if (!r || !e) return null;
       const res = checkField(r.field, sanitizeData(r.section, e.data));
-      return res.ok ? null : fieldLabelInSection(r.section, r.field.key);
+      return res.ok ? null : { label: fieldLabelInSection(r.section, r.field.key), entry: e, field: r.field.key };
     })
-    .filter((x): x is string => !!x);
+    .filter((x): x is { label: string; entry: SheetEntry; field: string } => !!x);
 }
 
 /** Resumen lateral: en qué subestado está cada departamento. */
@@ -224,7 +242,30 @@ function StateRow({ c, s, canEdit, refInfo, pc }: { c: DeptCard; s: DeptState; c
         return [ref, r && e ? e.data[r.field.key] : undefined];
       }),
     );
+  // Lo que falta para el siguiente estado se ve antes de pulsar, con acceso directo a rellenarlo
+  const missing = canEdit && !c.auto && s.next ? missingRefs(s.next.requiredFields, s.next.promptFields, scope) : [];
+  const firstMissing = missing[0]?.entry;
   return (
+    <div className="flex flex-col gap-2">
+      {missing.length > 0 && s.next && firstMissing && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status">
+          <p className="min-w-0">
+            Para pasar a <strong>«{s.next.name}»</strong> falta: {missing.map((m) => m.label).join(" · ")}.
+          </p>
+          <SectionEditor
+            projectId={pc.projectId}
+            sectionKey={firstMissing.section.key}
+            referenceId={refInfo?.id}
+            title={refInfo ? `${firstMissing.title} · ${refTitle(refInfo)}` : firstMissing.title}
+            ctx={pc.ctx}
+            initial={firstMissing.data}
+            files={pc.files}
+            maxMb={pc.maxMb}
+            triggerLabel="Completar datos"
+            required={missing.filter((m) => m.entry === firstMissing).map((m) => m.field)}
+          />
+        </div>
+      )}
     <div className="flex flex-wrap items-center justify-between gap-2">
       <p className="text-xs text-slate-500">
         {s.completed
@@ -253,7 +294,12 @@ function StateRow({ c, s, canEdit, refInfo, pc }: { c: DeptCard; s: DeptState; c
               initialValues={{}}
             />
           )}
-          {s.next && (
+          {s.next && missing.length > 0 && (
+            <Button size="sm" disabled title="Completa antes los datos que faltan">
+              <ArrowRight aria-hidden /> Avanzar a «{s.next.name}»
+            </Button>
+          )}
+          {s.next && !missing.length && (
             <DeptTransition
               projectId={pc.projectId}
               departmentId={c.dept.id}
@@ -266,7 +312,7 @@ function StateRow({ c, s, canEdit, refInfo, pc }: { c: DeptCard; s: DeptState; c
                   name: s.next.name,
                   isFinal: s.next.isFinal,
                   promptFields: s.next.promptFields,
-                  missing: missingFor(s.next.requiredFields, s.next.promptFields, scope),
+                  missing: [],
                 },
               ]}
               initialValues={promptValues(s.next.promptFields)}
@@ -274,6 +320,7 @@ function StateRow({ c, s, canEdit, refInfo, pc }: { c: DeptCard; s: DeptState; c
           )}
         </div>
       )}
+    </div>
     </div>
   );
 }

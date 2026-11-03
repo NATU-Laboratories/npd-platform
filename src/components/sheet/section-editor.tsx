@@ -34,6 +34,19 @@ export function ScalarInput({ f, value, onChange, id }: { f: ScalarField; value:
           {f.unit && <span className="text-sm text-slate-500">{f.unit}</span>}
         </div>
       );
+    case "url":
+      return (
+        <Input
+          id={id}
+          type="url"
+          inputMode="url"
+          spellCheck={false}
+          autoComplete="off"
+          value={(value as string) ?? ""}
+          placeholder={f.placeholder}
+          onChange={(e) => onChange(e.target.value.trim() || undefined)}
+        />
+      );
     case "date":
       return <Input id={id} type="date" value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value || undefined)} className="max-w-48" />;
     case "bool":
@@ -71,7 +84,13 @@ export function SectionEditor({
   initial,
   files,
   maxMb,
+  triggerLabel,
+  required = [],
 }: {
+  /** Texto del botón que abre el editor (por defecto «Editar»). */
+  triggerLabel?: string;
+  /** Campos (claves) que faltan para avanzar: se marcan como obligatorios. */
+  required?: string[];
   projectId: string;
   sectionKey: string;
   /** Referencia (apartados por referencia en proyectos con varias). */
@@ -108,8 +127,8 @@ export function SectionEditor({
       }}
     >
       <DialogTrigger asChild>
-        <Button variant="secondary" size="sm">
-          <Pencil /> Editar
+        <Button variant={triggerLabel ? "warning" : "secondary"} size="sm">
+          <Pencil aria-hidden /> {triggerLabel ?? "Editar"}
         </Button>
       </DialogTrigger>
       <DialogContent title={title} description={section.description} wide>
@@ -140,7 +159,15 @@ export function SectionEditor({
                       );
                     }
                     return (
-                      <Field key={f.key} label={f.label} hint={f.hint} htmlFor={id} className={cn((f.type === "textarea" || f.type === "multi") && "sm:col-span-2")}>
+                      <Field
+                        key={f.key}
+                        label={f.label}
+                        hint={f.hint}
+                        htmlFor={id}
+                        required={required.includes(f.key)}
+                        highlight={required.includes(f.key)}
+                        className={cn((f.type === "textarea" || f.type === "multi") && "sm:col-span-2")}
+                      >
                         <ScalarInput f={f} id={id} value={data[f.key]} onChange={(v) => set(f.key, v)} />
                       </Field>
                     );
