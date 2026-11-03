@@ -39,7 +39,7 @@ Cómo responder:
 - Para datos de proyectos usa SIEMPRE las herramientas; nunca inventes códigos, fechas, estados ni personas. Si no encuentras algo, dilo.
 - Solo puedes ver los proyectos que esta persona tiene permiso para ver: las herramientas ya lo filtran. Si un proyecto no aparece, indica que no existe o que no tiene acceso.
 - Cuando menciones un proyecto, enlázalo así: [2026-PL-0007 · Nombre](/proyectos/<id>).
-- Acciones que SÍ puedes preparar (siempre con confirmación de la persona): enviar un aviso a un departamento o persona (preparar_aviso), dejar un comentario en un proyecto o reposición (preparar_comentario) y, si es de Compras, pedir recotización a proveedores (preparar_recotizacion). Al prepararla, la herramienta NO la ejecuta: di en una frase qué vas a hacer y pide que la confirme (en la web con el botón «Confirmar»; en Teams respondiendo «sí»). Nunca digas que ya está hecha hasta que la persona confirme. Redacta el mensaje en primera persona de quien lo envía, claro y breve; no inventes datos.
+- Acciones que SÍ puedes preparar (siempre con confirmación de la persona): enviar un aviso a un departamento o persona (preparar_aviso), dejar un comentario en un proyecto o reposición (preparar_comentario) y, si es de Compras, pedir recotización a proveedores (preparar_recotizacion). Al prepararla, la herramienta NO la ejecuta: di en una frase qué vas a hacer y pide que la confirme según el canal en el que estás (lo indica el mensaje de contexto). Nunca digas que ya está hecha hasta que la persona confirme. Redacta el mensaje en primera persona de quien lo envía, claro y breve; no inventes datos.
 - No puedes aprobar P1/P2, avanzar fases ni estados, validar arte final, cancelar ni editar datos: explica dónde y cómo hacerlo en la plataforma.
 - Si la persona pregunta si tiene avisos o mensajes, usa ver_mis_avisos.
 - El coste objetivo de la fórmula es confidencial: solo lo menciones si la herramienta te lo devuelve.
@@ -384,7 +384,12 @@ export async function askAssistant(u: CurrentUser, history: ChatTurn[], channel:
   const done = (text: string): AssistantReply => ({ text, actions: ctx.prepared });
   const who = `Usuario actual: ${u.name}. Roles: ${u.roles.map((r) => ROLE_LABEL[r] ?? r).join(", ") || "ninguno"}. Departamentos: ${
     u.departmentKeys.join(", ") || "ninguno"
-  }. Hoy es ${new Date().toLocaleDateString("es-ES", { timeZone: "Europe/Madrid", weekday: "long", day: "numeric", month: "long", year: "numeric" })}.`;
+  }. Hoy es ${new Date().toLocaleDateString("es-ES", { timeZone: "Europe/Madrid", weekday: "long", day: "numeric", month: "long", year: "numeric" })}.
+${
+  channel.channel === "teams"
+    ? "Canal: Microsoft Teams. Al preparar una acción, el detalle se añade solo debajo de tu respuesta: no lo repitas; termina pidiendo que responda «sí» para hacerlo o «no» para cancelarlo. No menciones botones."
+    : "Canal: chat de la plataforma web. Al preparar una acción aparece una tarjeta con el detalle y los botones «Confirmar» y «Cancelar»: no repitas el detalle ni el mensaje; di en una frase qué has preparado y que lo confirme en la tarjeta. No menciones Teams ni responder «sí»."
+}`;
   const tools = toolsFor(u, ctx);
   // API Responses (la de Chat Completions no admite herramientas con razonamiento en los
   // modelos nuevos). Sin guardar nada en OpenAI: el razonamiento viaja cifrado entre vueltas.
