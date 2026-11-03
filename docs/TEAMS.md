@@ -1,6 +1,6 @@
-# NIA (asistente) en Microsoft Teams
+# Alexia (asistente) en Microsoft Teams
 
-El asistente virtual de la plataforma se puede usar como chat personal en Teams («NIA»).
+El asistente virtual de la plataforma se puede usar como chat personal en Teams («Alexia»).
 Responde lo mismo que el chat flotante: cada persona solo ve los proyectos que ve en la plataforma,
 y solo consulta (no hace cambios).
 
@@ -64,16 +64,16 @@ Con el Id. de aplicación, genera el paquete (manifiesto + iconos de NATU):
 pnpm teams:package <TEAMS_APP_ID> https://npd-platform-seven.vercel.app
 ```
 
-Se crea `teams-app/build/nia-teams.zip`.
+Se crea `teams-app/build/alexia-teams.zip`.
 
 ## 5. Publicarla en Teams
 
 1. Entra en **admin.teams.microsoft.com** → **Aplicaciones de Teams** → **Administrar aplicaciones**
    → **Cargar nueva aplicación** → **Cargar** → elige el `.zip`.
-2. Abre la app «NIA» y comprueba que su estado es **Permitida**.
+2. Abre la app «Alexia» y comprueba que su estado es **Permitida**.
 3. Para que la vea todo el mundo (o un grupo de prueba):
    - **Directivas de permisos** (o *Administrar aplicaciones → Acceso*): que esté permitida para esos usuarios.
-   - Opcional: **Directivas de configuración** → **Aplicaciones ancladas** → añade «NIA»
+   - Opcional: **Directivas de configuración** → **Aplicaciones ancladas** → añade «Alexia»
      para que aparezca fija en la barra lateral.
 4. Los usuarios la encuentran en Teams → **Aplicaciones** → **Creada para tu organización** → **Agregar**.
    Los cambios de directivas pueden tardar unas horas en llegar.

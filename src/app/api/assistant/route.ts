@@ -22,8 +22,8 @@ export async function POST(req: Request) {
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success || parsed.data.messages.at(-1)?.role !== "user") return Response.json({ error: "Mensaje no válido" }, { status: 400 });
   try {
-    const text = await askAssistant(u, parsed.data.messages);
-    return Response.json({ text });
+    const { text, actions } = await askAssistant(u, parsed.data.messages);
+    return Response.json({ text, actions });
   } catch (err) {
     if (err instanceof OpenAI.RateLimitError) return Response.json({ error: "El asistente está muy solicitado ahora mismo. Prueba en unos segundos." }, { status: 429 });
     if (err instanceof OpenAI.APIConnectionError) return Response.json({ error: "No se ha podido conectar con OpenAI. Inténtalo de nuevo en unos segundos." }, { status: 503 });
