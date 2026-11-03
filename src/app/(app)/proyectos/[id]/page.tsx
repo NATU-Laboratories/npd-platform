@@ -7,6 +7,7 @@ import { GateDialog } from "@/components/project/gate-dialog";
 import { ProjectAction } from "@/components/project/project-actions";
 import { LabelInfoDialog } from "@/components/project/label-info-dialog";
 import { AdvanceDialog, BudgetDialog, PrepaymentReceivedDialog, QuoteDialog } from "@/components/project/phase-dialogs";
+import { BackLink } from "@/components/back-link";
 import { NeededBySignal } from "@/components/needed-by";
 import { SheetPanel, SheetSummary } from "@/components/sheet/sheet-panel";
 import { Uploader } from "@/components/uploader";
@@ -339,12 +340,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
     <div className="flex flex-col gap-6">
       {/* 1. Cabecera */}
       <section className="flex flex-col gap-4">
-        <div className="text-xs text-slate-500">
-          <Link href="/" className="hover:underline">
-            Panel
-          </Link>{" "}
-          / {p.code}
-        </div>
+        <BackLink />
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
