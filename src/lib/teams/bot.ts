@@ -3,9 +3,10 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { assistantChats, users } from "@/db/schema";
 import { askAssistant, assistantEnabled, type ChatTurn } from "@/lib/server/assistant";
+import { cancelAction, confirmAction, latestPendingTeams, markNoticesRead, unreadNotices } from "@/lib/server/assistant-actions";
 import { isActive, loadUser } from "@/lib/server/authz";
 import { logError } from "@/lib/server/errors";
-import { appUrl } from "@/lib/utils";
+import { absolutizeLinks, appId, conversationApi, rememberConversation, teamsConfigured, tenantId } from "./connector";
 import { verifyBotJwt, type Jwk } from "./jwt";
 
 /**
@@ -30,12 +31,7 @@ export type Activity = {
 const BOT_ISSUER = "https://api.botframework.com";
 const OPENID_URL = "https://login.botframework.com/v1/.well-known/openidconfiguration";
 
-const appId = () => process.env.TEAMS_APP_ID ?? "";
-const tenantId = () => process.env.TEAMS_TENANT_ID || process.env.AUTH_MICROSOFT_ENTRA_ID_TENANT_ID || "";
-
-export function teamsConfigured() {
-  return !!(appId() && process.env.TEAMS_APP_PASSWORD && tenantId());
-}
+export { teamsConfigured };
 
 let keyCache: { keys: Jwk[]; exp: number } | null = null;
 async function botKeys(force = false): Promise<Jwk[]> {
@@ -59,43 +55,7 @@ export async function authenticate(authHeader: string | null, a: Activity) {
   return a.channelId === "msteams" && tenant === tenantId();
 }
 
-let tokenCache: { token: string; exp: number } | null = null;
-async function botToken() {
-  if (tokenCache && tokenCache.exp > Date.now() + 60_000) return tokenCache.token;
-  const res = await fetch(`https://login.microsoftonline.com/${tenantId()}/oauth2/v2.0/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: appId(),
-      client_secret: process.env.TEAMS_APP_PASSWORD ?? "",
-      scope: "https://api.botframework.com/.default",
-      grant_type: "client_credentials",
-    }),
-    cache: "no-store",
-  });
-  if (!res.ok) throw new Error(`No se pudo obtener el token del bot de Teams (${res.status}): ${(await res.text()).slice(0, 300)}`);
-  const json = (await res.json()) as { access_token: string; expires_in: number };
-  tokenCache = { token: json.access_token, exp: Date.now() + json.expires_in * 1000 };
-  return tokenCache.token;
-}
-
-async function connector<T>(a: Activity, path: string, init: { method?: string; json?: unknown } = {}): Promise<T> {
-  const base = a.serviceUrl!.replace(/\/$/, "");
-  const res = await fetch(`${base}/v3/conversations/${encodeURIComponent(a.conversation!.id)}${path}`, {
-    method: init.method ?? "GET",
-    headers: { Authorization: `Bearer ${await botToken()}`, ...(init.json ? { "Content-Type": "application/json" } : {}) },
-    body: init.json ? JSON.stringify(init.json) : undefined,
-    cache: "no-store",
-  });
-  if (!res.ok) throw new Error(`Bot Framework ${init.method ?? "GET"} ${path} → ${res.status}: ${(await res.text()).slice(0, 300)}`);
-  const text = await res.text();
-  return (text ? JSON.parse(text) : {}) as T;
-}
-
-/** Enlaces internos (/proyectos/…) → absolutos, para que se abran desde Teams. */
-export function absolutizeLinks(text: string) {
-  return text.replace(/\]\(\//g, `](${appUrl()}/`);
-}
+const connector = <T,>(a: Activity, path: string, init: { method?: string; json?: unknown } = {}) => conversationApi<T>(a.serviceUrl!, a.conversation!.id, path, init);
 
 async function reply(a: Activity, text: string) {
   await connector(a, "/activities", {
@@ -120,7 +80,9 @@ async function resolveUser(a: Activity) {
 
 const RESET = /^\s*(\/?reiniciar|\/?reset|nueva conversaci[oó]n|empezar de nuevo)\s*$/i;
 const WELCOME =
-  "¡Hola! Soy **NIA** 🌿, la asistente de proyectos de NATU. Pregúntame cómo va cualquier proyecto o reposición, qué tienes pendiente o cómo se hace algo en la plataforma: yo me encargo de rebuscar.\n\nEscribe **reiniciar** para empezar de cero. Solo consulto, no toco nada.";
+  "¡Hola! Soy **Alexia** 🌿, la asistente de proyectos de NATU. Pregúntame cómo va cualquier proyecto o reposición, qué tienes pendiente o cómo se hace algo en la plataforma: yo me encargo de rebuscar. También puedo enviar avisos y comentarios por ti, siempre después de que me lo confirmes.\n\nEscribe **reiniciar** para empezar de cero.";
+const YES = /^\s*(s[ií]|s[ií],? (env[ií]alo|hazlo|confirmo|adelante)|vale|ok|okay|confirmo|confirmar|adelante|dale|hazlo|env[ií]alo|perfecto)\s*[.!]*\s*$/i;
+const NO = /^\s*(no|no,? gracias|cancela|cancelar|cancélalo|d[eé]jalo|mejor no)\s*[.!]*\s*$/i;
 
 /** Procesa un mensaje del chat personal (se ejecuta tras responder 200 a Teams). */
 export async function handleActivity(a: Activity) {
@@ -140,6 +102,28 @@ export async function handleActivity(a: Activity) {
       return;
     }
     const convId = a.conversation!.id;
+    await rememberConversation(u.id, { conversationId: convId, serviceUrl: a.serviceUrl!, botId: a.recipient!.id }).catch(() => {});
+    const [row0] = await db.select().from(assistantChats).where(eq(assistantChats.conversationId, convId));
+    const saveTurns = async (extra: ChatTurn[]) => {
+      const base: ChatTurn[] = row0 && row0.userId === u.id ? row0.messages : [];
+      const messages = [...base, ...extra].slice(-30);
+      await db
+        .insert(assistantChats)
+        .values({ conversationId: convId, userId: u.id, messages })
+        .onConflictDoUpdate({ target: assistantChats.conversationId, set: { userId: u.id, messages, updatedAt: new Date() } });
+    };
+
+    // ¿Responde «sí» / «no» a una acción que Alexia le ha preparado?
+    const pending = YES.test(text) || NO.test(text) ? await latestPendingTeams(u.id, convId) : null;
+    if (pending) {
+      const res = YES.test(text) ? await confirmAction(u, pending.id) : await cancelAction(u, pending.id);
+      await saveTurns([
+        { role: "user", content: text },
+        { role: "assistant", content: res.message },
+      ]);
+      await reply(a, res.message);
+      return;
+    }
     if (RESET.test(text)) {
       await db.delete(assistantChats).where(eq(assistantChats.conversationId, convId));
       await reply(a, "Hecho, borrón y cuenta nueva. ¿En qué te ayudo?");
@@ -151,23 +135,30 @@ export async function handleActivity(a: Activity) {
     }
     await connector(a, "/activities", { method: "POST", json: { type: "typing", from: a.recipient } }).catch(() => {});
 
-    const [row] = await db.select().from(assistantChats).where(eq(assistantChats.conversationId, convId));
     // Si cambia la persona (no debería en un chat personal), no se reutiliza el historial
-    const history: ChatTurn[] = row && row.userId === u.id ? row.messages : [];
+    const history: ChatTurn[] = row0 && row0.userId === u.id ? row0.messages : [];
     const turns: ChatTurn[] = [...history, { role: "user", content: text }];
     let answer: string;
     try {
-      answer = await askAssistant(u, turns);
+      const res = await askAssistant(u, turns, { channel: "teams", conversationId: convId });
+      answer = res.text;
+      const act = res.actions.at(-1);
+      if (act) answer += `\n\n---\n**${act.title}**\n${act.lines.map(([k, v]) => `- **${k}:** ${v}`).join("\n")}\n\nResponde **sí** para hacerlo o **no** para cancelarlo.`;
     } catch (err) {
       await logError("teams", err, { userId: u.id });
       await reply(a, "Ahora mismo no puedo responder. Inténtalo de nuevo en unos minutos.");
       return;
     }
-    const messages = [...turns, { role: "assistant" as const, content: answer }].slice(-30);
-    await db
-      .insert(assistantChats)
-      .values({ conversationId: convId, userId: u.id, messages })
-      .onConflictDoUpdate({ target: assistantChats.conversationId, set: { userId: u.id, messages, updatedAt: new Date() } });
+    // Avisos que aún no ha visto (p. ej. llegaron antes de hablar por primera vez con Alexia)
+    const notices = await unreadNotices(u.id);
+    if (notices.length) {
+      answer = `${notices.map((n) => `📬 **${n.title}**${n.link ? ` · [abrir](${n.link})` : ""}\n\n«${n.body}»`).join("\n\n")}\n\n---\n${answer}`;
+      await markNoticesRead(u.id, notices.map((n) => n.id));
+    }
+    await saveTurns([
+      { role: "user", content: text },
+      { role: "assistant", content: answer },
+    ]);
     await reply(a, answer);
   } catch (err) {
     await logError("teams", err, { activityType: a.type });

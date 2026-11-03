@@ -12,6 +12,7 @@ import { getActiveUsers, getBrands, getCatalogLabels } from "./catalogs";
 import { listProjects } from "./dashboard";
 import { labelInfoMissing, refTitle } from "./references";
 import { canAccessReplenishments, listReplenishments, loadReplenishment, myTurn, REP_FLOW } from "./replenishments";
+import { commentInput, markNoticesRead, notifyInput, prepareComment, prepareNotify, prepareQuote, quoteInput, recentNotices, type ActionChannel, type PreparedAction } from "./assistant-actions";
 import { getSettings } from "./settings";
 import { getFormulaTargetCost, loadSheet, pendingUpTo } from "./sheet";
 
@@ -22,23 +23,25 @@ const MODEL = process.env.OPENAI_MODEL || "gpt-6.1-terra";
  * Guía de la plataforma (estable: va en el prefijo cacheado). Describe el
  * proceso y la interfaz para responder dudas de uso.
  */
-const GUIDE = `Eres NIA, la asistente virtual de la plataforma NPD (nuevos desarrollos) de NATU Laboratories (Laboratorios NatuAromatic S.L.), fabricante español de perfumería, cosmética y ambientación. Ayudas a cada persona en su día a día: estado de proyectos, qué tiene pendiente y cómo se usa la plataforma.
+const GUIDE = `Eres Alexia, la asistente virtual de la plataforma NPD (nuevos desarrollos) de NATU Laboratories (Laboratorios NatuAromatic S.L.), fabricante español de perfumería, cosmética y ambientación. Ayudas a cada persona en su día a día: estado de proyectos, qué tiene pendiente y cómo se usa la plataforma.
 
 Personalidad:
-- Eres NIA: resolutiva, cercana y con chispa. Hablas como una compañera de equipo que se lo sabe todo de los proyectos y te lo cuenta con buen humor, sin dejar de ser profesional.
+- Eres Alexia: resolutiva, cercana y con chispa. Hablas como una compañera de equipo que se lo sabe todo de los proyectos y te lo cuenta con buen humor, sin dejar de ser profesional.
 - Tuteas, en español de España, con frases naturales («Te cuento», «Vamos al lío», «Buena pregunta»). Nada de tono robótico ni de fórmulas de atención al cliente («Estimado usuario», «Le informo que…»).
 - Un toque de humor ligero de vez en cuando, como mucho una frase: un guiño a la perfumería («este proyecto huele a aprobado»), celebrar un avance («¡a imprenta!») o animar con lo pendiente. Nunca a costa de personas, clientes ni proveedores.
 - Primero el dato, luego la chispa: la gracia nunca retrasa ni tapa la respuesta. Si la pregunta es seca o urgente, contesta directo.
 - Sin humor cuando hay malas noticias (rechazos, cancelaciones, retrasos, errores): ahí empática y práctica, con el siguiente paso claro.
 - Emojis: como mucho uno por respuesta y solo si suma (✅ 🎉 🌿 👀); en listas de datos, ninguno.
-- Te llamas NIA. Si te preguntan quién eres: la asistente virtual de NATU para los proyectos (NIA PROJECTS). Si te preguntan qué significa, puedes bromear con que es «NATU + IA», pero que tú prefieres pensar que es un nombre bonito.
+- Te llamas Alexia. Si te preguntan quién eres: la asistente virtual de NATU para los proyectos. Si te preguntan por tu nombre, puedes bromear con que llevas la IA en el apellido («Alex-IA»), pero que tú prefieres pensar que es un nombre bonito.
 
 Cómo responder:
 - Responde siempre en español, de forma breve y clara. Usa listas cortas cuando ayuden.
 - Para datos de proyectos usa SIEMPRE las herramientas; nunca inventes códigos, fechas, estados ni personas. Si no encuentras algo, dilo.
 - Solo puedes ver los proyectos que esta persona tiene permiso para ver: las herramientas ya lo filtran. Si un proyecto no aparece, indica que no existe o que no tiene acceso.
 - Cuando menciones un proyecto, enlázalo así: [2026-PL-0007 · Nombre](/proyectos/<id>).
-- No puedes hacer cambios (aprobar, avanzar estados, editar): explica dónde y cómo hacerlo en la plataforma.
+- Acciones que SÍ puedes preparar (siempre con confirmación de la persona): enviar un aviso a un departamento o persona (preparar_aviso), dejar un comentario en un proyecto o reposición (preparar_comentario) y, si es de Compras, pedir recotización a proveedores (preparar_recotizacion). Al prepararla, la herramienta NO la ejecuta: di en una frase qué vas a hacer y pide que la confirme (en la web con el botón «Confirmar»; en Teams respondiendo «sí»). Nunca digas que ya está hecha hasta que la persona confirme. Redacta el mensaje en primera persona de quien lo envía, claro y breve; no inventes datos.
+- No puedes aprobar P1/P2, avanzar fases ni estados, validar arte final, cancelar ni editar datos: explica dónde y cómo hacerlo en la plataforma.
+- Si la persona pregunta si tiene avisos o mensajes, usa ver_mis_avisos.
 - El coste objetivo de la fórmula es confidencial: solo lo menciones si la herramienta te lo devuelve.
 
 Cómo funciona la plataforma:
@@ -94,7 +97,7 @@ async function lookups(clientId: number | null): Promise<Lookups> {
 }
 
 /** Herramientas de consulta: todas respetan lo que el usuario puede ver. */
-function toolsFor(u: CurrentUser) {
+function toolsFor(u: CurrentUser, ctx: ActionChannel & { prepared: PreparedAction[] }) {
   const searchProjects = defineTool({
     name: "buscar_proyectos",
     description:
@@ -327,17 +330,62 @@ function toolsFor(u: CurrentUser) {
     },
   });
 
-  return [searchProjects, getProject, searchReps, getRep];
+  const prepared = (res: PreparedAction | string) => {
+    if (typeof res === "string") return res;
+    ctx.prepared.push(res);
+    return JSON.stringify({
+      accion_preparada: res.title,
+      detalle: Object.fromEntries(res.lines),
+      estado: "PENDIENTE DE CONFIRMAR. No está hecha.",
+      instruccion: ctx.channel === "teams" ? "Pide a la persona que responda «sí» para hacerlo o «no» para cancelar." : "Pide a la persona que la revise y pulse «Confirmar» (o «Cancelar»).",
+    });
+  };
+  const notifyTool = defineTool({
+    name: "preparar_aviso",
+    description: "Prepara un aviso (email + mensaje de Alexia en su chat) para un departamento o una persona, opcionalmente sobre un proyecto o reposición. No lo envía: la persona debe confirmarlo.",
+    inputSchema: notifyInput,
+    run: async (i) => prepared(await prepareNotify(u, ctx, i)),
+  });
+  const commentTool = defineTool({
+    name: "preparar_comentario",
+    description: "Prepara un comentario en la ficha de un proyecto NPD o una reposición. No lo publica: la persona debe confirmarlo.",
+    inputSchema: commentInput,
+    run: async (i) => prepared(await prepareComment(u, ctx, i)),
+  });
+  const quoteTool = defineTool({
+    name: "preparar_recotizacion",
+    description: "Prepara la petición de recotización por email a los proveedores de una reposición (solo Compras). No la envía: la persona debe confirmarla.",
+    inputSchema: quoteInput,
+    run: async (i) => prepared(await prepareQuote(u, ctx, i)),
+  });
+  const noticesTool = defineTool({
+    name: "ver_mis_avisos",
+    description: "Avisos que otras personas han enviado al usuario (vía Alexia), los más recientes primero. Los marca como leídos.",
+    inputSchema: z.object({}),
+    run: async () => {
+      const list = await recentNotices(u.id);
+      await markNoticesRead(u.id);
+      if (!list.length) return "No tiene avisos.";
+      return JSON.stringify(list.map((n) => ({ de: n.from, titulo: n.title, mensaje: n.body, enlace: n.link, urgente: n.urgent, fecha: n.createdAt.toISOString().slice(0, 16).replace("T", " "), nuevo: !n.readAt })));
+    },
+  });
+
+  return [searchProjects, getProject, searchReps, getRep, notifyTool, commentTool, quoteTool, noticesTool];
 }
 
 export type ChatTurn = { role: "user" | "assistant"; content: string };
 
 /** Responde a la conversación (solo texto; el historial lo guarda el navegador). */
-export async function askAssistant(u: CurrentUser, history: ChatTurn[]) {
+export type AssistantReply = { text: string; actions: PreparedAction[] };
+
+/** Responde a la conversación; devuelve el texto y las acciones preparadas pendientes de confirmar. */
+export async function askAssistant(u: CurrentUser, history: ChatTurn[], channel: ActionChannel = { channel: "web" }): Promise<AssistantReply> {
+  const ctx = { ...channel, prepared: [] as PreparedAction[] };
+  const done = (text: string): AssistantReply => ({ text, actions: ctx.prepared });
   const who = `Usuario actual: ${u.name}. Roles: ${u.roles.map((r) => ROLE_LABEL[r] ?? r).join(", ") || "ninguno"}. Departamentos: ${
     u.departmentKeys.join(", ") || "ninguno"
   }. Hoy es ${new Date().toLocaleDateString("es-ES", { timeZone: "Europe/Madrid", weekday: "long", day: "numeric", month: "long", year: "numeric" })}.`;
-  const tools = toolsFor(u);
+  const tools = toolsFor(u, ctx);
   // API Responses (la de Chat Completions no admite herramientas con razonamiento en los
   // modelos nuevos). Sin guardar nada en OpenAI: el razonamiento viaja cifrado entre vueltas.
   // La guía va primero y sin cambios para aprovechar la caché de prompts.
@@ -357,9 +405,9 @@ export async function askAssistant(u: CurrentUser, history: ChatTurn[]) {
       include: ["reasoning.encrypted_content"],
     });
     const refused = res.output.some((o) => o.type === "message" && o.content.some((c) => c.type === "refusal"));
-    if (refused) return "Lo siento, no puedo ayudarte con esa petición.";
+    if (refused) return done("Lo siento, no puedo ayudarte con esa petición.");
     const calls = res.output.filter((o): o is OpenAI.Responses.ResponseFunctionToolCall => o.type === "function_call");
-    if (!calls.length) return res.output_text?.trim() || "No he podido generar una respuesta. ¿Puedes reformular la pregunta?";
+    if (!calls.length) return done(res.output_text?.trim() || "No he podido generar una respuesta. ¿Puedes reformular la pregunta?");
     input.push(...(res.output as OpenAI.Responses.ResponseInputItem[]));
     for (const call of calls) {
       const tool = tools.find((t) => t.def.name === call.name);
@@ -373,5 +421,5 @@ export async function askAssistant(u: CurrentUser, history: ChatTurn[]) {
       input.push({ type: "function_call_output", call_id: call.call_id, output });
     }
   }
-  return "La consulta es demasiado compleja. ¿Puedes concretar un poco más la pregunta?";
+  return done("La consulta es demasiado compleja. ¿Puedes concretar un poco más la pregunta?");
 }

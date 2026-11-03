@@ -803,3 +803,60 @@ export const replenishmentFiles = pgTable(
   },
   (t) => [index("replenishment_files_rep_idx").on(t.replenishmentId)],
 );
+
+// ─── Asistente Alexia: acciones con confirmación y avisos ────────────────────
+
+/** Acción preparada por Alexia que la persona debe confirmar antes de ejecutarse. */
+export const assistantActions = pgTable(
+  "assistant_actions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** notify · comment · request_quote */
+    kind: text("kind").notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    /** Resumen legible que se muestra para confirmar */
+    summary: jsonb("summary").$type<{ title: string; lines: [string, string][] }>().notNull(),
+    /** pending · done · cancelled · failed */
+    status: text("status").notNull().default("pending"),
+    /** web · teams (y en Teams, la conversación donde se preparó) */
+    channel: text("channel").notNull().default("web"),
+    conversationId: text("conversation_id"),
+    result: text("result"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    executedAt: timestamp("executed_at", { withTimezone: true }),
+  },
+  (t) => [index("assistant_actions_user_idx").on(t.userId, t.status)],
+);
+
+/** Avisos personales que Alexia comunica en el chat (web y Teams). */
+export const userNotices = pgTable(
+  "user_notices",
+  {
+    id: serial("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    fromUserId: uuid("from_user_id").references(() => users.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    link: text("link"),
+    urgent: boolean("urgent").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    readAt: timestamp("read_at", { withTimezone: true }),
+  },
+  (t) => [index("user_notices_user_idx").on(t.userId, t.readAt)],
+);
+
+/** Referencia a la conversación personal de Teams de cada usuario (para avisarle por iniciativa propia). */
+export const teamsConversations = pgTable("teams_conversations", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  conversationId: text("conversation_id").notNull(),
+  serviceUrl: text("service_url").notNull(),
+  botId: text("bot_id").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
