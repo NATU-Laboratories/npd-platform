@@ -125,8 +125,8 @@ export function AssistantWidget({ firstName }: { firstName: string }) {
               <Sparkles className="size-4" aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold">NIA</p>
-              <p className="text-[11px] text-white/70">Proyectos, pendientes y uso de la plataforma</p>
+              <p className="text-sm font-semibold tracking-wide">NIA PROJECTS</p>
+              <p className="text-[11px] text-white/70">Asistente virtual</p>
             </div>
             {turns.length > 0 && (
               <button type="button" onClick={() => setTurns([])} className="rounded p-1.5 text-white/80 hover:bg-white/10" title="Nueva conversación" aria-label="Nueva conversación">
