@@ -66,6 +66,9 @@ export function RepFiles({ id, files, round, canUpload, defaultTag, canDeleteAll
             {progress !== null ? `Subiendo… ${progress}%` : "Subir archivo"}
           </Button>
           <span className="text-xs text-slate-500">Se guarda en la ronda {round}.</span>
+          <span className="sr-only" aria-live="polite">
+            {progress !== null ? `Subiendo archivo: ${progress} %` : ""}
+          </span>
         </div>
       )}
       {!files.length && <p className="text-sm text-slate-500">Todavía no hay archivos.</p>}

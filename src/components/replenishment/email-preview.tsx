@@ -11,13 +11,12 @@ export function EmailPreview({ emails }: { emails: RepEmail[] }) {
   const e = emails[Math.min(sel, emails.length - 1)]!;
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Emails que se enviarán">
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Emails que se enviarán">
         {emails.map((x, i) => (
           <button
             key={x.key}
             type="button"
-            role="tab"
-            aria-selected={i === sel}
+            aria-pressed={i === sel}
             onClick={() => setSel(i)}
             className={cn(
               "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs ring-1",

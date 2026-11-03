@@ -61,14 +61,14 @@ export function RepItems({ id, items, suppliers, canEdit }: { id: string; items:
                   <p className="font-medium text-slate-800">{ELEMENT_LABEL[i.element] ?? i.element}</p>
                   {i.description && <p className="text-xs text-slate-500">{i.description}</p>}
                 </td>
-                <td className="whitespace-nowrap py-2 pr-3">{i.quantity ? `${i.quantity.toLocaleString("es-ES")} uds` : "—"}</td>
+                <td className="whitespace-nowrap py-2 pr-3 tabular-nums">{i.quantity ? `${i.quantity.toLocaleString("es-ES")} uds` : "—"}</td>
                 <td className="py-2 pr-3">
                   <p>{i.supplierName ?? <span className="text-amber-700">Sin proveedor</span>}</p>
                   <p className="text-xs text-slate-500">{i.supplierEmails.join(", ") || (i.supplierName ? <span className="text-amber-700">sin email</span> : null)}</p>
                 </td>
                 <td className="py-2 pr-3">
                   <span className={cn("rounded-full px-2 py-0.5 text-xs", QUOTE_TONE[i.quoteStatus])}>{QUOTE_STATUS_LABEL[i.quoteStatus] ?? i.quoteStatus}</span>
-                  {i.quotePrice && <p className="mt-1 text-xs font-medium text-slate-800">{Number(i.quotePrice).toLocaleString("es-ES", { maximumFractionDigits: 4 })} €/ud</p>}
+                  {i.quotePrice && <p className="mt-1 text-xs font-medium tabular-nums text-slate-800">{Number(i.quotePrice).toLocaleString("es-ES", { maximumFractionDigits: 4 })} €/ud</p>}
                   {i.quoteNotes && <p className="text-xs text-slate-500">{i.quoteNotes}</p>}
                   {i.quoteStatus === "requested" && i.quoteRequestedAt && <p className="text-xs text-slate-400">Pedida el {formatDate(i.quoteRequestedAt)}</p>}
                 </td>
@@ -148,7 +148,7 @@ function EditItemDialog({ item, suppliers, onClose }: { item: RepItemRow; suppli
                 <Input id="ei-nn" value={newName} onChange={(e) => setNewName(e.target.value)} maxLength={200} />
               </Field>
               <Field label="Email" htmlFor="ei-ne">
-                <Input id="ei-ne" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
+                <Input id="ei-ne" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} spellCheck={false} autoComplete="off" placeholder="pedidos@proveedor.com…" />
               </Field>
             </div>
           )}
@@ -191,7 +191,7 @@ function QuoteDialog({ item, onClose }: { item: RepItemRow; onClose: () => void 
       <DialogContent title={`Recotización · ${ELEMENT_LABEL[item.element] ?? item.element}`} description={item.supplierName ?? undefined}>
         <div className="flex flex-col gap-3">
           <Field label="Precio unitario (€/ud)" htmlFor="q-price">
-            <Input id="q-price" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0,0000" />
+            <Input id="q-price" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0,045…" className="tabular-nums" autoComplete="off" />
           </Field>
           <Field label="Notas" hint="Plazo de entrega, mínimos, validez de la oferta…" htmlFor="q-notes">
             <Textarea id="q-notes" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={1000} />

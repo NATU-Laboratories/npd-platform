@@ -11,15 +11,16 @@ const isRep = (p: string) => p.startsWith("/reposiciones");
 /** Pestañas de la cabecera: Nuevos desarrollos (NPD) y Reposiciones. */
 export function MainNav({ showReplenishments }: { showReplenishments: boolean }) {
   const path = usePathname();
+  const npd = path === "/" || path.startsWith("/proyectos");
   const tab = (active: boolean) => cn("rounded px-3 py-1.5 hover:bg-white/10", active && "bg-white/15 font-medium");
   return (
     <>
-      <Link href="/" className={tab(path === "/" || path.startsWith("/proyectos"))}>
+      <Link href="/" className={tab(npd)} aria-current={npd ? "page" : undefined}>
         <span className="hidden md:inline">Nuevos desarrollos</span>
         <span className="md:hidden">NPD</span>
       </Link>
       {showReplenishments && (
-        <Link href="/reposiciones" className={tab(isRep(path))}>
+        <Link href="/reposiciones" className={tab(isRep(path))} aria-current={isRep(path) ? "page" : undefined}>
           Reposiciones
         </Link>
       )}
