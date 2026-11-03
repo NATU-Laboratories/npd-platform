@@ -81,7 +81,7 @@ function ActionDialog({ id, action, onClose }: { id: string; action: RepAction; 
         <div className="flex flex-col gap-4">
           {m.comment && (
             <Field label={m.comment === "required" ? (action === "cancel" ? "Motivo" : "Qué hay que corregir") : "Comentario (opcional)"} required={m.comment === "required"} htmlFor="ra-comment">
-              <Textarea id="ra-comment" value={comment} onChange={(e) => setComment(e.target.value)} maxLength={4000} autoFocus />
+              <Textarea id="ra-comment" value={comment} onChange={(e) => setComment(e.target.value)} maxLength={4000} autoFocus={typeof window !== "undefined" && window.matchMedia("(pointer: fine)").matches} />
             </Field>
           )}
           {isPrint && (
@@ -96,7 +96,7 @@ function ActionDialog({ id, action, onClose }: { id: string; action: RepAction; 
                 ].map(([v, l]) => (
                   <label
                     key={String(v)}
-                    className={cn("cursor-pointer rounded-lg px-3 py-2 text-sm ring-1", sendSupplier === v ? "bg-natu-dark text-white ring-natu-dark" : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50")}
+                    className={cn("cursor-pointer rounded-lg px-3 py-2 text-sm ring-1 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand-500 has-[:focus-visible]:ring-offset-2", sendSupplier === v ? "bg-natu-dark text-white ring-natu-dark" : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50")}
                   >
                     <input type="radio" className="sr-only" checked={sendSupplier === v} onChange={() => setSendSupplier(v as boolean)} />
                     {l as string}

@@ -37,6 +37,20 @@ export function NewReplenishmentForm({ suppliers }: { suppliers: SupplierOption[
   const [preview, setPreview] = React.useState<{ key: string; emails: RepEmail[] } | null>(null);
   const [busy, setBusy] = React.useState<"preview" | "create" | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [invalid, setInvalid] = React.useState<string | null>(null);
+  const created = React.useRef(false);
+  const dirty = !!(title || productName || productRef || clientOrBrand || neededBy || notes || npd || items.some((i) => i.description || i.quantity || i.supplierId));
+
+  // Aviso al salir de la página con la solicitud a medias
+  React.useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      if (created.current) return;
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
 
   const payload = React.useMemo(
     () => ({
@@ -65,21 +79,29 @@ export function NewReplenishmentForm({ suppliers }: { suppliers: SupplierOption[
 
   const setItem = (key: string, patch: Partial<Item>) => setItems((list) => list.map((i) => (i.key === key ? { ...i, ...patch } : i)));
 
-  function check(): string | null {
-    if (!title.trim()) return "Pon un título a la reposición";
+  /** Primer error del formulario y el campo al que llevar el foco. */
+  function check(): [string, string] | null {
+    if (!title.trim()) return ["Pon un título a la reposición", "r-title"];
     for (const [n, i] of items.entries()) {
-      if (!i.supplierId) return `Indica el proveedor del elemento ${n + 1}`;
-      if (i.supplierId === NEW && !i.newName.trim()) return `Escribe el nombre del proveedor nuevo (elemento ${n + 1})`;
-      if (i.element === "otro" && !i.description.trim()) return `Describe el elemento ${n + 1} («Otro»)`;
+      if (!i.supplierId) return [`Indica el proveedor del elemento ${n + 1}`, `${i.key}-sup`];
+      if (i.supplierId === NEW && !i.newName.trim()) return [`Escribe el nombre del proveedor nuevo (elemento ${n + 1})`, `${i.key}-nn`];
+      if (i.element === "otro" && !i.description.trim()) return [`Describe el elemento ${n + 1} («Otro»)`, `${i.key}-desc`];
     }
-    if (sendSupplier === null) return "Indica si quieres enviar el email de recotización al proveedor";
+    if (sendSupplier === null) return ["Indica si quieres enviar el email de recotización al proveedor", "send-supplier-yes"];
     return null;
   }
+  const inv = (id: string) => (invalid === id ? true : undefined);
 
   async function doPreview() {
     const err = check();
-    setError(err);
-    if (err) return;
+    setError(err?.[0] ?? null);
+    setInvalid(err?.[1] ?? null);
+    if (err) {
+      const el = document.getElementById(err[1]);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      el?.focus({ preventScroll: true });
+      return;
+    }
     setBusy("preview");
     const res = await previewReplenishmentEmailsAction(payload);
     setBusy(null);
@@ -95,6 +117,7 @@ export function NewReplenishmentForm({ suppliers }: { suppliers: SupplierOption[
       setBusy(null);
       return setError(res.error);
     }
+    created.current = true;
     toast.success(`Reposición ${res.data!.code} creada`);
     router.push(`/reposiciones/${res.data!.id}`);
   }
@@ -124,7 +147,7 @@ export function NewReplenishmentForm({ suppliers }: { suppliers: SupplierOption[
       <Card className="grid gap-4 p-4 sm:grid-cols-2">
         <h2 className="text-sm font-semibold text-slate-900 sm:col-span-2">Producto a reponer</h2>
         <Field label="Título de la reposición" required htmlFor="r-title" className="sm:col-span-2">
-          <Input id="r-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="p. ej. Reposición etiquetas Bruma 100 ml" maxLength={200} />
+          <Input id="r-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="p. ej. Reposición etiquetas Bruma 100 ml…" maxLength={200} aria-invalid={inv("r-title")} />
         </Field>
         <Field label="Proyecto NPD de origen" hint="Opcional. Vincula el desarrollo original para tener a mano su ficha." className="sm:col-span-2">
           <ProjectPicker value={npd} onChange={setNpd} />
@@ -135,7 +158,7 @@ export function NewReplenishmentForm({ suppliers }: { suppliers: SupplierOption[
           )}
         </Field>
         <Field label="Producto" htmlFor="r-prod">
-          <Input id="r-prod" value={productName} onChange={(e) => setProductName(e.target.value)} placeholder="Nombre comercial" maxLength={200} />
+          <Input id="r-prod" value={productName} onChange={(e) => setProductName(e.target.value)} placeholder="Nombre comercial…" maxLength={200} />
         </Field>
         <Field label="Referencia / EAN" htmlFor="r-ref">
           <Input id="r-ref" value={productRef} onChange={(e) => setProductRef(e.target.value)} maxLength={100} />
@@ -170,13 +193,13 @@ export function NewReplenishmentForm({ suppliers }: { suppliers: SupplierOption[
                     </Select>
                   </Field>
                   <Field label="Descripción" required={i.element === "otro"} htmlFor={`${i.key}-desc`}>
-                    <Input id={`${i.key}-desc`} value={i.description} onChange={(e) => setItem(i.key, { description: e.target.value })} placeholder="Versión, medidas, idioma…" maxLength={300} />
+                    <Input id={`${i.key}-desc`} value={i.description} onChange={(e) => setItem(i.key, { description: e.target.value })} placeholder="Versión, medidas, idioma…" maxLength={300} aria-invalid={inv(`${i.key}-desc`)} />
                   </Field>
                   <Field label="Cantidad" htmlFor={`${i.key}-qty`}>
-                    <Input id={`${i.key}-qty`} type="number" min={1} value={i.quantity} onChange={(e) => setItem(i.key, { quantity: e.target.value })} placeholder="uds" />
+                    <Input id={`${i.key}-qty`} type="number" min={1} value={i.quantity} onChange={(e) => setItem(i.key, { quantity: e.target.value })} placeholder="5000…" className="tabular-nums" />
                   </Field>
                   <Field label="Proveedor" required htmlFor={`${i.key}-sup`}>
-                    <Select id={`${i.key}-sup`} value={i.supplierId} onChange={(e) => setItem(i.key, { supplierId: e.target.value })} aria-invalid={!i.supplierId || undefined}>
+                    <Select id={`${i.key}-sup`} value={i.supplierId} onChange={(e) => setItem(i.key, { supplierId: e.target.value })} aria-invalid={inv(`${i.key}-sup`)}>
                       <option value="">Elige proveedor…</option>
                       {suppliers.map((s) => (
                         <option key={s.id} value={s.id}>
@@ -200,10 +223,10 @@ export function NewReplenishmentForm({ suppliers }: { suppliers: SupplierOption[
                 {i.supplierId === NEW && (
                   <div className="mt-2 grid gap-2 rounded-md bg-slate-50 p-2 sm:grid-cols-2">
                     <Field label="Nombre del proveedor nuevo" required htmlFor={`${i.key}-nn`}>
-                      <Input id={`${i.key}-nn`} value={i.newName} onChange={(e) => setItem(i.key, { newName: e.target.value })} maxLength={200} />
+                      <Input id={`${i.key}-nn`} value={i.newName} onChange={(e) => setItem(i.key, { newName: e.target.value })} maxLength={200} autoComplete="off" aria-invalid={inv(`${i.key}-nn`)} />
                     </Field>
                     <Field label="Email del proveedor" hint="Para enviarle la solicitud de recotización." htmlFor={`${i.key}-ne`}>
-                      <Input id={`${i.key}-ne`} type="email" value={i.newEmail} onChange={(e) => setItem(i.key, { newEmail: e.target.value })} />
+                      <Input id={`${i.key}-ne`} type="email" value={i.newEmail} onChange={(e) => setItem(i.key, { newEmail: e.target.value })} spellCheck={false} autoComplete="off" placeholder="pedidos@proveedor.com…" />
                     </Field>
                   </div>
                 )}
@@ -233,11 +256,18 @@ export function NewReplenishmentForm({ suppliers }: { suppliers: SupplierOption[
               <label
                 key={String(v)}
                 className={cn(
-                  "cursor-pointer rounded-lg px-3 py-2 text-sm ring-1",
+                  "cursor-pointer rounded-lg px-3 py-2 text-sm ring-1 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand-500 has-[:focus-visible]:ring-offset-2",
                   sendSupplier === v ? "bg-natu-dark text-white ring-natu-dark" : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50",
                 )}
               >
-                <input type="radio" name="send-supplier" className="sr-only" checked={sendSupplier === v} onChange={() => setSendSupplier(v as boolean)} />
+                <input
+                  type="radio"
+                  name="send-supplier"
+                  id={v ? "send-supplier-yes" : "send-supplier-no"}
+                  className="sr-only"
+                  checked={sendSupplier === v}
+                  onChange={() => setSendSupplier(v as boolean)}
+                />
                 {l as string}
               </label>
             ))}
@@ -277,22 +307,30 @@ export function NewReplenishmentForm({ suppliers }: { suppliers: SupplierOption[
   );
 }
 
-/** Buscador de proyectos NPD (código o nombre). */
+/** Buscador de proyectos NPD (código o nombre), con teclado: ↑ ↓ Intro y Esc. */
 function ProjectPicker({ value, onChange }: { value: { id: string; label: string } | null; onChange: (v: { id: string; label: string } | null) => void }) {
   const [q, setQ] = React.useState("");
   const [results, setResults] = React.useState<{ id: string; label: string }[]>([]);
   const [open, setOpen] = React.useState(false);
+  const [active, setActive] = React.useState(0);
+  const listId = React.useId();
   React.useEffect(() => {
     if (q.trim().length < 2) return;
     const t = setTimeout(async () => {
       const res = await searchNpdProjectsAction(q);
       if (res.ok) {
         setResults(res.data ?? []);
+        setActive(0);
         setOpen(true);
       }
     }, 250);
     return () => clearTimeout(t);
   }, [q]);
+  const pick = (r: { id: string; label: string }) => {
+    onChange(r);
+    setOpen(false);
+    setQ("");
+  };
   if (value)
     return (
       <div className="flex items-center justify-between gap-2 rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm">
@@ -302,30 +340,61 @@ function ProjectPicker({ value, onChange }: { value: { id: string; label: string
         </button>
       </div>
     );
+  const shown = open && q.trim().length >= 2;
   return (
     <div className="relative">
-      <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-slate-400" />
-      <Input value={q} onChange={(e) => setQ(e.target.value)} onFocus={() => results.length && setOpen(true)} placeholder="Busca por código o nombre (p. ej. 2026-PL-0007)" className="pl-9" aria-label="Buscar proyecto NPD" />
-      {open && q.trim().length >= 2 && (
-        <ul className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-md bg-white py-1 text-sm shadow-lg ring-1 ring-slate-200">
+      <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-slate-400" aria-hidden />
+      <Input
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        onFocus={() => results.length && setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") return setOpen(false);
+          if (!shown || !results.length) return;
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setActive((a) => Math.min(a + 1, results.length - 1));
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setActive((a) => Math.max(a - 1, 0));
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            pick(results[active]!);
+          }
+        }}
+        placeholder="Busca por código o nombre (p. ej. 2026-PL-0007)…"
+        className="pl-9"
+        aria-label="Buscar proyecto NPD"
+        role="combobox"
+        aria-expanded={shown}
+        aria-controls={listId}
+        aria-autocomplete="list"
+        aria-activedescendant={shown && results.length ? `${listId}-${active}` : undefined}
+        autoComplete="off"
+        spellCheck={false}
+      />
+      {shown && (
+        <ul id={listId} role="listbox" aria-label="Proyectos NPD" className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-md bg-white py-1 text-sm shadow-lg ring-1 ring-slate-200">
           {results.length ? (
-            results.map((r) => (
-              <li key={r.id}>
-                <button
-                  type="button"
-                  className="w-full px-3 py-1.5 text-left hover:bg-slate-50"
-                  onClick={() => {
-                    onChange(r);
-                    setOpen(false);
-                    setQ("");
-                  }}
-                >
-                  {r.label}
-                </button>
+            results.map((r, i) => (
+              <li
+                key={r.id}
+                id={`${listId}-${i}`}
+                role="option"
+                aria-selected={i === active}
+                onMouseDown={(e) => e.preventDefault()}
+                onMouseEnter={() => setActive(i)}
+                onClick={() => pick(r)}
+                className={cn("cursor-pointer px-3 py-1.5", i === active && "bg-slate-100")}
+              >
+                {r.label}
               </li>
             ))
           ) : (
-            <li className="px-3 py-1.5 text-slate-500">Sin resultados</li>
+            <li className="px-3 py-1.5 text-slate-500" role="option" aria-selected={false} aria-disabled>
+              Sin resultados
+            </li>
           )}
         </ul>
       )}

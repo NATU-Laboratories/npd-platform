@@ -61,7 +61,7 @@ export default async function ReplenishmentPage({ params }: PageProps<"/reposici
               const done = r.status === "closed" || i < currentIdx;
               const now = i === currentIdx && r.status !== "closed";
               return (
-                <li key={s.key} className="flex items-center">
+                <li key={s.key} className="flex items-center" aria-current={now ? "step" : undefined}>
                   <span
                     className={cn(
                       "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs",

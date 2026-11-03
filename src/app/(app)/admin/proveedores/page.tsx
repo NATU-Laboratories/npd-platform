@@ -45,13 +45,13 @@ export default async function SuppliersPage() {
                   {used > 0 && <p className="mt-0.5 text-[11px] text-slate-400">En {used} {used === 1 ? "elemento" : "elementos"} de reposiciones</p>}
                 </Td>
                 <Td>
-                  <Input name="emails" form={f} defaultValue={s.emails.join(", ")} className="h-8 min-w-56 text-sm" aria-label="Emails" placeholder="sin email" />
+                  <Input name="emails" form={f} defaultValue={s.emails.join(", ")} className="h-8 min-w-56 text-sm" aria-label="Emails" placeholder="pedidos@proveedor.com…" spellCheck={false} autoComplete="off" />
                 </Td>
                 <Td>
                   <Input name="contactName" form={f} defaultValue={s.contactName ?? ""} className="h-8 min-w-32 text-sm" aria-label="Contacto" />
                 </Td>
                 <Td>
-                  <Input name="phone" form={f} defaultValue={s.phone ?? ""} className="h-8 w-32 text-sm" aria-label="Teléfono" />
+                  <Input name="phone" type="tel" form={f} defaultValue={s.phone ?? ""} className="h-8 w-32 text-sm" aria-label="Teléfono" autoComplete="off" />
                 </Td>
                 <Td>
                   <input type="checkbox" name="isActive" form={f} defaultChecked={s.isActive} className="accent-brand-600" aria-label="Activo" />
@@ -73,10 +73,10 @@ export default async function SuppliersPage() {
         </tbody>
       </Table>
       <form action={saveSupplierAction} className="mt-4 grid gap-2 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-[1fr_1.4fr_1fr_8rem_auto]">
-        <Input name="name" placeholder="Nuevo proveedor" required aria-label="Nombre del nuevo proveedor" />
-        <Input name="emails" placeholder="Emails (separados por comas)" aria-label="Emails" />
-        <Input name="contactName" placeholder="Persona de contacto" aria-label="Contacto" />
-        <Input name="phone" placeholder="Teléfono" aria-label="Teléfono" />
+        <Input name="name" placeholder="Nuevo proveedor…" required aria-label="Nombre del nuevo proveedor" autoComplete="off" />
+        <Input name="emails" placeholder="Emails, separados por comas…" aria-label="Emails" spellCheck={false} autoComplete="off" />
+        <Input name="contactName" placeholder="Persona de contacto…" aria-label="Contacto" autoComplete="off" />
+        <Input name="phone" type="tel" placeholder="Teléfono…" aria-label="Teléfono" autoComplete="off" />
         <Button type="submit" variant="secondary">
           Añadir
         </Button>
