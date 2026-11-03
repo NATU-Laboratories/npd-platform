@@ -16,6 +16,7 @@ type Target = { id: number; name: string; isFinal: boolean; promptFields: string
 export function DeptTransition({
   projectId,
   departmentId,
+  referenceId,
   deptName,
   direction,
   targets,
@@ -23,6 +24,8 @@ export function DeptTransition({
 }: {
   projectId: string;
   departmentId: number;
+  /** Referencia (si el departamento avanza por referencia). */
+  referenceId?: number;
   deptName: string;
   direction: "forward" | "back";
   targets: Target[];
@@ -42,7 +45,7 @@ export function DeptTransition({
   async function confirm() {
     setBusy(true);
     const promptValues = forward ? Object.fromEntries(target!.promptFields.map((ref) => [ref, values[ref]])) : undefined;
-    const res = await transitionDeptAction(projectId, departmentId, target!.id, comment, promptValues);
+    const res = await transitionDeptAction(projectId, departmentId, target!.id, comment, promptValues, referenceId);
     setBusy(false);
     if (!res.ok) return toast.error(res.error);
     toast.success(res.data?.completed ? `${deptName}: completado` : `${deptName}: ${target!.name}`);

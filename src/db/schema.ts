@@ -252,6 +252,10 @@ export const projects = pgTable(
     /** Cotización enviada al cliente (fase 1 → 2). */
     quoteAmount: numeric("quote_amount", { precision: 12, scale: 2 }),
     quotedAt: timestamp("quoted_at", { withTimezone: true }),
+    /** Proyectos con varias referencias: precio único o por referencia. */
+    pricingMode: text("pricing_mode").$type<"single" | "per_reference">().notNull().default("single"),
+    /** Envase y packaging común a todas las referencias o distinto por referencia. */
+    packagingMode: text("packaging_mode").$type<"common" | "per_reference">().notNull().default("common"),
     /** Solo PL: anticipo del 30 % recibido o inicio sin anticipo bajo responsabilidad. */
     prepayment: jsonb("prepayment").$type<Prepayment>(),
     templateId: integer("template_id").references(() => workflowTemplates.id),
@@ -548,6 +552,30 @@ export const sheetStatus = pgEnum("sheet_status", ["pending", "done", "na"]);
  * La definición de cada apartado vive en `src/lib/sheet/sections.ts`.
  */
 /**
+ * Referencias de un proyecto (variantes: fragancias, colores…). Con dos o más, la
+ * fórmula, identificación, regulatorio, etiqueta (y opcionalmente precio y envase)
+ * van por referencia y cada departamento avanza por separado en cada una.
+ */
+export const projectReferences = pgTable(
+  "project_references",
+  {
+    id: serial("id").primaryKey(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    /** Letra corta (A, B, C…). */
+    label: text("label").notNull(),
+    name: text("name").notNull(),
+    /** Datos para la etiqueta que aporta el comercial por referencia. */
+    finalName: text("final_name"),
+    facing: text("facing"),
+    sort: integer("sort").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("project_references_project_idx").on(t.projectId)],
+);
+
+/**
  * Datos confidenciales del proyecto, fuera de la ficha y del brief: solo los ven
  * Laboratorio / I+D, el gestor de proyectos (decisor global), admin y Operaciones.
  */
@@ -568,6 +596,8 @@ export const projectSheet = pgTable(
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
     section: text("section").notNull(),
+    /** 0 = común al proyecto; si no, id de project_references (apartados por referencia). */
+    referenceId: integer("reference_id").notNull().default(0),
     data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),
     status: sheetStatus("status").notNull().default("pending"),
     statusBy: uuid("status_by").references(() => users.id, { onDelete: "set null" }),
@@ -576,7 +606,7 @@ export const projectSheet = pgTable(
     updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [primaryKey({ columns: [t.projectId, t.section] })],
+  (t) => [primaryKey({ columns: [t.projectId, t.section, t.referenceId] })],
 );
 export type SheetRow = typeof projectSheet.$inferSelect;
 
@@ -626,8 +656,10 @@ export const projectDeptProgress = pgTable(
     rounds: integer("rounds").notNull().default(1),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+    /** 0 = estado único del departamento; si no, estado de esa referencia. */
+    referenceId: integer("reference_id").notNull().default(0),
   },
-  (t) => [primaryKey({ columns: [t.projectId, t.departmentId] })],
+  (t) => [primaryKey({ columns: [t.projectId, t.departmentId, t.referenceId] })],
 );
 
 /** Historial de avances y retrocesos de subestado (fechas del stepper y actividad). */
@@ -647,6 +679,7 @@ export const projectDeptTransitions = pgTable(
     comment: text("comment"),
     actorId: uuid("actor_id").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    referenceId: integer("reference_id").notNull().default(0),
   },
   (t) => [index("project_dept_transitions_idx").on(t.projectId, t.departmentId, t.createdAt)],
 );

@@ -9,6 +9,7 @@ import {
   infoRequests,
   projectCodeCounters,
   projectDepartments,
+  projectReferences,
   projects,
   users,
   type GateKey,
@@ -16,13 +17,14 @@ import {
   type Project,
   type ProjectStatus,
 } from "@/db/schema";
-import { computeCompleteness, FIELD_BY_KEY, missingLabelInfo, submitErrors } from "@/lib/brief/fields";
+import { computeCompleteness, FIELD_BY_KEY, submitErrors } from "@/lib/brief/fields";
 import { FIRST_RUNNING_PHASE, LAST_PHASE, PHASES, PREPAYMENT_TYPES } from "@/lib/labels";
 import { parseBriefLenient, type BriefData } from "@/lib/brief/schema";
 import { quoteSpecGroups } from "@/lib/sheet/sections";
 import { logActivity, jsonDiff } from "./activity";
 import { canCompleteLabelInfo, canDecideGate, canEditBrief, canManageProject, canRequest, canRequestOnBehalf, canSeeFormulaCost, canSendQuote, type CurrentUser } from "./authz";
 import { enqueueJob, kickJobs } from "./jobs";
+import { ensureReferences, isMulti, labelInfoMissing, listReferences, refTitle } from "./references";
 import { loadProjectRow, loadSheet, notifyPhaseSections, packagingSummary, setFormulaTargetCost, notifyProjectStarted, patchSheetSection, pendingUpTo, syncValidationDepts } from "./sheet";
 import {
   notifyApproved,
@@ -180,27 +182,55 @@ export async function saveBrief(u: CurrentUser, projectId: string, input: unknow
  * idiomas, países de venta) tras la aprobación de la fórmula. Solo se tocan esos
  * campos del brief; se avisa a Marketing, Calidad y Diseño si están implicados.
  */
-export async function completeLabelInfo(u: CurrentUser, projectId: string, input: { finalName?: string | null; facing?: string | null; languages?: string[]; markets?: string[] }) {
+export async function completeLabelInfo(
+  u: CurrentUser,
+  projectId: string,
+  input: {
+    finalName?: string | null;
+    facing?: string | null;
+    languages?: string[];
+    markets?: string[];
+    /** Con varias referencias: naming y facing de cada una. */
+    refs?: { id: number; finalName?: string | null; facing?: string | null }[];
+  },
+) {
   const changed = await db.transaction(async (tx) => {
     const p = await loadForUpdate(tx, projectId);
     if (!canCompleteLabelInfo(u, p)) throw new ActionError("Solo el comercial del proyecto o un gestor puede completar estos datos");
     if (!["in_progress", "paused", "in_production"].includes(p.status)) throw new ActionError("Acción no permitida en el estado actual del proyecto");
+    const refs = await listReferences(projectId, tx);
+    const multi = isMulti(refs);
     const patch = {
-      finalName: input.finalName?.trim() || undefined,
-      facing: input.facing?.trim() || undefined,
+      ...(multi ? {} : { finalName: input.finalName?.trim() || undefined, facing: input.facing?.trim() || undefined }),
       languages: input.languages ?? [],
       markets: input.markets ?? [],
     };
     const { data } = parseBriefLenient({ ...p.brief, ...patch });
-    const missing = missingLabelInfo(data);
+    const nextRefs = refs.map((r) => {
+      const v = input.refs?.find((x) => x.id === r.id);
+      return v ? { ...r, finalName: v.finalName?.trim() || null, facing: v.facing?.trim() || null } : r;
+    });
+    const missing = labelInfoMissing({ brief: data }, nextRefs);
     if (missing.length) throw new ActionError(`Falta: ${missing.map((f) => f.label).join(", ")}`, Object.fromEntries(missing.map((f) => [f.key, "Obligatorio"])));
     const diff = jsonDiff(p.brief, data);
-    if (!Object.keys(diff).length) return false;
+    const refChanges = nextRefs.filter((r, i) => r.finalName !== refs[i]!.finalName || r.facing !== refs[i]!.facing);
+    if (!Object.keys(diff).length && !refChanges.length) return false;
+    for (const r of refChanges) await tx.update(projectReferences).set({ finalName: r.finalName, facing: r.facing }).where(eq(projectReferences.id, r.id));
     await tx
       .update(projects)
       .set({ ...columnsFromBrief(data), brief: data, updatedAt: new Date() })
       .where(eq(projects.id, projectId));
-    await logActivity({ projectId, actorId: u.id, action: "brief.label_info", entity: "project", entityId: projectId, diff }, tx);
+    await logActivity(
+      {
+        projectId,
+        actorId: u.id,
+        action: "brief.label_info",
+        entity: "project",
+        entityId: projectId,
+        diff: { ...diff, ...(refChanges.length ? { referencias: refChanges.map((r) => `${refTitle(r)}: ${r.finalName ?? "—"}`) } : {}) },
+      },
+      tx,
+    );
     return true;
   });
   if (!changed) return;
@@ -292,6 +322,8 @@ export async function submitProject(u: CurrentUser, projectId: string, onBehalfO
       },
       tx,
     );
+    // Varias referencias en el brief: se crean (A, B, C…) para trabajar cada una por separado
+    if ((brief.references ?? 0) >= 2) await ensureReferences(null, projectId, Math.min(brief.references!, 26), tx);
     const jobId = await enqueueJob("sharepoint.provision", { projectId }, tx);
     return { code, jobId };
   });
@@ -499,14 +531,33 @@ export async function sendQuote(
     /** Coste objetivo de la fórmula (confidencial; solo si el usuario puede verlo). */
     formulaTargetCost?: number | null;
     comment?: string | null;
+    /** Con varias referencias: precio único o por referencia… */
+    pricingMode?: "single" | "per_reference";
+    refPrices?: Record<string, number | null>;
+    /** …y envase y packaging común o por referencia. */
+    packagingMode?: "common" | "per_reference";
+    refSpecs?: Record<string, Record<string, unknown>>;
   },
 ) {
   const raw = input.data ?? {};
   const specKeys = new Set(quoteSpecGroups().flatMap((g) => g.fields.map((f) => f.key)));
-  const rawSpecs = input.specs ?? {};
-  const specs = Object.fromEntries(Object.keys(rawSpecs).filter((k) => specKeys.has(k)).map((k) => [k, rawSpecs[k]]));
+  const pickSpecs = (src: Record<string, unknown> | null | undefined) =>
+    Object.fromEntries(Object.keys(src ?? {}).filter((k) => specKeys.has(k)).map((k) => [k, src![k]]));
+  const specs = pickSpecs(input.specs);
   const data = Object.fromEntries(QUOTE_FIELDS.filter((k) => k in raw).map((k) => [k, raw[k]]));
-  const price = typeof data.unitPrice === "number" && Number.isFinite(data.unitPrice) && data.unitPrice >= 0 ? data.unitPrice : null;
+  const validPrice = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
+  const refs = await listReferences(projectId);
+  const multi = isMulti(refs);
+  const pricingMode = multi && input.pricingMode === "per_reference" ? "per_reference" : "single";
+  const packagingMode = multi && input.packagingMode === "per_reference" ? "per_reference" : "common";
+  const refPrices = pricingMode === "per_reference" ? refs.map((r) => ({ ref: r, price: validPrice(input.refPrices?.[String(r.id)]) })) : [];
+  if (pricingMode === "per_reference") {
+    const missing = refPrices.filter((x) => x.price == null);
+    if (missing.length) throw new ActionError(`Indica el precio unitario de: ${missing.map((x) => refTitle(x.ref)).join(", ")}`);
+    delete data.unitPrice;
+  }
+  // Importe de referencia del proyecto: el único, o el menor de los de cada referencia
+  const price = pricingMode === "per_reference" ? Math.min(...refPrices.map((x) => x.price!)) : validPrice(data.unitPrice);
   if (price == null) throw new ActionError("Indica el precio unitario cotizado", { unitPrice: "Obligatorio" });
   const comment = input.comment?.trim() || null;
   await db.transaction(async (tx) => {
@@ -516,15 +567,23 @@ export async function sendQuote(
     const now = new Date();
     await tx
       .update(projects)
-      .set({ phase: 2, quoteAmount: String(price), quotedAt: now, updatedAt: now })
+      .set({ phase: 2, quoteAmount: String(price), quotedAt: now, updatedAt: now, pricingMode, packagingMode })
       .where(eq(projects.id, projectId));
+    const pNow = { ...p, pricingMode, packagingMode } as typeof p;
     await tx
       .insert(gates)
       .values({ projectId, gate: "G2", status: "pending", openedAt: now })
       .onConflictDoUpdate({ target: [gates.projectId, gates.gate], set: { status: "pending", openedAt: now, decidedBy: null, decidedAt: null } });
     await logActivity({ projectId, actorId: u.id, action: "quote.sent", entity: "project", entityId: projectId, diff: { amount: price, comment } }, tx);
-    await patchSheetSection(u, p, "comercial", data, tx);
-    if (Object.keys(specs).length) await patchSheetSection(u, p, "packaging", specs, tx);
+    await patchSheetSection(u, pNow, "comercial", data, tx);
+    for (const x of refPrices) await patchSheetSection(u, pNow, "comercial", { unitPrice: x.price }, tx, x.ref.id);
+    if (Object.keys(specs).length) await patchSheetSection(u, pNow, "packaging", specs, tx);
+    if (packagingMode === "per_reference") {
+      for (const r of refs) {
+        const own = pickSpecs(input.refSpecs?.[String(r.id)]);
+        if (Object.keys(own).length) await patchSheetSection(u, pNow, "packaging", own, tx, r.id);
+      }
+    }
     if (canSeeFormulaCost(u) && input.formulaTargetCost !== undefined) await setFormulaTargetCost(u, projectId, input.formulaTargetCost, tx);
     await syncValidationDepts(u, projectId, "quoted", comment, tx);
   });
@@ -534,7 +593,9 @@ export async function sendQuote(
   const eur = (n: unknown) => (typeof n === "number" ? n.toLocaleString("es-ES", { style: "currency", currency: "EUR" }) : null);
   const rows: [string, string][] = (
     [
-      ["Precio unitario cotizado", eur(price)],
+      ...(pricingMode === "per_reference"
+        ? ([["Precio unitario cotizado por referencia", refPrices.map((x) => `${refTitle(x.ref)}: ${eur(x.price)}`).join("\n")]] as [string, string][])
+        : ([["Precio unitario cotizado", eur(price)]] as [string, string | null][])),
       ["Precio objetivo inicial", eur(data.targetPrice)],
       ["PVP recomendado", eur(data.rrp)],
       ["Unidades del primer pedido", typeof data.units === "number" ? `${data.units.toLocaleString("es-ES")} uds` : null],
@@ -560,6 +621,8 @@ export type BudgetDecision =
       comment?: string | null;
       /** Precio unitario final acordado (opcional; se guarda en la ficha de Comercial). */
       finalUnitPrice?: number | null;
+      /** Precio final por referencia: { [referenceId]: precio }. */
+      refFinalPrices?: Record<string, number | null>;
       /** Obligatorio en PL. */
       prepayment?: { mode: "received" | "waived"; responsible?: string | null; accepted?: boolean; note?: string | null } | null;
     }
@@ -601,8 +664,13 @@ export async function decideBudget(u: CurrentUser, projectId: string, decision: 
           .where(eq(gates.id, g!.id));
         await tx.update(projects).set({ phase: FIRST_RUNNING_PHASE, prepayment, updatedAt: now }).where(eq(projects.id, projectId));
         // Comercial pasa a «Presupuesto aprobado» con la misma acción
+        const okPrice = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0;
         const finalPrice = decision.finalUnitPrice;
-        if (finalPrice != null && Number.isFinite(finalPrice) && finalPrice >= 0) await patchSheetSection(u, p, "comercial", { finalUnitPrice: finalPrice }, tx);
+        if (okPrice(finalPrice)) await patchSheetSection(u, p, "comercial", { finalUnitPrice: finalPrice }, tx);
+        // Precio final por referencia (si se cotizó por referencia)
+        for (const [refId, v] of Object.entries(decision.refFinalPrices ?? {})) {
+          if (okPrice(v) && p.pricingMode === "per_reference") await patchSheetSection(u, p, "comercial", { finalUnitPrice: v }, tx, Number(refId));
+        }
         await syncValidationDepts(u, projectId, "approved", decision.comment?.trim() || null, tx);
         await logActivity(
           { projectId, actorId: u.id, action: "gate.approved", entity: "gate", entityId: "G2", diff: { gate: "G2", comment: decision.comment ?? null, prepayment } },
@@ -696,7 +764,7 @@ export async function advancePhase(u: CurrentUser, projectId: string, comment?: 
     const pending = pendingUpTo((await loadSheet(current)).cards, current.phase);
     if (pending.length) throw new ActionError(`Aún no han terminado: ${pending.map((c) => c.dept.name).join(", ")}`);
     // Tras aprobarse la fórmula, los datos para la etiqueta son obligatorios
-    const missing = current.phase >= FIRST_RUNNING_PHASE ? missingLabelInfo(current.brief) : [];
+    const missing = current.phase >= FIRST_RUNNING_PHASE ? labelInfoMissing(current, await listReferences(projectId)) : [];
     if (missing.length) throw new ActionError(`Falta que el comercial complete: ${missing.map((f) => f.label).join(", ")}`);
   }
   const result = await db.transaction(async (tx) => {

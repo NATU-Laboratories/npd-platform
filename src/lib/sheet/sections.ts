@@ -551,6 +551,18 @@ export const SHEET_SECTIONS: SheetSection[] = [
 
 export const SECTION_BY_KEY: Record<string, SheetSection> = Object.fromEntries(SHEET_SECTIONS.map((s) => [s.key, s]));
 
+/**
+ * Con varias referencias, estos apartados van siempre por referencia (fórmula,
+ * naming y EAN, regulatorio, etiqueta). «Envase y packaging» puede ser común o
+ * por referencia, y el precio de la cotización único o por referencia.
+ */
+export const PER_REFERENCE_SECTIONS = new Set(["formula", "identificacion", "regulatorio", "etiqueta"]);
+export const PER_REFERENCE_PRICE_FIELDS = ["unitPrice", "finalUnitPrice"] as const;
+
+export function isPerReferenceSection(key: string, multi: boolean, packagingMode: string) {
+  return multi && (PER_REFERENCE_SECTIONS.has(key) || (key === "packaging" && packagingMode === "per_reference"));
+}
+
 /** Etiqueta de un campo con el grupo delante si hace falta para entenderlo («Envase · Modelo»). */
 export function fieldLabelInSection(section: SheetSection, fieldKey: string) {
   const g = section.groups.find((x) => x.fields.some((f) => f.key === fieldKey));

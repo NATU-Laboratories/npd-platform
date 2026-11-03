@@ -64,3 +64,14 @@ describe("quoteSpecGroups", () => {
     expect(keys.some((k) => /Supplier$|Files$/.test(k))).toBe(false);
   });
 });
+
+describe("isPerReferenceSection", () => {
+  it("fórmula, identificación, regulatorio y etiqueta por referencia; envase según el modo", async () => {
+    const { isPerReferenceSection } = await import("./sections");
+    for (const k of ["formula", "identificacion", "regulatorio", "etiqueta"]) expect(isPerReferenceSection(k, true, "common")).toBe(true);
+    expect(isPerReferenceSection("packaging", true, "common")).toBe(false);
+    expect(isPerReferenceSection("packaging", true, "per_reference")).toBe(true);
+    expect(isPerReferenceSection("comercial", true, "per_reference")).toBe(false);
+    expect(isPerReferenceSection("formula", false, "per_reference")).toBe(false);
+  });
+});
