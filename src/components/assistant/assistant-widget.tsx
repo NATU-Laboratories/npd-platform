@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 type Turn = { role: "user" | "assistant"; content: string };
 
 const STORAGE_KEY = "npd-assistant";
-const SUGGESTIONS = ["¿Qué tengo pendiente?", "¿Qué proyectos están en riesgo?", "¿Cómo creo una nueva solicitud?", "¿Qué es P2 y quién lo registra?"];
+const SUGGESTIONS = ["¿Qué tengo pendiente?", "¿Qué proyectos están en riesgo?", "¿Hay reposiciones en marcha?", "¿Cómo creo una nueva solicitud?"];
 
 /** Markdown mínimo: **negrita**, [texto](/ruta) y listas con «- ». */
 function Rich({ text }: { text: string }) {
@@ -142,7 +142,7 @@ export function AssistantWidget({ firstName }: { firstName: string }) {
             {turns.length === 0 && (
               <div className="flex flex-col gap-3 p-1">
                 <p className="text-slate-700">
-                  ¡Hola, {firstName}! Soy NIA, tu asistente en la plataforma. Puedo contarte cómo va cualquier proyecto que puedas ver, qué tienes pendiente o cómo se hace algo en la plataforma.
+                  ¡Hola, {firstName}! Soy NIA 🌿 Pregúntame cómo va cualquier proyecto o reposición, qué tienes pendiente o cómo se hace algo en la plataforma. Yo me encargo de rebuscar.
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {SUGGESTIONS.map((s) => (
