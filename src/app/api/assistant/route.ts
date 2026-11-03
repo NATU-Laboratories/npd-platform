@@ -31,6 +31,10 @@ export async function POST(req: Request) {
       await logError("assistant", err);
       return Response.json({ error: "La clave de la API de OpenAI no es válida." }, { status: 503 });
     }
+    if (err instanceof OpenAI.NotFoundError) {
+      await logError("assistant", err);
+      return Response.json({ error: "El modelo configurado en OPENAI_MODEL no existe o tu cuenta no tiene acceso a él." }, { status: 503 });
+    }
     await logError("assistant", err, { userId: u.id });
     return Response.json({ error: "No he podido responder. Inténtalo de nuevo." }, { status: 500 });
   }
