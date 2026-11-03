@@ -1,6 +1,6 @@
-# Asistente NPD en Microsoft Teams
+# NIA (asistente) en Microsoft Teams
 
-El asistente virtual de la plataforma se puede usar como chat personal en Teams («Asistente NPD»).
+El asistente virtual de la plataforma se puede usar como chat personal en Teams («NIA»).
 Responde lo mismo que el chat flotante: cada persona solo ve los proyectos que ve en la plataforma,
 y solo consulta (no hace cambios).
 
@@ -64,16 +64,16 @@ Con el Id. de aplicación, genera el paquete (manifiesto + iconos de NATU):
 pnpm teams:package <TEAMS_APP_ID> https://npd-platform-seven.vercel.app
 ```
 
-Se crea `teams-app/build/asistente-npd-teams.zip`.
+Se crea `teams-app/build/nia-teams.zip`.
 
 ## 5. Publicarla en Teams
 
 1. Entra en **admin.teams.microsoft.com** → **Aplicaciones de Teams** → **Administrar aplicaciones**
    → **Cargar nueva aplicación** → **Cargar** → elige el `.zip`.
-2. Abre la app «Asistente NPD» y comprueba que su estado es **Permitida**.
+2. Abre la app «NIA» y comprueba que su estado es **Permitida**.
 3. Para que la vea todo el mundo (o un grupo de prueba):
    - **Directivas de permisos** (o *Administrar aplicaciones → Acceso*): que esté permitida para esos usuarios.
-   - Opcional: **Directivas de configuración** → **Aplicaciones ancladas** → añade «Asistente NPD»
+   - Opcional: **Directivas de configuración** → **Aplicaciones ancladas** → añade «NIA»
      para que aparezca fija en la barra lateral.
 4. Los usuarios la encuentran en Teams → **Aplicaciones** → **Creada para tu organización** → **Agregar**.
    Los cambios de directivas pueden tardar unas horas en llegar.
@@ -84,3 +84,10 @@ Se crea `teams-app/build/asistente-npd-teams.zip`.
 - Si el bot no responde, revisa Backoffice → Errores (origen `teams`).
 - Los usuarios deben estar dados de alta en la plataforma con su email corporativo (los preregistrados
   «sin email» no se pueden asociar).
+
+## Actualizar la app (nueva versión del paquete)
+
+Si cambia el manifiesto (nombre, descripción, iconos), genera el paquete con `pnpm teams:package <TEAMS_APP_ID>`
+(sube `version` en `scripts/teams-package.mjs`) y, en el Centro de administración de Teams → Administrar
+aplicaciones → la app → **Actualizar** (o «Cargar archivo»), sube el nuevo `.zip`. Mantiene el mismo ID:
+no hay que crear otra app ni volver a configurar el bot.

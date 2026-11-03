@@ -109,15 +109,15 @@ export function AssistantWidget({ firstName }: { firstName: string }) {
           type="button"
           onClick={() => setOpen(true)}
           className="fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full bg-natu-dark px-4 py-3 text-sm font-semibold text-white shadow-lg ring-2 ring-natu-sage hover:bg-brand-700"
-          aria-label="Abrir el asistente virtual"
+          aria-label="Abrir NIA, el asistente virtual"
         >
-          <MessageCircle className="size-5" aria-hidden /> <span className="hidden sm:inline">Asistente</span>
+          <MessageCircle className="size-5" aria-hidden /> <span className="hidden sm:inline">NIA</span>
         </button>
       )}
       {open && (
         <section
           role="dialog"
-          aria-label="Asistente virtual"
+          aria-label="NIA, asistente virtual"
           className="fixed inset-x-2 bottom-2 z-50 flex max-h-[80dvh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl sm:inset-x-auto sm:bottom-5 sm:right-5 sm:h-[600px] sm:w-[400px]"
         >
           <header className="flex items-center gap-2 bg-natu-dark px-4 py-3 text-white">
@@ -125,7 +125,7 @@ export function AssistantWidget({ firstName }: { firstName: string }) {
               <Sparkles className="size-4" aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold">Asistente NPD</p>
+              <p className="text-sm font-semibold">NIA</p>
               <p className="text-[11px] text-white/70">Proyectos, pendientes y uso de la plataforma</p>
             </div>
             {turns.length > 0 && (
@@ -133,7 +133,7 @@ export function AssistantWidget({ firstName }: { firstName: string }) {
                 <RotateCcw className="size-4" />
               </button>
             )}
-            <button type="button" onClick={() => setOpen(false)} className="rounded p-1.5 text-white/80 hover:bg-white/10" aria-label="Cerrar el asistente">
+            <button type="button" onClick={() => setOpen(false)} className="rounded p-1.5 text-white/80 hover:bg-white/10" aria-label="Cerrar NIA">
               <X className="size-4" />
             </button>
           </header>
@@ -142,7 +142,7 @@ export function AssistantWidget({ firstName }: { firstName: string }) {
             {turns.length === 0 && (
               <div className="flex flex-col gap-3 p-1">
                 <p className="text-slate-700">
-                  ¡Hola, {firstName}! Soy tu asistente. Puedo contarte cómo va cualquier proyecto que puedas ver, qué tienes pendiente o cómo se hace algo en la plataforma.
+                  ¡Hola, {firstName}! Soy NIA, tu asistente en la plataforma. Puedo contarte cómo va cualquier proyecto que puedas ver, qué tienes pendiente o cómo se hace algo en la plataforma.
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {SUGGESTIONS.map((s) => (
