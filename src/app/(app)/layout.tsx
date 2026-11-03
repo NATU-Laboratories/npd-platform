@@ -3,6 +3,8 @@ import { LogOut, Plus, Settings } from "lucide-react";
 import { devLoginEnabled, signOut } from "@/auth";
 import { Logo } from "@/components/logo";
 import { ViewAsBanner } from "@/components/view-as-banner";
+import { AssistantWidget } from "@/components/assistant/assistant-widget";
+import { assistantEnabled } from "@/lib/server/assistant";
 import { Button } from "@/components/ui/button";
 import { canRequest, isAdmin, requireUser } from "@/lib/server/authz";
 import { EDITABLE_ROLES, ROLE_LABEL } from "@/lib/labels";
@@ -72,6 +74,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         </div>
       </header>
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">{children}</main>
+      {/* Asistente virtual (solo si está configurada la clave de la API de Claude) */}
+      {assistantEnabled() && <AssistantWidget firstName={u.name.split(" ")[0] ?? u.name} />}
     </div>
   );
 }
