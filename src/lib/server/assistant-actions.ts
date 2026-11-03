@@ -9,7 +9,8 @@ import { canViewProject, isActive, loadUser, type CurrentUser } from "./authz";
 import { renderEmail } from "./email-template";
 import { logError } from "./errors";
 import { queueNotification, uniqEmails } from "./notifications";
-import { addComment, canAccessReplenishments, canActAs, departmentRecipients, sendQuoteRequests } from "./replenishments";
+import { listProjects } from "./dashboard";
+import { addComment, canAccessReplenishments, canActAs, departmentRecipients, listReplenishments, sendQuoteRequests } from "./replenishments";
 
 /**
  * Acciones que Alexia puede hacer por una persona. Nunca se ejecutan al momento:
@@ -26,18 +27,38 @@ const PENDING_MINUTES = 30;
 
 type Subject = { kind: "project" | "replenishment"; id: string; code: string; name: string; link: string };
 
-async function resolveSubject(u: CurrentUser, code?: string | null): Promise<Subject | null | "forbidden" | "missing"> {
+async function resolveSubject(u: CurrentUser, code?: string | null): Promise<Subject | null | "forbidden" | "missing" | { ambiguous: string[] }> {
   const key = code?.trim();
   if (!key) return null;
-  if (/^REP-/i.test(key)) {
+  if (/^REP-\d{4}-\d+$/i.test(key)) {
     if (!canAccessReplenishments(u)) return "forbidden";
     const [r] = await db.select({ id: replenishments.id, code: replenishments.code, title: replenishments.title }).from(replenishments).where(eq(replenishments.code, key.toUpperCase()));
     return r ? { kind: "replenishment", id: r.id, code: r.code, name: r.title, link: `/reposiciones/${r.id}` } : "missing";
   }
   const [p] = await db.select({ id: projects.id, code: projects.code, name: projects.name }).from(projects).where(eq(projects.code, key.toUpperCase()));
-  if (!p) return "missing";
-  if (!(await canViewProject(u, p.id))) return "forbidden";
-  return { kind: "project", id: p.id, code: p.code ?? key, name: p.name, link: `/proyectos/${p.id}` };
+  if (p) {
+    if (!(await canViewProject(u, p.id))) return "forbidden";
+    return { kind: "project", id: p.id, code: p.code ?? key, name: p.name, link: `/proyectos/${p.id}` };
+  }
+  // No es un código exacto: búsqueda por nombre (sin tildes, espacios ni orden de palabras), solo entre lo visible
+  const { rows } = await listProjects(u, { q: key }, 30);
+  const reps = canAccessReplenishments(u) ? await listReplenishments(u, { q: key }) : [];
+  const found: Subject[] = [
+    ...rows.filter((r) => r.code).map((r) => ({ kind: "project" as const, id: r.id, code: r.code!, name: r.name, link: `/proyectos/${r.id}` })),
+    ...reps.map((r) => ({ kind: "replenishment" as const, id: r.id, code: r.code, name: r.title, link: `/reposiciones/${r.id}` })),
+  ];
+  if (found.length === 1) return found[0]!;
+  if (!found.length) return "missing";
+  return { ambiguous: found.slice(0, 6).map((f) => `${f.code} · ${f.name}`) };
+}
+
+const isSubject = (x: unknown): x is Subject => typeof x === "object" && x !== null && "kind" in x;
+
+/** Mensaje para la IA cuando el proyecto no se puede determinar. */
+function subjectProblem(r: "forbidden" | "missing" | { ambiguous: string[] }, asked: string) {
+  if (r === "forbidden") return `No tienes acceso a «${asked}».`;
+  if (r === "missing") return `No encuentro ningún proyecto ni reposición visible que coincida con «${asked}». Busca con buscar_proyectos (también admite nombres aproximados) o pregunta a la persona.`;
+  return `«${asked}» coincide con varios: ${r.ambiguous.join("; ")}. Pregunta a la persona a cuál se refiere.`;
 }
 
 // ─── Destinatarios (departamento o persona) ───────────────────────────────
@@ -94,7 +115,7 @@ async function store(u: CurrentUser, ch: ActionChannel, kind: string, payload: R
 export const notifyInput = z.object({
   destinatario: z.string().min(1).max(100).describe("Departamento (p. ej. «Diseño») o persona a la que va el aviso"),
   mensaje: z.string().min(1).max(2000).describe("Texto del aviso, redactado en primera persona por el usuario"),
-  sobre: z.string().max(40).optional().describe("Código del proyecto (2026-PL-0007) o reposición (REP-2026-0001) al que se refiere, si lo hay"),
+  sobre: z.string().max(120).optional().describe("Código (2026-PL-0007, REP-2026-0001) o nombre, aunque sea aproximado, del proyecto o reposición al que se refiere, si lo hay"),
   urgente: z.boolean().optional().describe("Marcar como urgente"),
 });
 
@@ -102,8 +123,7 @@ export async function prepareNotify(u: CurrentUser, ch: ActionChannel, i: z.infe
   const target = await resolveTarget(i.destinatario);
   if (typeof target === "string") return target;
   const subject = await resolveSubject(u, i.sobre);
-  if (subject === "forbidden") return `No tienes acceso a ${i.sobre}.`;
-  if (subject === "missing") return `No existe ${i.sobre}.`;
+  if (subject && !isSubject(subject)) return subjectProblem(subject, i.sobre!);
   return store(u, ch, "notify", { target, subject, message: i.mensaje.trim(), urgent: !!i.urgente }, {
     title: `Aviso${i.urgente ? " urgente" : ""} para ${target.label}`,
     lines: [
@@ -116,14 +136,14 @@ export async function prepareNotify(u: CurrentUser, ch: ActionChannel, i: z.infe
 }
 
 export const commentInput = z.object({
-  sobre: z.string().min(1).max(40).describe("Código del proyecto (2026-PL-0007) o reposición (REP-2026-0001)"),
+  sobre: z.string().min(1).max(120).describe("Código (2026-PL-0007, REP-2026-0001) o nombre aproximado del proyecto o reposición"),
   comentario: z.string().min(1).max(4000).describe("Texto del comentario, tal como lo quiere el usuario"),
 });
 
 export async function prepareComment(u: CurrentUser, ch: ActionChannel, i: z.infer<typeof commentInput>): Promise<PreparedAction | string> {
   const subject = await resolveSubject(u, i.sobre);
-  if (!subject || subject === "missing") return `No existe ${i.sobre}.`;
-  if (subject === "forbidden") return `No tienes acceso a ${i.sobre}.`;
+  if (!subject) return "Indica en qué proyecto o reposición quieres comentar.";
+  if (!isSubject(subject)) return subjectProblem(subject, i.sobre);
   return store(u, ch, "comment", { subject, body: i.comentario.trim() }, {
     title: `Comentario en ${subject.code}`,
     lines: [
@@ -141,8 +161,9 @@ export const quoteInput = z.object({
 
 export async function prepareQuote(u: CurrentUser, ch: ActionChannel, i: z.infer<typeof quoteInput>): Promise<PreparedAction | string> {
   const subject = await resolveSubject(u, i.reposicion);
-  if (subject === "forbidden") return "No tienes acceso a Reposiciones.";
-  if (!subject || subject === "missing" || subject.kind !== "replenishment") return `No existe la reposición ${i.reposicion}.`;
+  if (!subject) return "Indica la reposición.";
+  if (!isSubject(subject)) return subjectProblem(subject, i.reposicion);
+  if (subject.kind !== "replenishment") return `${subject.code} no es una reposición.`;
   const [rep] = await db.select({ requesterId: replenishments.requesterId }).from(replenishments).where(eq(replenishments.id, subject.id));
   if (!rep || !canActAs(u, rep, "compras")) return "Solo Compras (o quien abrió la reposición) puede pedir recotizaciones.";
   let supplier: { id: number; name: string } | null = null;

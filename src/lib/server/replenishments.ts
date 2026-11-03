@@ -19,6 +19,7 @@ import { getStorage } from "@/lib/graph/storage";
 import { ELEMENT_LABEL, ELEMENTS, OPEN_REP_STATUSES, PRINTED_ELEMENTS, REP_STATUS_LABEL, REPLENISHMENT_TEMPLATES } from "@/lib/replenishment/config";
 import { formatDate } from "@/lib/utils";
 import { logActivity } from "./activity";
+import { fuzzyMatch } from "./fuzzy";
 import { AuthzError, hasRole, type CurrentUser } from "./authz";
 import { renderEmail } from "./email-template";
 import { logError } from "./errors";
@@ -623,7 +624,17 @@ export async function listReplenishments(u: CurrentUser, f: { q?: string; status
   const conds: SQL[] = [];
   if (f.q?.trim()) {
     const like = `%${f.q.trim()}%`;
-    conds.push(or(ilike(replenishments.code, like), ilike(replenishments.title, like), ilike(replenishments.productName, like), ilike(replenishments.productRef, like), ilike(replenishments.clientOrBrand, like))!);
+    const fuzzy = fuzzyMatch(f.q, [replenishments.code, replenishments.title, replenishments.productName, replenishments.productRef, replenishments.clientOrBrand]);
+    conds.push(
+      or(
+        ilike(replenishments.code, like),
+        ilike(replenishments.title, like),
+        ilike(replenishments.productName, like),
+        ilike(replenishments.productRef, like),
+        ilike(replenishments.clientOrBrand, like),
+        ...(fuzzy ? [fuzzy] : []),
+      )!,
+    );
   }
   if (f.status === "abiertas") conds.push(inArray(replenishments.status, OPEN_REP_STATUSES));
   else if (f.status && f.status in REP_STATUS_LABEL) conds.push(eq(replenishments.status, f.status as ReplenishmentStatus));

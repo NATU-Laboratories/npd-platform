@@ -1,4 +1,5 @@
 import "server-only";
+import { fuzzyMatch } from "./fuzzy";
 import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, lt, lte, ne, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
@@ -113,7 +114,9 @@ export async function buildWhere(u: CurrentUser, f: ProjectFilters, riskDays: nu
   if (!opts.includeDrafts) conds.push(ne(projects.status, "draft"));
   if (f.q?.trim()) {
     const term = `%${f.q.trim()}%`;
-    conds.push(or(ilike(projects.name, term), ilike(projects.code, term), ilike(clients.name, term))!);
+    // Tolerante a tildes, espacios y orden de palabras (además de la coincidencia literal)
+    const fuzzy = fuzzyMatch(f.q, [projects.name, projects.code, clients.name, brands.name]);
+    conds.push(or(ilike(projects.name, term), ilike(projects.code, term), ilike(clients.name, term), ...(fuzzy ? [fuzzy] : []))!);
   }
   if (f.type === "PL" || f.type === "MP" || f.type === "MDD") conds.push(eq(projects.type, f.type));
   if (f.brand) conds.push(eq(projects.brandId, Number(f.brand)));
