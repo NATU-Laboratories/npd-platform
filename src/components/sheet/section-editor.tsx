@@ -34,6 +34,19 @@ export function ScalarInput({ f, value, onChange, id }: { f: ScalarField; value:
           {f.unit && <span className="text-sm text-slate-500">{f.unit}</span>}
         </div>
       );
+    case "url":
+      return (
+        <Input
+          id={id}
+          type="url"
+          inputMode="url"
+          spellCheck={false}
+          autoComplete="off"
+          value={(value as string) ?? ""}
+          placeholder={f.placeholder}
+          onChange={(e) => onChange(e.target.value.trim() || undefined)}
+        />
+      );
     case "date":
       return <Input id={id} type="date" value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value || undefined)} className="max-w-48" />;
     case "bool":

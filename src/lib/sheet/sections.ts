@@ -21,7 +21,7 @@ type Base = {
   when?: (c: SheetCtx) => boolean;
 };
 export type ScalarField =
-  | (Base & { type: "text" | "textarea"; placeholder?: string })
+  | (Base & { type: "text" | "textarea" | "url"; placeholder?: string })
   | (Base & { type: "money" | "number"; unit?: string })
   | (Base & { type: "date" })
   | (Base & { type: "bool" })
@@ -499,7 +499,15 @@ export const SHEET_SECTIONS: SheetSection[] = [
       {
         title: "Artes finales",
         fields: [
-          { key: "artworkFiles", label: "Artes finales", type: "files", tag: "arte_final" },
+          {
+            key: "artworkUrl",
+            label: "Enlace a los artes finales",
+            type: "url",
+            placeholder: "https://natuaromatic.sharepoint.com/…",
+            hint: "Pega el enlace de la carpeta o del archivo en OneDrive o SharePoint (con permiso para el equipo).",
+            valid: (v) => typeof v === "string" && /^https:\/\/[^\s]+\.(sharepoint\.com|onedrive\.live\.com|1drv\.ms)(\/|$)/i.test(v),
+            invalidLabel: "un enlace de OneDrive o SharePoint",
+          },
           { key: "clientApproved", label: "Artes finales aprobados por el cliente", type: "bool" },
           { key: "clientApprovedAt", label: "Fecha de aprobación", type: "date" },
         ],
@@ -653,6 +661,11 @@ export function sanitizeData(s: SheetSection, raw: unknown): SheetData {
         return typeof v === "string" && f.options.some((o) => o.value === v) ? v : undefined;
       case "multi":
         return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && f.options.some((o) => o.value === x)) : undefined;
+      case "url": {
+        // Solo enlaces https (se muestran como enlace: nada de javascript: ni similares)
+        const t = typeof v === "string" ? v.trim() : "";
+        return /^https:\/\/[^\s]+$/i.test(t) ? t.slice(0, 2000) : undefined;
+      }
       default:
         return typeof v === "string" && v.trim() ? v.trim().slice(0, f.type === "textarea" ? 8000 : 300) : undefined;
     }

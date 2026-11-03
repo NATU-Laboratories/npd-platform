@@ -1,4 +1,4 @@
-import { Check, ChevronDown, FileText, RotateCcw } from "lucide-react";
+import { Check, ChevronDown, ExternalLink, FileText, RotateCcw } from "lucide-react";
 import type { ReactNode } from "react";
 import type { UploadedFile } from "@/components/uploader";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -115,6 +115,23 @@ function FieldView({ f, data, files }: { f: SheetField; data: SheetData; files: 
     );
   }
   const v = formatValue(f, data[f.key]);
+  if (f.type === "url") {
+    return (
+      <div className="min-w-0 sm:col-span-2">
+        <dt className="text-xs text-slate-500">{f.label}</dt>
+        <dd className="text-sm">
+          {v ? (
+            <a href={v} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-full items-center gap-1 font-medium text-brand-600 underline underline-offset-2 hover:text-brand-800">
+              <ExternalLink className="size-3.5 shrink-0" aria-hidden />
+              <span className="truncate">{/sharepoint\.com/i.test(v) ? "Abrir en SharePoint" : /onedrive|1drv\.ms/i.test(v) ? "Abrir en OneDrive" : v}</span>
+            </a>
+          ) : (
+            <span className="text-slate-300">—</span>
+          )}
+        </dd>
+      </div>
+    );
+  }
   return (
     <div className={cn("min-w-0", (f.type === "textarea" || f.type === "multi") && "sm:col-span-2")}>
       <dt className="text-xs text-slate-500">{f.label}</dt>
