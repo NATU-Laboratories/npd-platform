@@ -3,13 +3,15 @@ import OpenAI from "openai";
 import { and, desc, eq, ilike, or } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { activityLog, clients, projects, users } from "@/db/schema";
+import { activityLog, clients, projects, replenishments, users } from "@/db/schema";
+import { ELEMENT_LABEL, QUOTE_STATUS_LABEL, REP_ACTION_LABEL, REP_STATUS_LABEL, REPLENISHMENT_TEMPLATES, STATUS_STEPS } from "@/lib/replenishment/config";
 import { briefSections, type Lookups } from "@/lib/brief/display";
 import { ACTION_LABEL, CATEGORY_LABEL, PHASES, PRIORITY_LABEL, ROLE_LABEL, SITUATIONS, statusLabel, TYPE_LABEL } from "@/lib/labels";
 import { canSeeFormulaCost, canViewProject, type CurrentUser } from "./authz";
 import { getActiveUsers, getBrands, getCatalogLabels } from "./catalogs";
 import { listProjects } from "./dashboard";
 import { labelInfoMissing, refTitle } from "./references";
+import { canAccessReplenishments, listReplenishments, loadReplenishment, myTurn, REP_FLOW } from "./replenishments";
 import { getSettings } from "./settings";
 import { getFormulaTargetCost, loadSheet, pendingUpTo } from "./sheet";
 
@@ -44,7 +46,8 @@ Cómo funciona la plataforma:
 - Nueva solicitud: botón «Nueva solicitud» (arriba a la derecha). Asistente en pasos: datos básicos, cliente y mercado, producto (con bloque olfativo; la blacklist es necesaria si se vende fuera de España, o marcar «No hay blacklist»), adjuntos y resumen. Se guarda como borrador hasta enviarla. Admin y gestor de proyectos pueden enviarla en nombre de otra persona.
 - Panel: indicadores, filtros (Requieren mi acción, Mis proyectos, Solo en riesgo, tipo, categoría, situación, fase…), lista de proyectos y «Estado de proyectos por departamentos». «En riesgo» = entrega requerida próxima.
 - Roles: Admin (todo, incluido Backoffice), Gestor de proyectos (ve todo, decide P1 y P2, edita cualquier departamento, avanza fases), Solicitante (crea solicitudes y registra P2 de las suyas), Lectura global (solo consulta). Pertenecer a un departamento permite ver sus proyectos y trabajar su parte. Los aprobadores se asignan en Backoffice → Aprobadores.
-- Backoffice (solo admin): usuarios, departamentos, estados de departamento (con campos obligatorios), aprobadores, marcas propias, plantillas, configuración, registro de actividad, errores y notificaciones.`;
+- Reposiciones (pestaña «Reposiciones» de la cabecera): apartado separado de NPD para volver a fabricar productos ya desarrollados. Códigos REP-AAAA-NNNN. Lo abre Compras con «Nueva reposición»: producto, proyecto NPD de origen (opcional), elementos a reponer (etiqueta, estuche, caja master, envase, tapón, prospecto…) con el proveedor de cada uno, y si se envía email de recotización al proveedor (con vista previa de los emails). Plantilla «Repetición»: Revisión de diseño (Diseño: «Sin cambios» o «Hay cambios», debe subir el arte final) → Correcciones de diseño → Validación de calidad (Calidad valida o pide correcciones, nueva ronda) → Arte final aprobado (Compras) → Enviado a imprenta → Cerrada. Compras registra las recotizaciones y puede pedirlas por email al proveedor, que responde a Compras. Para preguntas de reposiciones usa buscar_reposiciones y ver_reposicion (no son proyectos NPD); enlaza así: [REP-2026-0001 · Título](/reposiciones/<id>).
+- Backoffice (solo admin): usuarios, proveedores, departamentos, estados de departamento (con campos obligatorios), aprobadores, marcas propias, plantillas, configuración, registro de actividad, errores y notificaciones.`;
 
 let client: OpenAI | null = null;
 const getClient = () => (client ??= new OpenAI());
@@ -224,7 +227,99 @@ function toolsFor(u: CurrentUser) {
     },
   });
 
-  return [searchProjects, getProject];
+  const searchReps = defineTool({
+    name: "buscar_reposiciones",
+    description:
+      "Busca y cuenta reposiciones (apartado Reposiciones: productos ya desarrollados que se vuelven a fabricar). Filtra por texto (código REP-…, producto, referencia, cliente), estado o las abiertas por el usuario. Devuelve el total y como máximo 25.",
+    inputSchema: z.object({
+      texto: z.string().max(100).optional().describe("Código REP-…, producto, referencia/EAN o cliente"),
+      estado: z
+        .enum(["abiertas", "todas", ...(Object.keys(REP_STATUS_LABEL) as [string, ...string[]])])
+        .optional()
+        .describe(`abiertas (por defecto), todas o uno de: ${Object.entries(REP_STATUS_LABEL).map(([k, l]) => `${k} (${l})`).join(", ")}`),
+      mias: z.boolean().optional().describe("Solo las abiertas por el usuario"),
+      me_toca: z.boolean().optional().describe("Solo las que requieren una acción del usuario"),
+    }),
+    run: async (i) => {
+      if (!canAccessReplenishments(u)) return "Este usuario no tiene acceso al apartado de Reposiciones.";
+      const estado = i.estado ?? "abiertas";
+      let rows = await listReplenishments(u, { q: i.texto, status: estado === "todas" ? undefined : estado, mine: i.mias });
+      if (i.me_toca) rows = rows.filter((r) => myTurn(u, r));
+      if (!rows.length) return "No hay reposiciones que cumplan esos criterios.";
+      return JSON.stringify({
+        total: rows.length,
+        reposiciones: rows.slice(0, 25).map((r) => ({
+          id: r.id,
+          enlace: `/reposiciones/${r.id}`,
+          codigo: r.code,
+          titulo: r.title,
+          producto: r.productName,
+          cliente_o_marca: r.clientOrBrand,
+          estado: REP_STATUS_LABEL[r.status],
+          le_toca_al_usuario: myTurn(u, r),
+          elementos: r.elements,
+          proveedores: r.suppliers,
+          recotizaciones_pendientes: r.quotesPending,
+          solicitante: r.requester,
+          fecha_necesaria: r.neededBy,
+          creada: r.createdAt.toISOString().slice(0, 10),
+        })),
+      });
+    },
+  });
+
+  const getRep = defineTool({
+    name: "ver_reposicion",
+    description: "Detalle de una reposición por código (REP-2026-0001) o id: estado y ronda de diseño, a quién le toca, elementos con proveedor y recotización, archivos de arte final e historial reciente.",
+    inputSchema: z.object({ codigo_o_id: z.string().describe("Código REP-… o id") }),
+    run: async ({ codigo_o_id }) => {
+      if (!canAccessReplenishments(u)) return "Este usuario no tiene acceso al apartado de Reposiciones.";
+      const key = codigo_o_id.trim();
+      const [row] = await db
+        .select({ id: replenishments.id })
+        .from(replenishments)
+        .where(/^[0-9a-f-]{36}$/i.test(key) ? eq(replenishments.id, key) : eq(replenishments.code, key.toUpperCase()));
+      const d = row ? await loadReplenishment(u, row.id) : null;
+      if (!d) return "No existe esa reposición.";
+      const r = d.rep;
+      const step = STATUS_STEPS.find((x) => x.key === r.status);
+      return JSON.stringify({
+        id: r.id,
+        enlace: `/reposiciones/${r.id}`,
+        codigo: r.code,
+        titulo: r.title,
+        plantilla: REPLENISHMENT_TEMPLATES[r.template as keyof typeof REPLENISHMENT_TEMPLATES]?.label ?? r.template,
+        estado: REP_STATUS_LABEL[r.status],
+        le_toca_a: step?.dept ? { diseno: "Diseño", calidad: "Calidad", compras: "Compras" }[step.dept] : null,
+        acciones_del_usuario: d.actions.map((a) => REP_FLOW[a].label),
+        ronda_de_diseno: r.round,
+        producto: r.productName,
+        referencia: r.productRef,
+        cliente_o_marca: r.clientOrBrand,
+        proyecto_npd: d.npd ? `${d.npd.code} · ${d.npd.name} (/proyectos/${d.npd.id})` : null,
+        fecha_necesaria: r.neededBy,
+        solicitante: d.requesterName,
+        notas: r.notes,
+        elementos: d.itemRows.map((i) => ({
+          elemento: ELEMENT_LABEL[i.element] ?? i.element,
+          descripcion: i.description,
+          cantidad: i.quantity,
+          proveedor: d.supplierRows.find((s) => s.id === i.supplierId)?.name ?? null,
+          recotizacion: QUOTE_STATUS_LABEL[i.quoteStatus] ?? i.quoteStatus,
+          precio_unitario: i.quotePrice ? `${Number(i.quotePrice)} €/ud` : null,
+        })),
+        arte_final: d.files.filter((f) => f.f.tag === "arte_final").map((f) => `${f.f.name} (ronda ${f.f.round}, ${f.by})`),
+        historial_reciente: d.activity.slice(0, 10).map(({ a, who }) => ({
+          fecha: a.createdAt.toISOString().slice(0, 16).replace("T", " "),
+          quien: who ?? "Sistema",
+          que: REP_ACTION_LABEL[a.action] ?? a.action,
+          comentario: (a.diff as Record<string, unknown> | null)?.comment ?? (a.diff as Record<string, unknown> | null)?.body ?? undefined,
+        })),
+      });
+    },
+  });
+
+  return [searchProjects, getProject, searchReps, getRep];
 }
 
 export type ChatTurn = { role: "user" | "assistant"; content: string };
