@@ -128,7 +128,7 @@ export function briefSections(b: BriefData, l: Lookups): Section[] {
             .map((i) => `${i.product}${i.brand ? ` (${i.brand})` : ""}${i.likes ? `: ${i.likes}` : ""}${i.url ? ` — ${i.url}` : ""}`)
             .join(" · ") || null,
         ],
-        ["Blacklist", o.blacklist ?? null],
+        ["Blacklist", o.blacklist ?? (o.noBlacklist ? "No hay blacklist" : o.blacklistAttached ? "Documento adjunto" : null)],
       ],
     });
   }

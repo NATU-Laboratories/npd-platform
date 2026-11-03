@@ -10,7 +10,7 @@ import { ChipGroup } from "@/components/ui/chips";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Uploader, type UploadedFile } from "@/components/uploader";
 import { briefSections, type Lookups } from "@/lib/brief/display";
-import { computeCompleteness, FIELD_BY_KEY, missingFields, submitErrors } from "@/lib/brief/fields";
+import { blacklistPending, computeCompleteness, FIELD_BY_KEY, isInternational, missingFields, submitErrors } from "@/lib/brief/fields";
 import { needsOlfactory, parseBriefLenient, type BriefInput } from "@/lib/brief/schema";
 import type { Option } from "@/lib/catalog-defaults";
 import { CATEGORY_LABEL, PRIORITY_LABEL, TYPE_LABEL } from "@/lib/labels";
@@ -533,13 +533,19 @@ export function Wizard(props: WizardProps) {
                         compact
                       />
                     }
+                    international={isInternational(parsed)}
                     blacklistUpload={
                       <Uploader
                         projectId={project.id}
                         phase={0}
                         initial={blacklistFiles}
                         maxMb={props.settings.max_file_mb}
-                        onChange={setBlacklistFiles}
+                        onChange={(list) => {
+                          setBlacklistFiles(list);
+                          // Marca en el brief que hay documento de blacklist (cuenta como aportada)
+                          setBrief((b) => ({ ...b, olfactory: { ...(b.olfactory ?? {}), blacklistAttached: list.length > 0 || undefined } }));
+                          setDirty(true);
+                        }}
                         defaultTag="blacklist"
                         showTags={false}
                         compact
@@ -579,6 +585,19 @@ export function Wizard(props: WizardProps) {
                       ))}
                     </Select>
                   </Field>
+                </div>
+              )}
+              {blacklistPending(parsed, blacklistFiles.length > 0) && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                  <p className="font-semibold">Falta la blacklist</p>
+                  <p className="mt-1">
+                    El producto se venderá fuera de España: para cotizar correctamente necesitamos la blacklist del cliente si la hay. Puedes enviar la
+                    solicitud igualmente, pero añádela o marca «No hay blacklist» en{" "}
+                    <button type="button" className="underline" onClick={() => go(3)}>
+                      Producto → Bloque olfativo
+                    </button>
+                    .
+                  </p>
                 </div>
               )}
               {Object.keys(reqErrors).length > 0 && (

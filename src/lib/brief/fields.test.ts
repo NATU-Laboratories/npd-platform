@@ -116,3 +116,17 @@ describe("missingLabelInfo", () => {
     expect(missingLabelInfo({ markets: ["ES"], languages: ["es"], finalName: "Aura", facing: "Logo + Eau de Parfum" })).toEqual([]);
   });
 });
+
+describe("blacklist en mercados internacionales", () => {
+  it("se pide (sin bloquear) si se vende fuera de España", async () => {
+    const { blacklistPending, missingFields, submitErrors } = await import("./fields");
+    const intl: BriefData = { ...plBase, markets: ["ES", "FR"] };
+    expect(blacklistPending(intl)).toBe(true);
+    expect(submitErrors(intl)).toEqual({});
+    expect(missingFields(intl, "recommended").map((f) => f.key)).toContain("olfactory.blacklist");
+    expect(blacklistPending({ ...intl, olfactory: { ...intl.olfactory, noBlacklist: true } })).toBe(false);
+    expect(blacklistPending({ ...intl, olfactory: { ...intl.olfactory, blacklist: "Lyral" } })).toBe(false);
+    expect(blacklistPending(intl, true)).toBe(false);
+    expect(blacklistPending({ ...plBase, markets: ["ES"] })).toBe(false);
+  });
+});
