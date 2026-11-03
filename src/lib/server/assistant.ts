@@ -1,6 +1,6 @@
 import "server-only";
 import OpenAI from "openai";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ilike, or } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { activityLog, clients, projects, users } from "@/db/schema";
@@ -86,16 +86,35 @@ function toolsFor(u: CurrentUser) {
   const searchProjects = defineTool({
     name: "buscar_proyectos",
     description:
-      "Busca proyectos visibles para el usuario. Úsala para encontrar un proyecto por código, nombre o cliente, listar proyectos por situación o tipo, ver los del usuario o los que requieren su acción. Devuelve como máximo 25.",
+      "Busca y cuenta proyectos visibles para el usuario: por código, nombre o cliente, situación, tipo, quién creó la solicitud (solicitante), fechas de solicitud, los del usuario o los que requieren su acción. Devuelve el total y como máximo 25 proyectos.",
     inputSchema: z.object({
       texto: z.string().optional().describe("Código, nombre o cliente a buscar"),
       situacion: z.enum(SITUATIONS.map((s) => s.key) as [string, ...string[]]).optional().describe(`Una de: ${SITUATIONS.map((s) => `${s.key} (${s.label})`).join(", ")}`),
       tipo: z.enum(["PL", "MP", "MDD"]).optional().describe("PL marca privada, MP marca propia, MDD marca de distribuidor"),
+      solicitante: z.string().max(100).optional().describe("Nombre o email de la persona que creó la solicitud (p. ej. «Comercial 1»)"),
+      solicitado_desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("Fecha AAAA-MM-DD: solicitudes enviadas desde ese día"),
+      solicitado_hasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("Fecha AAAA-MM-DD: solicitudes enviadas hasta ese día"),
       requieren_mi_accion: z.boolean().optional(),
       mis_proyectos: z.boolean().optional(),
       en_riesgo: z.boolean().optional(),
     }),
     run: async (i) => {
+      let createdBy: string | undefined;
+      let who: string | undefined;
+      if (i.solicitante?.trim()) {
+        const term = `%${i.solicitante.trim()}%`;
+        const matches = await db
+          .select({ id: users.id, name: users.name })
+          .from(users)
+          .where(or(ilike(users.name, term), ilike(users.email, term)))
+          .limit(10);
+        const exact = matches.filter((m) => m.name.toLowerCase() === i.solicitante!.trim().toLowerCase());
+        const pick = exact.length === 1 ? exact : matches;
+        if (!pick.length) return `No hay ningún usuario que coincida con «${i.solicitante}».`;
+        if (pick.length > 1) return `Hay varias personas que coinciden con «${i.solicitante}»: ${pick.map((m) => m.name).join(", ")}. Pregunta a cuál se refiere.`;
+        createdBy = pick[0]!.id;
+        who = pick[0]!.name;
+      }
       const settings = await getSettings();
       const { rows, total } = await listProjects(
         u,
@@ -105,13 +124,17 @@ function toolsFor(u: CurrentUser) {
           type: i.tipo,
           action: i.requieren_mi_accion ? "1" : undefined,
           mine: i.mis_proyectos ? "1" : undefined,
+          createdBy,
+          from: i.solicitado_desde,
+          to: i.solicitado_hasta,
           risk: i.en_riesgo ? "1" : undefined,
         },
         settings.risk_days,
       );
-      if (!rows.length) return "No hay proyectos visibles que cumplan esos criterios.";
+      if (!rows.length) return `No hay proyectos visibles que cumplan esos criterios${who ? ` (solicitante: ${who})` : ""}.`;
       return JSON.stringify({
         total,
+        ...(who ? { solicitante: who, nota: "Solo cuenta los proyectos que esta persona puede ver el usuario actual; los borradores ajenos no se ven." } : {}),
         proyectos: rows.map((r) => ({
           id: r.id,
           codigo: r.code ?? "(borrador)",
