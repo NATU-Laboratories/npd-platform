@@ -240,7 +240,7 @@ export function AssistantWidget({ firstName }: { firstName: string }) {
                   {t.role === "assistant" ? <Rich text={t.content} /> : <p className="whitespace-pre-wrap">{t.content}</p>}
                   {t.actions?.map((a) => (
                     <div key={a.id} className="mt-2 rounded-xl bg-[#f4f5ef] p-3 ring-1 ring-natu-sage">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-[#56613f]">Pendiente de tu confirmación</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[#56613f]">{a.status === "done" ? "Hecho" : a.status === "failed" ? "No se ha podido hacer" : a.status === "cancelled" ? "Cancelado" : "Pendiente de tu confirmación"}</p>
                       <p className="mt-0.5 font-semibold text-slate-900">{a.title}</p>
                       <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-xs">
                         {a.lines.map(([k, v]) => (
@@ -253,7 +253,7 @@ export function AssistantWidget({ firstName }: { firstName: string }) {
                       {a.status === "done" || a.status === "cancelled" || a.status === "failed" ? (
                         <p className={cn("mt-2 flex items-center gap-1 text-xs font-medium", a.status === "done" ? "text-[#56613f]" : a.status === "failed" ? "text-rose-700" : "text-slate-500")}>
                           {a.status === "done" && <Check className="size-3.5" aria-hidden />}
-                          {a.status === "done" ? "Hecho" : a.status === "cancelled" ? "Cancelado" : "No se ha podido hacer"}
+                          {a.result ?? (a.status === "done" ? "Hecho" : a.status === "cancelled" ? "Cancelado" : "No se ha podido hacer")}
                         </p>
                       ) : (
                         <div className="mt-2.5 flex gap-2">
@@ -321,7 +321,7 @@ export function AssistantWidget({ firstName }: { firstName: string }) {
               <Send className="size-4" />
             </button>
           </form>
-          <p className="bg-white px-3 pb-2 text-[10px] text-slate-400">Asistente con IA: puede equivocarse. Las acciones siempre se confirman antes.</p>
+          <p className="bg-white px-3 pb-2 text-[10px] text-slate-400">Asistente con IA: puede equivocarse. Los emails a proveedores siempre se confirman antes.</p>
         </section>
       )}
     </>

@@ -18,7 +18,7 @@ import { addComment, canAccessReplenishments, canActAs, departmentRecipients, se
  */
 
 export type ActionChannel = { channel: "web" | "teams"; conversationId?: string | null };
-export type PreparedAction = { id: string; title: string; lines: [string, string][] };
+export type PreparedAction = { id: string; title: string; lines: [string, string][]; status?: "pending" | "done" | "failed"; result?: string };
 
 const PENDING_MINUTES = 30;
 
@@ -105,7 +105,7 @@ export async function prepareNotify(u: CurrentUser, ch: ActionChannel, i: z.infe
   if (subject === "forbidden") return `No tienes acceso a ${i.sobre}.`;
   if (subject === "missing") return `No existe ${i.sobre}.`;
   return store(u, ch, "notify", { target, subject, message: i.mensaje.trim(), urgent: !!i.urgente }, {
-    title: `Enviar aviso${i.urgente ? " urgente" : ""} a ${target.label}`,
+    title: `Aviso${i.urgente ? " urgente" : ""} para ${target.label}`,
     lines: [
       ["Para", target.label],
       ...(subject ? ([["Sobre", `${subject.code} · ${subject.name}`]] as [string, string][]) : []),
@@ -125,7 +125,7 @@ export async function prepareComment(u: CurrentUser, ch: ActionChannel, i: z.inf
   if (!subject || subject === "missing") return `No existe ${i.sobre}.`;
   if (subject === "forbidden") return `No tienes acceso a ${i.sobre}.`;
   return store(u, ch, "comment", { subject, body: i.comentario.trim() }, {
-    title: `Comentar en ${subject.code}`,
+    title: `Comentario en ${subject.code}`,
     lines: [
       ["En", `${subject.code} · ${subject.name}`],
       ["Comentario", i.comentario.trim()],

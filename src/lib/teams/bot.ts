@@ -80,7 +80,7 @@ async function resolveUser(a: Activity) {
 
 const RESET = /^\s*(\/?reiniciar|\/?reset|nueva conversaci[oó]n|empezar de nuevo)\s*$/i;
 const WELCOME =
-  "¡Hola! Soy **Alexia** 🌿, la asistente de proyectos de NATU. Pregúntame cómo va cualquier proyecto o reposición, qué tienes pendiente o cómo se hace algo en la plataforma: yo me encargo de rebuscar. También puedo enviar avisos y comentarios por ti, siempre después de que me lo confirmes.\n\nEscribe **reiniciar** para empezar de cero.";
+  "¡Hola! Soy **Alexia** 🌿, la asistente de proyectos de NATU. Pregúntame cómo va cualquier proyecto o reposición, qué tienes pendiente o cómo se hace algo en la plataforma: yo me encargo de rebuscar. También puedo enviar avisos y comentarios por ti.\n\nEscribe **reiniciar** para empezar de cero.";
 const YES = /^\s*(s[ií]|s[ií],? (env[ií]alo|hazlo|confirmo|adelante)|vale|ok|okay|confirmo|confirmar|adelante|dale|hazlo|env[ií]alo|perfecto)\s*[.!]*\s*$/i;
 const NO = /^\s*(no|no,? gracias|cancela|cancelar|cancélalo|d[eé]jalo|mejor no)\s*[.!]*\s*$/i;
 
@@ -142,7 +142,7 @@ export async function handleActivity(a: Activity) {
     try {
       const res = await askAssistant(u, turns, { channel: "teams", conversationId: convId });
       answer = res.text;
-      const act = res.actions.at(-1);
+      const act = res.actions.filter((x) => !x.status || x.status === "pending").at(-1);
       if (act) answer += `\n\n---\n**${act.title}**\n${act.lines.map(([k, v]) => `- **${k}:** ${v}`).join("\n")}\n\nResponde **sí** para hacerlo o **no** para cancelarlo.`;
     } catch (err) {
       await logError("teams", err, { userId: u.id });

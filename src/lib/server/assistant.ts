@@ -12,7 +12,7 @@ import { getActiveUsers, getBrands, getCatalogLabels } from "./catalogs";
 import { listProjects } from "./dashboard";
 import { labelInfoMissing, refTitle } from "./references";
 import { canAccessReplenishments, listReplenishments, loadReplenishment, myTurn, REP_FLOW } from "./replenishments";
-import { commentInput, markNoticesRead, notifyInput, prepareComment, prepareNotify, prepareQuote, quoteInput, recentNotices, type ActionChannel, type PreparedAction } from "./assistant-actions";
+import { commentInput, confirmAction, markNoticesRead, notifyInput, prepareComment, prepareNotify, prepareQuote, quoteInput, recentNotices, type ActionChannel, type PreparedAction } from "./assistant-actions";
 import { getSettings } from "./settings";
 import { getFormulaTargetCost, loadSheet, pendingUpTo } from "./sheet";
 
@@ -39,7 +39,9 @@ Cómo responder:
 - Para datos de proyectos usa SIEMPRE las herramientas; nunca inventes códigos, fechas, estados ni personas. Si no encuentras algo, dilo.
 - Solo puedes ver los proyectos que esta persona tiene permiso para ver: las herramientas ya lo filtran. Si un proyecto no aparece, indica que no existe o que no tiene acceso.
 - Cuando menciones un proyecto, enlázalo así: [2026-PL-0007 · Nombre](/proyectos/<id>).
-- Acciones que SÍ puedes preparar (siempre con confirmación de la persona): enviar un aviso a un departamento o persona (preparar_aviso), dejar un comentario en un proyecto o reposición (preparar_comentario) y, si es de Compras, pedir recotización a proveedores (preparar_recotizacion). Al prepararla, la herramienta NO la ejecuta: di en una frase qué vas a hacer y pide que la confirme según el canal en el que estás (lo indica el mensaje de contexto). Nunca digas que ya está hecha hasta que la persona confirme. Redacta el mensaje en primera persona de quien lo envía, claro y breve; no inventes datos.
+- Acciones que puedes hacer por la persona: enviar un aviso a un departamento o persona (preparar_aviso) y dejar un comentario en un proyecto o reposición (preparar_comentario): se hacen AL MOMENTO, sin confirmación, así que antes de llamarlas asegúrate de que está claro a quién va, sobre qué proyecto o reposición y qué dice; si hay cualquier duda (varias personas con ese nombre, proyecto ambiguo, mensaje poco claro), pregunta primero y no llames a la herramienta. Cuando la herramienta diga que está hecho, confírmalo en una frase (sin repetir todo el mensaje).
+- Pedir recotización a proveedores (preparar_recotizacion, solo Compras) envía un email a una empresa externa: esa SÍ queda pendiente de confirmación; di en una frase qué has preparado y pide que la confirme según el canal (lo indica el mensaje de contexto). No digas que está hecha hasta que la confirme.
+- Redacta los mensajes en primera persona de quien los envía, claros y breves; no inventes datos.
 - No puedes aprobar P1/P2, avanzar fases ni estados, validar arte final, cancelar ni editar datos: explica dónde y cómo hacerlo en la plataforma.
 - Si la persona pregunta si tiene avisos o mensajes, usa ver_mis_avisos.
 - El coste objetivo de la fórmula es confidencial: solo lo menciones si la herramienta te lo devuelve.
@@ -330,8 +332,14 @@ function toolsFor(u: CurrentUser, ctx: ActionChannel & { prepared: PreparedActio
     },
   });
 
-  const prepared = (res: PreparedAction | string) => {
+  const prepared = async (res: PreparedAction | string, direct = false) => {
     if (typeof res === "string") return res;
+    if (direct) {
+      // Avisos y comentarios internos: sin dudas, se hacen al momento
+      const r = await confirmAction(u, res.id);
+      ctx.prepared.push({ ...res, status: r.ok ? "done" : "failed", result: r.message });
+      return JSON.stringify({ accion: res.title, estado: r.ok ? "HECHO" : "NO SE HA PODIDO HACER", resultado: r.message });
+    }
     ctx.prepared.push(res);
     return JSON.stringify({
       accion_preparada: res.title,
@@ -342,15 +350,15 @@ function toolsFor(u: CurrentUser, ctx: ActionChannel & { prepared: PreparedActio
   };
   const notifyTool = defineTool({
     name: "preparar_aviso",
-    description: "Prepara un aviso (email + mensaje de Alexia en su chat) para un departamento o una persona, opcionalmente sobre un proyecto o reposición. No lo envía: la persona debe confirmarlo.",
+    description: "Envía al momento un aviso (email + mensaje de Alexia en su chat + comentario en la ficha) a un departamento o una persona, opcionalmente sobre un proyecto o reposición. Úsala solo cuando no haya dudas de destinatario, proyecto y mensaje.",
     inputSchema: notifyInput,
-    run: async (i) => prepared(await prepareNotify(u, ctx, i)),
+    run: async (i) => prepared(await prepareNotify(u, ctx, i), true),
   });
   const commentTool = defineTool({
     name: "preparar_comentario",
-    description: "Prepara un comentario en la ficha de un proyecto NPD o una reposición. No lo publica: la persona debe confirmarlo.",
+    description: "Publica al momento un comentario en la ficha de un proyecto NPD o una reposición. Úsala solo cuando no haya dudas de dónde y qué comentar.",
     inputSchema: commentInput,
-    run: async (i) => prepared(await prepareComment(u, ctx, i)),
+    run: async (i) => prepared(await prepareComment(u, ctx, i), true),
   });
   const quoteTool = defineTool({
     name: "preparar_recotizacion",
@@ -387,8 +395,8 @@ export async function askAssistant(u: CurrentUser, history: ChatTurn[], channel:
   }. Hoy es ${new Date().toLocaleDateString("es-ES", { timeZone: "Europe/Madrid", weekday: "long", day: "numeric", month: "long", year: "numeric" })}.
 ${
   channel.channel === "teams"
-    ? "Canal: Microsoft Teams. Al preparar una acción, el detalle se añade solo debajo de tu respuesta: no lo repitas; termina pidiendo que responda «sí» para hacerlo o «no» para cancelarlo. No menciones botones."
-    : "Canal: chat de la plataforma web. Al preparar una acción aparece una tarjeta con el detalle y los botones «Confirmar» y «Cancelar»: no repitas el detalle ni el mensaje; di en una frase qué has preparado y que lo confirme en la tarjeta. No menciones Teams ni responder «sí»."
+    ? "Canal: Microsoft Teams. Si preparas una acción pendiente de confirmar, el detalle se añade solo debajo de tu respuesta: no lo repitas; termina pidiendo que responda «sí» para hacerlo o «no» para cancelarlo. No menciones botones."
+    : "Canal: chat de la plataforma web. Debajo de tu respuesta aparece una tarjeta con el detalle de cada acción (hecha o pendiente, con botones «Confirmar» y «Cancelar» si está pendiente): no repitas el detalle ni el mensaje. No menciones Teams ni responder «sí»."
 }`;
   const tools = toolsFor(u, ctx);
   // API Responses (la de Chat Completions no admite herramientas con razonamiento en los
