@@ -2,6 +2,7 @@
 import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import * as React from "react";
+import { PANEL_URL_KEY } from "@/components/back-link";
 import { Input, Select } from "@/components/ui/form";
 import { CATEGORY_LABEL, PHASES, SITUATIONS, STAGES } from "@/lib/labels";
 import { cn } from "@/lib/utils";
@@ -37,6 +38,14 @@ export function Filters({
     },
     [sp, router, pathname],
   );
+
+  // Recuerda los filtros del panel para que «← Nuevos desarrollos» vuelva igual
+  React.useEffect(() => {
+    try {
+      const qs = sp.toString();
+      sessionStorage.setItem(PANEL_URL_KEY, `${pathname}${qs ? `?${qs}` : ""}`);
+    } catch {}
+  }, [sp, pathname]);
 
   React.useEffect(() => {
     if (q === (sp.get("q") ?? "")) return;
