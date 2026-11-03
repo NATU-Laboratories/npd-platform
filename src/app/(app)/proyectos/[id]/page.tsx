@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlertTriangle, ExternalLink, FileText, FolderOpen, Pencil } from "lucide-react";
+import { AlertTriangle, ClipboardList, ExternalLink, FileText, FolderOpen, Pencil } from "lucide-react";
 import { ActivityTimeline, type ActivityItem } from "@/components/project/activity-timeline";
 import { CommentComposer } from "@/components/project/comment-composer";
 import { GateDialog } from "@/components/project/gate-dialog";
@@ -9,7 +9,7 @@ import { LabelInfoDialog } from "@/components/project/label-info-dialog";
 import { AdvanceDialog, BudgetDialog, PrepaymentReceivedDialog, QuoteDialog } from "@/components/project/phase-dialogs";
 import { BackLink } from "@/components/back-link";
 import { NeededBySignal } from "@/components/needed-by";
-import { SheetPanel, SheetSummary } from "@/components/sheet/sheet-panel";
+import { MyWork, SheetPanel, SheetSummary } from "@/components/sheet/sheet-panel";
 import { Uploader } from "@/components/uploader";
 import { Badge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -359,6 +359,13 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            {showSheet && (
+              <Button asChild variant="secondary">
+                <Link href={`/proyectos/${p.id}/ficha`}>
+                  <ClipboardList aria-hidden /> Ficha completa
+                </Link>
+              </Button>
+            )}
             {canDecide && (
               <GateDialog
                 projectId={p.id}
@@ -518,6 +525,31 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
           </div>
         )}
       </section>
+
+      {/* Lo que depende de la persona en este proyecto */}
+      <MyWork
+        projectId={p.id}
+        cards={sheet.cards}
+        entries={sheet.entries}
+        ctx={sheet.ctx}
+        now={now}
+        files={d.files.map(({ f }) => ({ id: f.id, name: f.name, size: f.size, mime: f.mime, tag: f.tag }))}
+        maxMb={settings.max_file_mb}
+        editable={Object.fromEntries(sheet.cards.map((c) => [c.dept.key, canEditSection(u, c.dept.key, c.phase, p)]))}
+        mine={u.departmentKeys.filter(Boolean)}
+        actions={[
+          ...(canDecide ? [{ label: "Revisar la solicitud (P1)", hint: "Apruébala, pide más información o recházala con el botón de arriba." }] : []),
+          ...(canQuote ? [{ label: "Enviar la cotización al comercial", hint: "Con el botón «Enviar cotización al comercial» de arriba." }] : []),
+          ...(canBudget ? [{ label: "Registrar la respuesta del cliente (P2)", hint: "Indica si el cliente aprueba el presupuesto, pide cambios o lo rechaza." }] : []),
+          ...(canCompleteLabelInfo(u, p) && labDone && missingLabel.length
+            ? [{ label: "Completar los datos para la etiqueta", hint: "Naming definitivo, facing, idiomas y países: sin ellos no se pasa a Diseño." }]
+            : []),
+          ...(p.status === "info_requested" && isRequester ? [{ label: "Responder la petición de información", hint: "Te han pedido más datos para poder aprobar la solicitud." }] : []),
+          ...(canAdvance && !advanceWaitingOn.length && p.status === "in_progress" && p.phase >= FIRST_RUNNING_PHASE
+            ? [{ label: `Avanzar el proyecto a «${p.phase === LAST_PHASE ? "Producción" : (PHASES[p.phase + 1]?.name ?? "")}»`, hint: "Todos los departamentos de esta fase han terminado." }]
+            : []),
+        ]}
+      />
 
       {/* 2. Línea de fases */}
       <Card>
@@ -763,6 +795,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
               editable={Object.fromEntries(sheet.cards.map((c) => [c.dept.key, canEditSection(u, c.dept.key, c.phase, p)]))}
               maxMb={settings.max_file_mb}
               {...(seeFormulaCost ? { formulaCost } : {})}
+              mine={u.departmentKeys.filter(Boolean)}
             />
           )}
 

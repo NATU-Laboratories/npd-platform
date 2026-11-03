@@ -372,7 +372,12 @@ function Inputs({ deps, pc }: { deps: string[]; pc: PanelCtx }) {
   if (!deps.length) return null;
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Información de partida</p>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Información de partida</p>
+        <a href={`/proyectos/${pc.projectId}/ficha`} className="text-xs font-medium text-brand-600 hover:text-brand-800">
+          Ver toda la ficha en una página →
+        </a>
+      </div>
       <ul className="flex flex-col gap-1.5">
         {deps.map((key) => {
           const dep = pc.entries.find((x) => x.section.key === key);
@@ -416,12 +421,17 @@ export function SheetPanel({
   maxMb,
   now,
   formulaCost,
+  mine = [],
 }: PanelCtx & {
   editable: Record<string, boolean>;
   /** Coste objetivo de la fórmula (confidencial); undefined si el usuario no puede verlo. */
   formulaCost?: number | null;
+  /** Departamentos de la persona: van primero y destacados. */
+  mine?: string[];
 }) {
   const pc: PanelCtx = { projectId, cards, entries, ctx, files, maxMb, now };
+  const ordered = [...cards.filter((c) => mine.includes(c.dept.key)), ...cards.filter((c) => !mine.includes(c.dept.key))];
+  const firstOther = ordered.findIndex((c) => !mine.includes(c.dept.key));
   return (
     <Card id="ficha">
       <CardHeader
@@ -429,7 +439,8 @@ export function SheetPanel({
         description="Cada departamento avanza por sus estados (por referencia si el proyecto tiene varias). Solo sus miembros (y el gestor de proyectos) pueden cambiar el estado y editar sus datos."
       />
       <div className="divide-y divide-slate-100">
-        {cards.map((c) => {
+        {ordered.map((c, idx) => {
+          const own = mine.includes(c.dept.key);
           const canEdit = editable[c.dept.key] ?? false;
           const allEntries = [...c.entries, ...c.refs.flatMap((r) => r.entries)];
           const deps = [...new Set(allEntries.flatMap((e) => e.section.dependsOn ?? []))];
@@ -438,12 +449,20 @@ export function SheetPanel({
             <section
               key={c.dept.key}
               id={`dept-${c.dept.key}`}
-              className={cn("flex scroll-mt-24 flex-col gap-3 px-5 py-4", c.completed && "border-l-4 border-l-[#7f8f63] bg-[#f4f6ee]")}
+              className={cn(
+                "flex scroll-mt-24 flex-col gap-3 px-5 py-4",
+                c.completed && "border-l-4 border-l-[#7f8f63] bg-[#f4f6ee]",
+                own && !c.completed && "border-l-4 border-l-natu-dark",
+              )}
             >
+              {mine.length > 0 && idx === firstOther && idx > 0 && (
+                <p className="-mt-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Resto de departamentos</p>
+              )}
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="flex items-center gap-2 font-semibold text-slate-900">
                   <span className="size-2.5 rounded-full" style={{ background: c.dept.color }} aria-hidden />
                   {c.dept.name}
+                  {own && <span className="rounded-full bg-natu-dark px-2 py-0.5 text-[11px] font-medium text-white">Tu departamento</span>}
                   <span className="text-xs font-normal text-slate-500">· {titles.join(" · ")}</span>
                 </h3>
                 <span className="flex items-center gap-1.5">
@@ -497,6 +516,108 @@ export function SheetPanel({
                 </>
               )}
             </section>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+
+/**
+ * «Tu parte en este proyecto»: lo que depende de la persona (sus departamentos y las
+ * decisiones que le tocan), con los botones para completar y avanzar sin bajar a la ficha.
+ */
+export function MyWork({
+  cards,
+  mine,
+  editable,
+  actions,
+  ...pc
+}: PanelCtx & {
+  mine: string[];
+  editable: Record<string, boolean>;
+  /** Tareas del proyecto que le tocan (P1, cotización, P2, datos de etiqueta…). */
+  actions: { label: string; hint: string }[];
+}) {
+  const ctx: PanelCtx = { ...pc, cards };
+  const myCards = cards.filter((c) => mine.includes(c.dept.key));
+  if (!myCards.length && !actions.length) return null;
+  const pending = myCards.filter((c) => !c.completed);
+  const todo = actions.length + pending.filter((c) => c.active && c.due).length;
+  return (
+    <Card className="border-natu-dark/30 ring-1 ring-natu-dark/10">
+      <CardHeader
+        title="Tu parte en este proyecto"
+        actions={
+          <a href={`/proyectos/${pc.projectId}/ficha`} className="text-xs font-medium text-brand-600 hover:text-brand-800">
+            Toda la información del proyecto →
+          </a>
+        }
+        description={
+          todo
+            ? `Tienes ${todo} ${todo === 1 ? "cosa" : "cosas"} pendiente${todo === 1 ? "" : "s"}. El resto de departamentos, más abajo.`
+            : "Ahora mismo no tienes nada pendiente aquí."
+        }
+      />
+      <div className="flex flex-col divide-y divide-slate-100">
+        {actions.map((a) => (
+          <div key={a.label} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
+            <p className="text-sm">
+              <span className="font-medium text-slate-900">{a.label}</span>
+              <span className="block text-xs text-slate-500">{a.hint}</span>
+            </p>
+            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-amber-200">Te toca</span>
+          </div>
+        ))}
+        {myCards.map((c) => {
+          const canEdit = editable[c.dept.key] ?? false;
+          const head = (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                <span className="size-2.5 rounded-full" style={{ background: c.dept.color }} aria-hidden />
+                {c.dept.name}
+              </p>
+              <a href={`#dept-${c.dept.key}`} className="text-xs font-medium text-brand-600 hover:text-brand-800">
+                Ver todos mis datos ↓
+              </a>
+            </div>
+          );
+          if (c.completed)
+            return (
+              <div key={c.dept.key} className="flex flex-col gap-1 px-5 py-3">
+                {head}
+                <p className="flex items-center gap-1 text-sm text-[#56613f]">
+                  <Check className="size-4" aria-hidden /> Tu parte está completada{c.completedAt ? ` (${formatDate(c.completedAt)})` : ""}.
+                </p>
+              </div>
+            );
+          if (!c.active || !c.due)
+            return (
+              <div key={c.dept.key} className="flex flex-col gap-1 px-5 py-3">
+                {head}
+                <p className="text-sm text-slate-500">
+                  {c.waitsP2 ? "Tu parte empieza cuando el cliente apruebe el presupuesto (P2)." : `Tu parte empieza en la fase ${c.phase} · ${PHASES[c.phase]?.name}.`}
+                  {canEdit && c.active && " Si quieres, puedes ir adelantando datos."}
+                </p>
+              </div>
+            );
+          return (
+            <div key={c.dept.key} className="flex flex-col gap-3 px-5 py-3">
+              {head}
+              {!c.perRef ? (
+                <StateRow c={c} s={c} canEdit={canEdit} refInfo={null} pc={ctx} />
+              ) : (
+                c.refs
+                  .filter((r) => !r.completed)
+                  .map((r) => (
+                    <div key={r.ref.id} className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3">
+                      <p className="text-sm font-semibold text-slate-900">{refTitle(r.ref)}</p>
+                      <StateRow c={c} s={r} canEdit={canEdit} refInfo={r.ref} pc={ctx} />
+                    </div>
+                  ))
+              )}
+            </div>
           );
         })}
       </div>
