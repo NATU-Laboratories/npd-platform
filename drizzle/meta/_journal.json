@@ -71,6 +71,13 @@
       "when": 1793628138986,
       "tag": "0009_unusual_angel",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793698103645,
+      "tag": "0010_teams_chats",
+      "breakpoints": true
     }
   ]
 }

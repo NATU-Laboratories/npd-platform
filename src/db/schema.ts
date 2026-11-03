@@ -475,6 +475,16 @@ export const errorLog = pgTable(
   (t) => [index("error_created_idx").on(t.createdAt)],
 );
 
+/** Conversaciones del asistente en Microsoft Teams (Teams no envía el historial). */
+export const assistantChats = pgTable("assistant_chats", {
+  conversationId: text("conversation_id").primaryKey(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  messages: jsonb("messages").$type<{ role: "user" | "assistant"; content: string }[]>().notNull().default([]),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 /** Cola simple con reintentos (§10 Resiliencia). */
 export const jobs = pgTable(
   "jobs",
