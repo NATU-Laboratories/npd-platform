@@ -9,6 +9,7 @@ const NAV = [
   ["/admin/decisores", "Aprobadores"],
   ["/admin/marcas", "Marcas propias"],
   ["/admin/plantillas", "Plantillas de flujo"],
+  ["/admin/proveedores", "Proveedores"],
   ["/admin/configuracion", "Configuración"],
   ["/admin/actividad", "Registro de actividad"],
   ["/admin/errores", "Logs de errores"],

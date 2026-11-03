@@ -1,15 +1,15 @@
 import Link from "next/link";
-import { LogOut, Plus, Settings } from "lucide-react";
+import { LogOut, Settings } from "lucide-react";
 import { devLoginEnabled, signOut } from "@/auth";
 import { Logo } from "@/components/logo";
 import { ViewAsBanner } from "@/components/view-as-banner";
 import { AssistantWidget } from "@/components/assistant/assistant-widget";
 import { assistantEnabled } from "@/lib/server/assistant";
-import { Button } from "@/components/ui/button";
+import { HeaderNewButton, MainNav } from "@/components/nav-links";
+import { canAccessReplenishments, canCreateReplenishment } from "@/lib/server/replenishments";
 import { canRequest, isAdmin, requireUser } from "@/lib/server/authz";
 import { EDITABLE_ROLES, ROLE_LABEL } from "@/lib/labels";
 import { initials } from "@/lib/utils";
-import { newDraftAction } from "@/app/actions/projects";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const u = await requireUser();
@@ -26,25 +26,16 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           <Link href="/" className="shrink-0">
             <Logo onDark />
           </Link>
-          <nav className="ml-4 hidden items-center gap-1 text-sm sm:flex">
-            <Link href="/" className="rounded px-3 py-1.5 hover:bg-white/10">
-              Panel
-            </Link>
+          <nav className="ml-2 flex items-center gap-1 text-sm sm:ml-4">
+            <MainNav showReplenishments={canAccessReplenishments(u)} />
             {isAdmin(u) && (
-              <Link href="/admin" className="inline-flex items-center gap-1.5 rounded px-3 py-1.5 hover:bg-white/10">
+              <Link href="/admin" className="hidden items-center gap-1.5 rounded px-3 py-1.5 hover:bg-white/10 sm:inline-flex">
                 <Settings className="size-4" /> Backoffice
               </Link>
             )}
           </nav>
           <div className="ml-auto flex items-center gap-2">
-            {canRequest(u) && (
-              <form action={newDraftAction}>
-                <Button type="submit" size="sm" className="bg-natu-sage font-semibold text-natu-dark hover:bg-brand-300">
-                  <Plus /> <span className="hidden sm:inline">Nueva solicitud</span>
-                  <span className="sm:hidden">Nueva</span>
-                </Button>
-              </form>
-            )}
+            <HeaderNewButton canNpd={canRequest(u)} canRep={canCreateReplenishment(u)} />
             <details className="relative">
               <summary className="flex cursor-pointer list-none items-center rounded-full bg-white/15 size-8 justify-center text-xs font-semibold hover:bg-white/25" title={u.name}>
                 {initials(u.name)}
