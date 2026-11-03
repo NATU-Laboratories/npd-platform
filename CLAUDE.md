@@ -3,6 +3,7 @@
 # Proyecto NPD (NATU)
 
 - Especificación funcional: `docs/SPEC.md`. La interfaz y los textos de usuario van en español.
+- Diseño: sigue `DESIGN.md` (paleta, componentes y textos). Para revisar pantallas usa la skill `web-design-guidelines`.
 - Todo cambio de estado de proyecto pasa por `src/lib/server/state-machine.ts` (permisos + `activity_log` + notificaciones). No actualices `projects.status` desde otro sitio.
 - El brief vive en `projects.brief` (JSONB) validado por `src/lib/brief/schema.ts`; la obligatoriedad y etiquetas están en `src/lib/brief/fields.ts`. Los campos de filtro/KPI se desnormalizan en columnas (`columnsFromBrief`).
 - Server actions: autorizar siempre en servidor (`requireActionUser`, `requireAdminAction`, `canViewProject`…).
