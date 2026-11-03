@@ -62,7 +62,16 @@ function requiresMyAction(u: CurrentUser, sectionDept: Record<string, string>): 
     if (phase == null || deptId == null) return;
     conds.push(
       sql`(${projects.status} in ('in_progress', 'paused') and ${projects.phase} >= ${phase}
-        and not exists (select 1 from project_dept_progress pdp where pdp.project_id = ${projects.id} and pdp.department_id = ${deptId} and pdp.completed_at is not null)
+        and not (
+          exists (select 1 from project_dept_progress pdp where pdp.project_id = ${projects.id} and pdp.department_id = ${deptId} and pdp.completed_at is not null)
+          -- con varias referencias, solo está hecho cuando lo están todas
+          and not exists (
+            select 1 from project_references r
+            where r.project_id = ${projects.id}
+              and exists (select 1 from project_dept_progress x where x.project_id = ${projects.id} and x.department_id = ${deptId} and x.reference_id <> 0)
+              and not exists (select 1 from project_dept_progress y where y.project_id = ${projects.id} and y.department_id = ${deptId} and y.reference_id = r.id and y.completed_at is not null)
+          )
+        )
         and (${phase < FIRST_RUNNING_PHASE}
              or not exists (select 1 from project_departments pd where pd.project_id = ${projects.id})
              or exists (select 1 from project_departments pd where pd.project_id = ${projects.id} and pd.department_id = ${deptId})))`,
@@ -189,6 +198,32 @@ export async function myDrafts(u: CurrentUser) {
     .from(projects)
     .where(and(eq(projects.status, "draft"), eq(projects.requesterId, u.id)))
     .orderBy(desc(projects.updatedAt));
+}
+
+/**
+ * Solicitudes nuevas pendientes de revisar (P1) que este usuario puede decidir:
+ * gestor de proyectos y admin (todas) y aprobadores de P1 (las de su tipo).
+ * Se muestran destacadas al entrar para que no pasen desapercibidas.
+ */
+export async function pendingNewRequests(u: CurrentUser) {
+  const all = hasRole(u, "admin", "global_decider");
+  const types = [...new Set(u.deciderFor.filter((d) => d.gate === "G1").map((d) => d.projectType))];
+  if (!all && !types.length) return [];
+  const requester = alias(users, "nr_requester");
+  return db
+    .select({
+      id: projects.id,
+      code: projects.code,
+      name: projects.name,
+      type: projects.type,
+      priority: projects.priority,
+      requestedAt: projects.requestedAt,
+      requester: requester.name,
+    })
+    .from(projects)
+    .innerJoin(requester, eq(requester.id, projects.requesterId))
+    .where(and(eq(projects.status, "submitted"), all ? undefined : inArray(projects.type, types)))
+    .orderBy(desc(projects.requestedAt));
 }
 
 /** KPIs y series para el panel (§7.1). Respetan visibilidad y el periodo. */

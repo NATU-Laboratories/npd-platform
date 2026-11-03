@@ -1,20 +1,41 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { ArrowDown, ArrowUp, ChevronRight, FileEdit } from "lucide-react";
+import { ArrowDown, ArrowUp, BellRing, ChevronRight, FileEdit } from "lucide-react";
 import { MonthlyChart, PhaseFunnel } from "@/components/dashboard/charts";
 import { DashboardKpis } from "@/components/dashboard/kpis";
 import { DeptBoard } from "@/components/dashboard/dept-board";
 import { Filters } from "@/components/dashboard/filters";
 import { StatusBadge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { requireUser } from "@/lib/server/authz";
-import { dashboardStats, filterOptions, listProjects, myDrafts, PAGE_SIZE, type ProjectFilters } from "@/lib/server/dashboard";
+import { hasRole, requireUser } from "@/lib/server/authz";
+import { dashboardStats, filterOptions, listProjects, myDrafts, PAGE_SIZE, pendingNewRequests, type ProjectFilters } from "@/lib/server/dashboard";
 import { getSettings } from "@/lib/server/settings";
 import { CATEGORY_LABEL, PHASES, PRIORITY_COLOR, PRIORITY_LABEL, stageOf } from "@/lib/labels";
 import { cn, formatDate } from "@/lib/utils";
 import { NeededBySignal } from "@/components/needed-by";
 
 export const metadata = { title: "Panel" };
+
+/** Saludo según la hora en España. */
+function greeting() {
+  const h = Number(new Date().toLocaleString("en-GB", { timeZone: "Europe/Madrid", hour: "2-digit", hour12: false }));
+  return h < 6 ? "Buenas noches" : h < 14 ? "Buenos días" : h < 21 ? "Buenas tardes" : "Buenas noches";
+}
+
+/** Frase del día (cambia cada día, igual para todos). */
+const MOTTOS = [
+  "Cada gran producto empezó como una buena idea. Vamos a por la siguiente.",
+  "Lo que hoy es un brief, mañana estará en el lineal.",
+  "Pequeños avances cada día hacen grandes lanzamientos.",
+  "Hoy es un buen día para dar vida a un nuevo producto.",
+  "Detrás de cada fragancia hay un equipo que la hace posible. Gracias por ser parte.",
+  "Un paso más cerca de producción. ¡Seguimos!",
+  "Las mejores ideas se convierten en productos cuando trabajamos juntos.",
+];
+function dailyMotto() {
+  const day = Math.floor(Date.now() / 86_400_000);
+  return MOTTOS[day % MOTTOS.length];
+}
 
 function sortHref(f: ProjectFilters, key: string) {
   const sp = new URLSearchParams(Object.entries(f).filter(([, v]) => v) as [string, string][]);
@@ -42,11 +63,12 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
   const raw = await searchParams;
   const f: ProjectFilters = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v]));
   const settings = await getSettings();
-  const [list, stats, drafts, options] = await Promise.all([
+  const [list, stats, drafts, options, newRequests] = await Promise.all([
     listProjects(u, f, settings.risk_days),
     dashboardStats(u, f, settings.risk_days),
     myDrafts(u),
     filterOptions(),
+    pendingNewRequests(u),
   ]);
   const t = stats.totals;
 
@@ -62,9 +84,56 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Nuevos desarrollos</h1>
-          <p className="text-sm text-slate-500">Hola, {u.name.split(" ")[0]}. Los indicadores reflejan los filtros activos.</p>
+          <p className="text-sm text-slate-500">
+            {greeting()}, {u.name.split(" ")[0]}. {dailyMotto()}
+          </p>
         </div>
       </div>
+
+      {newRequests.length > 0 && (
+        <section
+          aria-label="Solicitudes nuevas pendientes de revisar"
+          className="overflow-hidden rounded-xl border-2 border-natu-salmon bg-[#fdf1ee] shadow-sm"
+        >
+          <div className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-natu-salmon text-natu-dark">
+              <BellRing className="size-5" aria-hidden />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-base font-semibold text-slate-900">
+                {newRequests.length === 1 ? "Hay 1 solicitud nueva pendiente de revisar" : `Hay ${newRequests.length} solicitudes nuevas pendientes de revisar`}
+              </p>
+              <p className="text-sm text-slate-600">
+                {newRequests.length === 1 ? "Revísala para aprobarla, pedir más información o rechazarla (P1)." : "Revísalas para aprobarlas, pedir más información o rechazarlas (P1)."}
+              </p>
+            </div>
+          </div>
+          <ul className="divide-y divide-natu-salmon/40 border-t border-natu-salmon/40 bg-white/70">
+            {newRequests.slice(0, 5).map((r) => (
+              <li key={r.id}>
+                <Link href={`/proyectos/${r.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm hover:bg-white sm:px-5">
+                  <span className="font-mono text-xs text-slate-500">{r.code}</span>
+                  <span className="min-w-0 flex-1 truncate font-medium text-slate-900">{r.name}</span>
+                  <span className="text-xs text-slate-500">
+                    {r.requester} · {formatDate(r.requestedAt)}
+                  </span>
+                  {r.priority && (
+                    <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", PRIORITY_COLOR[r.priority])}>{PRIORITY_LABEL[r.priority]}</span>
+                  )}
+                  <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-natu-dark">
+                    Revisar <ChevronRight className="size-3.5" aria-hidden />
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          {newRequests.length > 5 && (
+            <Link href="/?status=g1" className="block border-t border-natu-salmon/40 bg-white/70 px-4 py-2 text-center text-sm font-medium text-natu-dark hover:bg-white sm:px-5">
+              Ver las {newRequests.length} solicitudes
+            </Link>
+          )}
+        </section>
+      )}
 
       {drafts.length > 0 && (
         <Card>
@@ -87,7 +156,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
       )}
 
       <Suspense>
-        <Filters {...options} />
+        <Filters {...options} showDepartment={hasRole(u, "admin", "global_decider")} />
       </Suspense>
 
       <DashboardKpis

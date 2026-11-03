@@ -8,7 +8,18 @@ import { cn } from "@/lib/utils";
 
 type Opt = { id: number | string; name: string };
 
-export function Filters({ brands, departments, requesters }: { brands: Opt[]; departments: Opt[]; requesters: Opt[] }) {
+export function Filters({
+  brands,
+  departments,
+  requesters,
+  showDepartment = false,
+}: {
+  brands: Opt[];
+  departments: Opt[];
+  requesters: Opt[];
+  /** Solo gestor de proyectos y admin filtran por departamento. */
+  showDepartment?: boolean;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
@@ -33,8 +44,13 @@ export function Filters({ brands, departments, requesters }: { brands: Opt[]; de
     return () => clearTimeout(t);
   }, [q, sp, setParam]);
 
-  const sel = (key: string, label: string, options: [string, string][]) => (
-    <Select aria-label={label} value={sp.get(key) ?? ""} onChange={(e) => setParam({ [key]: e.target.value || null })} className={cn("h-8 w-auto text-xs", sp.get(key) && "border-brand-500 bg-brand-50")}>
+  const sel = (key: string, label: string, options: [string, string][], extra?: (v: string) => Record<string, string | null>) => (
+    <Select
+      aria-label={label}
+      value={sp.get(key) ?? ""}
+      onChange={(e) => setParam({ [key]: e.target.value || null, ...(extra?.(e.target.value) ?? {}) })}
+      className={cn("h-8 w-auto text-xs", sp.get(key) && "border-brand-500 bg-brand-50")}
+    >
       <option value="">{label}</option>
       {options.map(([v, l]) => (
         <option key={v} value={v}>
@@ -77,12 +93,18 @@ export function Filters({ brands, departments, requesters }: { brands: Opt[]; de
         )}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        {sel("type", "Tipo", [
-          ["PL", "Marca privada"],
-          ["MP", "Marca propia"],
-          ["MDD", "Marca de distribuidor"],
-        ])}
-        {sel("brand", "Marca", brands.map((b) => [String(b.id), b.name]))}
+        {sel(
+          "type",
+          "Tipo",
+          [
+            ["PL", "Marca privada"],
+            ["MP", "Marca propia"],
+            ["MDD", "Marca de distribuidor"],
+          ],
+          // La marca solo tiene sentido en Marca propia: al cambiar de tipo se quita
+          (v): Record<string, string | null> => (v === "MP" ? {} : { brand: null }),
+        )}
+        {sp.get("type") === "MP" && sel("brand", "Marca", brands.map((b) => [String(b.id), b.name]))}
         {sel("category", "Categoría", Object.entries(CATEGORY_LABEL))}
         {sel("status", "Situación", SITUATIONS.map((x) => [x.key, x.label]))}
         <Select
@@ -103,7 +125,7 @@ export function Filters({ brands, departments, requesters }: { brands: Opt[]; de
           ))}
         </Select>
         {sel("requester", "Solicitante", requesters.map((r) => [String(r.id), r.name]))}
-        {sel("department", "Departamento", departments.map((d) => [String(d.id), d.name]))}
+        {showDepartment && sel("department", "Departamento", departments.map((d) => [String(d.id), d.name]))}
         <label className="flex items-center gap-1 text-xs text-slate-500">
           Desde
           <Input type="date" className="h-8 w-auto text-xs" value={sp.get("from") ?? ""} onChange={(e) => setParam({ from: e.target.value || null })} />
