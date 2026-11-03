@@ -26,7 +26,7 @@ import { getSettings } from "./settings";
 
 // ─── Envío y registro ─────────────────────────────────────────────────────
 
-function uniqEmails(list: (string | null | undefined)[]) {
+export function uniqEmails(list: (string | null | undefined)[]) {
   // Los usuarios de prueba sin email (dominio ficticio) nunca reciben correos
   return [
     ...new Set(
@@ -45,15 +45,26 @@ function uniqEmails(list: (string | null | undefined)[]) {
 export async function queueNotification(n: {
   event: string;
   projectId?: string | null;
+  replenishmentId?: string | null;
   recipients: (string | null | undefined)[];
+  replyTo?: (string | null | undefined)[];
   subject: string;
   html: string;
 }) {
   const recipients = uniqEmails(n.recipients);
   if (!recipients.length) return null;
+  const replyTo = n.replyTo ? uniqEmails(n.replyTo) : [];
   const [row] = await db
     .insert(notificationLog)
-    .values({ event: n.event, projectId: n.projectId ?? null, recipients, subject: n.subject, html: n.html })
+    .values({
+      event: n.event,
+      projectId: n.projectId ?? null,
+      replenishmentId: n.replenishmentId ?? null,
+      recipients,
+      replyTo: replyTo.length ? replyTo : null,
+      subject: n.subject,
+      html: n.html,
+    })
     .returning({ id: notificationLog.id });
   const jobId = await enqueueJob("email.send", { notificationId: row!.id });
   kickJobs([jobId]);
@@ -66,7 +77,7 @@ export async function deliverNotification(id: number) {
   if (!n || n.status === "sent") return;
   const { sender_mailbox } = await getSettings();
   try {
-    await sendMail({ to: n.recipients, subject: n.subject, html: n.html }, sender_mailbox || undefined);
+    await sendMail({ to: n.recipients, subject: n.subject, html: n.html, replyTo: n.replyTo }, sender_mailbox || undefined);
     await db
       .update(notificationLog)
       .set({ status: "sent", sentAt: new Date(), error: null, attempts: sql`${notificationLog.attempts} + 1` })

@@ -23,8 +23,13 @@ export function renderEmail(opts: {
   project?: ProjectSummary;
   message?: { label: string; body: string } | null;
   extraRows?: [string, string][];
-  ctaPath?: string;
+  /** null = sin botón (destinatarios externos, p. ej. proveedores) */
+  ctaPath?: string | null;
   ctaLabel?: string;
+  /** Subtítulo de la cabecera (por defecto «Laboratories · Nuevos desarrollos») */
+  subtitle?: string;
+  /** Pie del email (por defecto, aviso de mensaje automático) */
+  footer?: string;
 }) {
   const rows: [string, string][] = [];
   if (opts.project) {
@@ -42,7 +47,7 @@ export function renderEmail(opts: {
     );
   }
   rows.push(...(opts.extraRows ?? []));
-  const url = appUrl(opts.ctaPath ?? (opts.project ? `/proyectos/${opts.project.id}` : "/"));
+  const url = opts.ctaPath === null ? null : appUrl(opts.ctaPath ?? (opts.project ? `/proyectos/${opts.project.id}` : "/"));
 
   const table = rows.length
     ? `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin:16px 0;font-size:14px">
@@ -67,15 +72,19 @@ ${escapeHtml(opts.message.body).replace(/\n/g, "<br>")}</div>`
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden">
 <tr><td style="background:${BRAND};padding:18px 24px;color:#ffffff">
 <div style="font-size:18px;font-weight:700;letter-spacing:.08em">NATU</div>
-<div style="font-size:12px;opacity:.85">Laboratories · Nuevos desarrollos</div></td></tr>
+<div style="font-size:12px;opacity:.85">${escapeHtml(opts.subtitle ?? "Laboratories · Nuevos desarrollos")}</div></td></tr>
 <tr><td style="padding:24px">
 <h1 style="margin:0 0 8px;font-size:20px;color:#0f172a">${escapeHtml(opts.title)}</h1>
 <p style="margin:0;font-size:14px;line-height:1.5;color:#334155">${escapeHtml(opts.intro)}</p>
 ${message}${table}
-<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:8px"><tr><td style="border-radius:6px;background:${BRAND}">
+${
+  url
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:8px"><tr><td style="border-radius:6px;background:${BRAND}">
 <a href="${escapeHtml(url)}" style="display:inline-block;padding:10px 20px;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px">${escapeHtml(opts.ctaLabel ?? "Ver en la plataforma")}</a>
-</td></tr></table>
+</td></tr></table>`
+    : ""
+}
 </td></tr>
-<tr><td style="padding:16px 24px;background:#f8fafc;color:#94a3b8;font-size:11px">Mensaje automático de la plataforma NPD de Laboratorios NatuAromatic S.L. No respondas a este correo.</td></tr>
+<tr><td style="padding:16px 24px;background:#f8fafc;color:#94a3b8;font-size:11px">${escapeHtml(opts.footer ?? "Mensaje automático de la plataforma NPD de Laboratorios NatuAromatic S.L. No respondas a este correo.")}</td></tr>
 </table></td></tr></table></body></html>`;
 }

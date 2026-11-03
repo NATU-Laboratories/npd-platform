@@ -449,7 +449,11 @@ export const notificationLog = pgTable(
     id: serial("id").primaryKey(),
     event: text("event").notNull(),
     projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
+    /** Reposición relacionada (apartado de reposiciones) */
+    replenishmentId: uuid("replenishment_id"),
     recipients: text("recipients").array().notNull(),
+    /** Respuestas a (p. ej. emails a proveedores: contestan a Compras) */
+    replyTo: text("reply_to").array(),
     subject: text("subject").notNull(),
     html: text("html").notNull(),
     status: notificationStatus("status").notNull().default("pending"),
@@ -692,4 +696,110 @@ export const projectDeptTransitions = pgTable(
     referenceId: integer("reference_id").notNull().default(0),
   },
   (t) => [index("project_dept_transitions_idx").on(t.projectId, t.departmentId, t.createdAt)],
+);
+
+// ─── Reposiciones (apartado separado de NPD) ──────────────────────────────
+
+/** Proveedores de materiales (etiquetas, estuches, envases…). */
+export const suppliers = pgTable(
+  "suppliers",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    emails: text("emails").array().notNull().default(sql`'{}'::text[]`),
+    contactName: text("contact_name"),
+    phone: text("phone"),
+    notes: text("notes"),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("suppliers_name_idx").on(sql`lower(${t.name})`)],
+);
+
+export const replenishmentStatus = pgEnum("replenishment_status", [
+  "design_review", // Revisión de diseño (Diseño)
+  "design_changes", // Correcciones de diseño (Diseño)
+  "quality_review", // Validación del arte final (Calidad)
+  "art_approved", // Arte final aprobado: Compras envía a imprenta
+  "sent_to_print", // Enviado a imprenta / proveedor
+  "closed", // Cerrada (material recibido)
+  "cancelled",
+]);
+export type ReplenishmentStatus = (typeof replenishmentStatus.enumValues)[number];
+
+export const replenishments = pgTable(
+  "replenishments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    code: text("code").notNull().unique(),
+    template: text("template").notNull().default("repeticion"),
+    title: text("title").notNull(),
+    status: replenishmentStatus("status").notNull().default("design_review"),
+    /** Ronda de diseño (sube con cada petición de correcciones). */
+    round: integer("round").notNull().default(1),
+    npdProjectId: uuid("npd_project_id").references(() => projects.id, { onDelete: "set null" }),
+    productName: text("product_name"),
+    productRef: text("product_ref"),
+    clientOrBrand: text("client_or_brand"),
+    neededBy: date("needed_by"),
+    notes: text("notes"),
+    requesterId: uuid("requester_id")
+      .notNull()
+      .references(() => users.id),
+    storageFolderId: text("storage_folder_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+  },
+  (t) => [index("replenishments_status_idx").on(t.status)],
+);
+
+export const replenishmentCodeCounters = pgTable("replenishment_code_counters", {
+  year: integer("year").primaryKey(),
+  last: integer("last").notNull().default(0),
+});
+
+/** Elementos a reponer, cada uno con su proveedor y su recotización. */
+export const replenishmentItems = pgTable(
+  "replenishment_items",
+  {
+    id: serial("id").primaryKey(),
+    replenishmentId: uuid("replenishment_id")
+      .notNull()
+      .references(() => replenishments.id, { onDelete: "cascade" }),
+    element: text("element").notNull(),
+    description: text("description"),
+    quantity: integer("quantity"),
+    supplierId: integer("supplier_id").references(() => suppliers.id, { onDelete: "set null" }),
+    /** pending (sin pedir) · requested (pedida al proveedor) · received */
+    quoteStatus: text("quote_status").notNull().default("pending"),
+    quotePrice: numeric("quote_price", { precision: 12, scale: 4 }),
+    quoteNotes: text("quote_notes"),
+    quoteRequestedAt: timestamp("quote_requested_at", { withTimezone: true }),
+    quoteReceivedAt: timestamp("quote_received_at", { withTimezone: true }),
+    sort: integer("sort").notNull().default(0),
+  },
+  (t) => [index("replenishment_items_rep_idx").on(t.replenishmentId)],
+);
+
+export const replenishmentFiles = pgTable(
+  "replenishment_files",
+  {
+    id: serial("id").primaryKey(),
+    replenishmentId: uuid("replenishment_id")
+      .notNull()
+      .references(() => replenishments.id, { onDelete: "cascade" }),
+    storageItemId: text("storage_item_id").notNull(),
+    name: text("name").notNull(),
+    mime: text("mime"),
+    size: integer("size").notNull().default(0),
+    /** arte_final · prueba · referencia · cotizacion · otro */
+    tag: text("tag").notNull().default("otro"),
+    round: integer("round").notNull().default(1),
+    uploadedBy: uuid("uploaded_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("replenishment_files_rep_idx").on(t.replenishmentId)],
 );

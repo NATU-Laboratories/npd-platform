@@ -13,6 +13,8 @@ import {
   deptSubstates,
   projectDeptProgress,
   gateDeciders,
+  replenishmentItems,
+  suppliers,
   gateKey,
   projectType,
   roles,
@@ -315,4 +317,46 @@ export async function retryJobAction(fd: FormData) {
   await retryJobs([id]);
   await audit(admin.id, "admin.job.retried", "job", id);
   revalidatePath("/admin/notificaciones");
+}
+
+// ─── Proveedores (Reposiciones) ───────────────────────────────────────────
+
+export async function saveSupplierAction(fd: FormData) {
+  const admin = await requireAdminAction();
+  const id = fd.get("id") ? Number(fd.get("id")) : null;
+  const name = z.string().trim().min(1, "Pon el nombre del proveedor").max(200).parse(fd.get("name"));
+  const emails = String(fd.get("emails") ?? "")
+    .split(/[,;\s]+/)
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  for (const e of emails) z.string().email(`Email no válido: ${e}`).parse(e);
+  const values = {
+    name,
+    emails: [...new Set(emails)],
+    contactName: String(fd.get("contactName") ?? "").trim() || null,
+    phone: String(fd.get("phone") ?? "").trim() || null,
+    notes: String(fd.get("notes") ?? "").trim() || null,
+    isActive: id ? fd.get("isActive") === "on" : true,
+  };
+  if (id) await db.update(suppliers).set(values).where(eq(suppliers.id, id));
+  else await db.insert(suppliers).values(values).onConflictDoNothing();
+  await audit(admin.id, id ? "admin.supplier.updated" : "admin.supplier.created", "supplier", id ?? name, { name });
+  revalidatePath("/admin/proveedores");
+}
+
+/** Elimina un proveedor; si tiene reposiciones, solo se desactiva para no perder el historial. */
+export async function deleteSupplierAction(id: number): Promise<{ ok: boolean; error?: string; deactivated?: boolean }> {
+  const admin = await requireAdminAction();
+  const sid = z.number().int().positive().parse(id);
+  const [used] = await db.select({ id: replenishmentItems.id }).from(replenishmentItems).where(eq(replenishmentItems.supplierId, sid)).limit(1);
+  if (used) {
+    await db.update(suppliers).set({ isActive: false }).where(eq(suppliers.id, sid));
+    await audit(admin.id, "admin.supplier.deactivated", "supplier", sid);
+    revalidatePath("/admin/proveedores");
+    return { ok: true, deactivated: true };
+  }
+  await db.delete(suppliers).where(eq(suppliers.id, sid));
+  await audit(admin.id, "admin.supplier.deleted", "supplier", sid);
+  revalidatePath("/admin/proveedores");
+  return { ok: true };
 }
