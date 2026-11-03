@@ -191,6 +191,32 @@ export async function myDrafts(u: CurrentUser) {
     .orderBy(desc(projects.updatedAt));
 }
 
+/**
+ * Solicitudes nuevas pendientes de revisar (P1) que este usuario puede decidir:
+ * gestor de proyectos y admin (todas) y aprobadores de P1 (las de su tipo).
+ * Se muestran destacadas al entrar para que no pasen desapercibidas.
+ */
+export async function pendingNewRequests(u: CurrentUser) {
+  const all = hasRole(u, "admin", "global_decider");
+  const types = [...new Set(u.deciderFor.filter((d) => d.gate === "G1").map((d) => d.projectType))];
+  if (!all && !types.length) return [];
+  const requester = alias(users, "nr_requester");
+  return db
+    .select({
+      id: projects.id,
+      code: projects.code,
+      name: projects.name,
+      type: projects.type,
+      priority: projects.priority,
+      requestedAt: projects.requestedAt,
+      requester: requester.name,
+    })
+    .from(projects)
+    .innerJoin(requester, eq(requester.id, projects.requesterId))
+    .where(and(eq(projects.status, "submitted"), all ? undefined : inArray(projects.type, types)))
+    .orderBy(desc(projects.requestedAt));
+}
+
 /** KPIs y series para el panel (§7.1). Respetan visibilidad y el periodo. */
 export async function dashboardStats(u: CurrentUser, f: ProjectFilters, riskDays: number) {
   // Todos los KPIs se calculan sobre el conjunto filtrado (excepto paginación/orden)
