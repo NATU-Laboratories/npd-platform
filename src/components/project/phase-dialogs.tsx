@@ -36,6 +36,20 @@ function useAction() {
 
 // ─── Fase 1: enviar cotización ────────────────────────────────────────────
 
+/** Selector de dos opciones (único / por referencia). */
+function ModeChoice({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: [string, string][] }) {
+  return (
+    <fieldset className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+      <legend className="mb-1 w-full text-sm font-medium text-slate-900">{label}</legend>
+      {options.map(([v, l]) => (
+        <label key={v} className="flex cursor-pointer items-center gap-1.5 text-sm">
+          <input type="radio" className="accent-brand-600" checked={value === v} onChange={() => onChange(v)} /> {l}
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
 export function QuoteDialog({
   projectId,
   initial,
@@ -44,6 +58,8 @@ export function QuoteDialog({
   requesterName,
   specsInitial,
   formulaCost,
+  references = [],
+  modes,
 }: {
   projectId: string;
   /** Comercial que creó la solicitud: único destinatario del aviso. */
@@ -57,17 +73,35 @@ export function QuoteDialog({
   /** PDFs ya subidos con la etiqueta «cotizacion». */
   files: UploadedFile[];
   maxMb: number;
+  /** Referencias del proyecto (con dos o más se puede cotizar y especificar el envase por referencia). */
+  references?: { id: number; title: string; unitPrice: number | null; specs: SheetData }[];
+  modes?: { pricing: "single" | "per_reference"; packaging: "common" | "per_reference" };
 }) {
   const section = SECTION_BY_KEY.comercial!;
-  const fields = section.groups.flatMap((g) => g.fields).filter((f) => f.key !== "finalUnitPrice");
+  const multi = references.length >= 2;
   const [open, setOpen] = React.useState(false);
   const [data, setData] = React.useState<SheetData>(initial);
   const [comment, setComment] = React.useState("");
   const [specs, setSpecs] = React.useState<SheetData>(specsInitial);
   const canSeeCost = formulaCost !== undefined;
   const [cost, setCost] = React.useState(formulaCost != null ? String(formulaCost) : "");
+  const [pricing, setPricing] = React.useState(modes?.pricing ?? "single");
+  const [packaging, setPackaging] = React.useState(modes?.packaging ?? "common");
+  const initRefPrices = () => Object.fromEntries(references.map((r) => [String(r.id), r.unitPrice != null ? String(r.unitPrice) : ""]));
+  const initRefSpecs = () => Object.fromEntries(references.map((r) => [String(r.id), { ...specsInitial, ...r.specs }]));
+  const [refPrices, setRefPrices] = React.useState<Record<string, string>>(initRefPrices);
+  const [refSpecs, setRefSpecs] = React.useState<Record<string, SheetData>>(initRefSpecs);
+  const [specRef, setSpecRef] = React.useState(references[0] ? String(references[0].id) : "");
   const { busy, errors, run } = useAction();
   const specGroups = quoteSpecGroups();
+  const perRefPrice = multi && pricing === "per_reference";
+  const perRefPack = multi && packaging === "per_reference";
+  const fields = section.groups.flatMap((g) => g.fields).filter((f) => f.key !== "finalUnitPrice" && !(perRefPrice && f.key === "unitPrice"));
+  const priceReady = perRefPrice ? references.every((r) => refPrices[String(r.id)]?.trim()) : typeof data.unitPrice === "number";
+  const curSpecs = perRefPack ? (refSpecs[specRef] ?? {}) : specs;
+  const setSpec = (k: string, v: unknown) =>
+    perRefPack ? setRefSpecs((m) => ({ ...m, [specRef]: { ...(m[specRef] ?? {}), [k]: v } })) : setSpecs((d) => ({ ...d, [k]: v }));
+  const num = (s: string) => (s.trim() ? Number(s.replace(",", ".")) : null);
   return (
     <Dialog
       open={open}
@@ -77,6 +111,8 @@ export function QuoteDialog({
           setData(initial);
           setSpecs(specsInitial);
           setCost(formulaCost != null ? String(formulaCost) : "");
+          setRefPrices(initRefPrices());
+          setRefSpecs(initRefSpecs());
         }
       }}
     >
@@ -91,6 +127,37 @@ export function QuoteDialog({
         wide
       >
         <div className="grid gap-4 sm:grid-cols-2">
+          {multi && (
+            <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-4 sm:col-span-2">
+              <ModeChoice
+                label={`Precio (${references.length} referencias)`}
+                value={pricing}
+                onChange={(v) => setPricing(v as typeof pricing)}
+                options={[
+                  ["single", "Precio único"],
+                  ["per_reference", "Precio por referencia"],
+                ]}
+              />
+              {perRefPrice && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {references.map((r) => (
+                    <Field key={r.id} label={`${r.title} (€/ud)`} required htmlFor={`quote-ref-price-${r.id}`}>
+                      <Input
+                        id={`quote-ref-price-${r.id}`}
+                        type="number"
+                        inputMode="decimal"
+                        step="0.01"
+                        min={0}
+                        value={refPrices[String(r.id)] ?? ""}
+                        onChange={(e) => setRefPrices((m) => ({ ...m, [String(r.id)]: e.target.value }))}
+                        className="max-w-40"
+                      />
+                    </Field>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {fields.map((f) => {
             if (f.type === "files") return null;
             const id = `quote-${f.key}`;
@@ -113,15 +180,45 @@ export function QuoteDialog({
               <h3 className="text-sm font-semibold text-slate-900">Presupuesto desglosado</h3>
               <p className="text-xs text-slate-500">Especificaciones cotizadas. Se incluyen en el email al comercial y quedan en «Envase y packaging» de Marketing.</p>
             </div>
+            {multi && (
+              <ModeChoice
+                label="Envase y packaging"
+                value={packaging}
+                onChange={(v) => setPackaging(v as typeof packaging)}
+                options={[
+                  ["common", "Común a todas las referencias"],
+                  ["per_reference", "Distinto por referencia"],
+                ]}
+              />
+            )}
+            {perRefPack && (
+              <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Referencia">
+                {references.map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={specRef === String(r.id)}
+                    onClick={() => setSpecRef(String(r.id))}
+                    className={cn(
+                      "rounded-full px-3 py-1 text-xs font-medium ring-1",
+                      specRef === String(r.id) ? "bg-slate-900 text-white ring-slate-900" : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50",
+                    )}
+                  >
+                    {r.title}
+                  </button>
+                ))}
+              </div>
+            )}
             {specGroups.map((g) => (
-              <fieldset key={g.title} className="flex flex-col gap-3">
+              <fieldset key={`${specRef}-${g.title}`} className="flex flex-col gap-3">
                 <legend className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{g.title}</legend>
                 <div className="grid gap-4 sm:grid-cols-2">
                   {g.fields.map((f) => {
                     const id = `quote-spec-${f.key}`;
                     return (
                       <Field key={f.key} label={f.label} htmlFor={id} className={cn((f.type === "textarea" || f.type === "multi") && "sm:col-span-2")}>
-                        <ScalarInput f={f} id={id} value={specs[f.key]} onChange={(v) => setSpecs((d) => ({ ...d, [f.key]: v }))} />
+                        <ScalarInput f={f} id={id} value={curSpecs[f.key]} onChange={(v) => setSpec(f.key, v)} />
                       </Field>
                     );
                   })}
@@ -161,7 +258,7 @@ export function QuoteDialog({
             Cancelar
           </Button>
           <Button
-            disabled={busy || typeof data.unitPrice !== "number"}
+            disabled={busy || !priceReady}
             onClick={() =>
               run(
                 () =>
@@ -169,7 +266,15 @@ export function QuoteDialog({
                     data,
                     specs,
                     comment,
-                    ...(canSeeCost ? { formulaTargetCost: cost.trim() ? Number(cost.replace(",", ".")) : null } : {}),
+                    ...(multi
+                      ? {
+                          pricingMode: pricing,
+                          packagingMode: packaging,
+                          refPrices: perRefPrice ? Object.fromEntries(Object.entries(refPrices).map(([k, v]) => [k, num(v)])) : undefined,
+                          refSpecs: perRefPack ? refSpecs : undefined,
+                        }
+                      : {}),
+                    ...(canSeeCost ? { formulaTargetCost: num(cost) } : {}),
                   }),
                 "Cotización enviada al comercial. El proyecto pasa a Valoración con cliente.",
                 () => setOpen(false),
@@ -200,17 +305,21 @@ export function BudgetDialog({
   currentUserName,
   quoteInfo,
   rejectionReasons,
+  priceReferences = [],
 }: {
   projectId: string;
   requiresPrepayment: boolean;
   currentUserName: string;
   quoteInfo: string | null;
   rejectionReasons: Option[];
+  /** Si se cotizó por referencia: precio final de cada una. */
+  priceReferences?: { id: number; title: string; quoted: number | null }[];
 }) {
   const [open, setOpen] = React.useState(false);
   const [kind, setKind] = React.useState<BudgetKind>("approve");
   const [comment, setComment] = React.useState("");
   const [finalPrice, setFinalPrice] = React.useState("");
+  const [refFinal, setRefFinal] = React.useState<Record<string, string>>({});
   const [ppMode, setPpMode] = React.useState<"received" | "waived" | "">("");
   const [responsible, setResponsible] = React.useState(currentUserName);
   const [accepted, setAccepted] = React.useState(false);
@@ -232,7 +341,10 @@ export function BudgetDialog({
         ? {
             kind,
             comment,
-            finalUnitPrice: finalPrice ? Number(finalPrice.replace(",", ".")) : null,
+            finalUnitPrice: !priceReferences.length && finalPrice ? Number(finalPrice.replace(",", ".")) : null,
+            refFinalPrices: priceReferences.length
+              ? Object.fromEntries(Object.entries(refFinal).map(([k, v]) => [k, v.trim() ? Number(v.replace(",", ".")) : null]))
+              : undefined,
             prepayment: requiresPrepayment && ppMode ? { mode: ppMode, responsible, accepted, note: ppNote } : null,
           }
         : kind === "reject"
@@ -269,9 +381,32 @@ export function BudgetDialog({
         <div className="mt-5 flex flex-col gap-4">
           {kind === "approve" && (
             <>
-              <Field label="Precio unitario final (€/ud)" hint="Opcional: el acordado con el cliente. Se guarda en la ficha de Comercial.">
-                <Input type="number" inputMode="decimal" step="0.01" min={0} value={finalPrice} onChange={(e) => setFinalPrice(e.target.value)} className="max-w-40" />
-              </Field>
+              {priceReferences.length ? (
+                <fieldset className="flex flex-col gap-2">
+                  <legend className="mb-1 text-sm font-medium text-slate-900">Precio unitario final por referencia (€/ud)</legend>
+                  <p className="text-xs text-slate-500">Opcional: el acordado con el cliente. Se guarda en la ficha de Comercial.</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {priceReferences.map((r) => (
+                      <Field key={r.id} label={r.title} hint={r.quoted != null ? `Cotizado: ${r.quoted.toLocaleString("es-ES", { style: "currency", currency: "EUR" })}` : undefined} htmlFor={`final-${r.id}`}>
+                        <Input
+                          id={`final-${r.id}`}
+                          type="number"
+                          inputMode="decimal"
+                          step="0.01"
+                          min={0}
+                          value={refFinal[String(r.id)] ?? ""}
+                          onChange={(e) => setRefFinal((m) => ({ ...m, [String(r.id)]: e.target.value }))}
+                          className="max-w-40"
+                        />
+                      </Field>
+                    ))}
+                  </div>
+                </fieldset>
+              ) : (
+                <Field label="Precio unitario final (€/ud)" hint="Opcional: el acordado con el cliente. Se guarda en la ficha de Comercial.">
+                  <Input type="number" inputMode="decimal" step="0.01" min={0} value={finalPrice} onChange={(e) => setFinalPrice(e.target.value)} className="max-w-40" />
+                </Field>
+              )}
               {requiresPrepayment && (
                 <fieldset className={cn("rounded-lg border p-4", errors.prepayment || errors.responsible || errors.accepted ? "border-rose-300" : "border-amber-300 bg-amber-50/50")}>
                   <legend className="flex items-center gap-1.5 px-1 text-sm font-semibold text-amber-900">

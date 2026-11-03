@@ -114,7 +114,7 @@ export async function pauseAction(projectId: string, reason: string) {
 
 export async function sendQuoteAction(
   projectId: string,
-  input: { data?: Record<string, unknown> | null; specs?: Record<string, unknown> | null; formulaTargetCost?: number | null; comment?: string | null },
+  input: Parameters<typeof sendQuote>[2],
 ) {
   return run("sendQuote", async () => {
     const u = await requireActionUser();
@@ -151,7 +151,10 @@ export async function markPrepaymentAction(projectId: string, note: string) {
 }
 
 /** El comercial completa naming, facing, idiomas y países tras aprobarse la fórmula. */
-export async function completeLabelInfoAction(projectId: string, input: { finalName?: string; facing?: string; languages?: string[]; markets?: string[] }) {
+export async function completeLabelInfoAction(
+  projectId: string,
+  input: { finalName?: string; facing?: string; languages?: string[]; markets?: string[]; refs?: { id: number; finalName?: string; facing?: string }[] },
+) {
   return run("completeLabelInfo", async () => {
     const u = await requireActionUser();
     await completeLabelInfo(u, projectId, input);

@@ -14,7 +14,9 @@ import { Badge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { briefSections, formatFormat, type Lookups } from "@/lib/brief/display";
-import { applicableFields, FIELD_BY_KEY, isFieldFilled, missingLabelInfo } from "@/lib/brief/fields";
+import { applicableFields, FIELD_BY_KEY, isFieldFilled } from "@/lib/brief/fields";
+import { canManageReferences, labelInfoMissing } from "@/lib/server/references";
+import { ReferencesCard } from "@/components/project/references-card";
 import { needsOlfactory } from "@/lib/brief/schema";
 import {
   ACTION_LABEL,
@@ -88,8 +90,13 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
   const sheetPending = pendingUpTo(sheet.cards, p.phase).map((c) => `${c.dept.name} (en «${c.current?.name ?? "—"}»)`);
   // La fase solo avanza cuando todos sus departamentos han terminado su parte
   // Tras aprobarse la fórmula (Laboratorio completado), el comercial debe completar los datos para la etiqueta
-  const labDone = p.phase > FIRST_RUNNING_PHASE || !!sheet.cards.find((x) => x.dept.key === "idi")?.completed;
-  const missingLabel = p.phase >= FIRST_RUNNING_PHASE && ["in_progress", "paused"].includes(p.status) ? missingLabelInfo(b) : [];
+  // Con varias referencias basta con que una tenga la fórmula aprobada para pedir sus datos
+  const labCard = sheet.cards.find((x) => x.dept.key === "idi");
+  const labDone = p.phase > FIRST_RUNNING_PHASE || !!labCard?.completed || !!labCard?.refs.some((r) => r.completed);
+  const missingLabel = p.phase >= FIRST_RUNNING_PHASE && ["in_progress", "paused"].includes(p.status) ? labelInfoMissing(p, sheet.refs) : [];
+  const multiRef = sheet.refs.length >= 2;
+  const refTitleOf = (r: { label: string; name: string }) => (r.name && r.name !== `Referencia ${r.label}` ? `${r.label} · ${r.name}` : `Referencia ${r.label}`);
+  const refPriceOf = (id: number) => sheet.refPrices.find((x) => x.ref.id === id);
   const advanceWaitingOn = [
     ...pendingUpTo(sheet.cards, p.phase).map((c) => c.dept.name),
     ...(missingLabel.length ? ["el comercial (datos para la etiqueta)"] : []),
@@ -394,8 +401,15 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
                 files={d.files.filter(({ f }) => f.tag === "cotizacion").map(({ f }) => ({ id: f.id, name: f.name, size: f.size, mime: f.mime, tag: f.tag }))}
                 maxMb={settings.max_file_mb}
                 requesterName={lookups.users[p.requesterId] ?? "el solicitante"}
-                specsInitial={sheet.entries.find((e) => e.section.key === "packaging")?.data ?? {}}
+                specsInitial={sheet.entries.find((e) => e.section.key === "packaging" && e.refId === 0)?.data ?? sheet.entries.find((e) => e.section.key === "packaging")?.data ?? {}}
                 {...(seeFormulaCost ? { formulaCost } : {})}
+                references={sheet.refs.map((r) => ({
+                  id: r.id,
+                  title: refTitleOf(r),
+                  unitPrice: refPriceOf(r.id)?.unitPrice ?? null,
+                  specs: p.packagingMode === "per_reference" ? (sheet.entries.find((e) => e.section.key === "packaging" && e.refId === r.id)?.data ?? {}) : {},
+                }))}
+                modes={{ pricing: p.pricingMode, packaging: p.packagingMode }}
               />
             )}
             {canBudget && (
@@ -403,8 +417,15 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
                 projectId={p.id}
                 requiresPrepayment={needsPrepayment}
                 currentUserName={u.name}
-                quoteInfo={p.quotedAt ? `Cotización enviada al comercial el ${formatDate(p.quotedAt)}${p.quoteAmount ? ` · ${formatEuro(p.quoteAmount)}/ud` : ""}.` : null}
+                quoteInfo={
+                  p.quotedAt
+                    ? `Cotización enviada al comercial el ${formatDate(p.quotedAt)}${
+                        sheet.refPrices.length ? " · precio por referencia" : p.quoteAmount ? ` · ${formatEuro(p.quoteAmount)}/ud` : ""
+                      }.`
+                    : null
+                }
                 rejectionReasons={catalogs.rejection_reason}
+                priceReferences={sheet.refPrices.map((x) => ({ id: x.ref.id, title: refTitleOf(x.ref), quoted: x.unitPrice }))}
               />
             )}
             {canAdvance && advanceWaitingOn.length > 0 && (
@@ -463,12 +484,18 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
             <p>
               <span className="font-semibold">Fórmula aprobada por el cliente.</span> Falta que el comercial complete los datos para la etiqueta:{" "}
-              {missingLabel.map((f) => f.label.replace(/ \(.*\)$/, "")).join(", ")}.
+              {(multiRef ? missingLabel.map((f) => f.label) : missingLabel.map((f) => f.label.replace(/ \(.*\)$/, ""))).join(", ")}.
             </p>
             {canCompleteLabelInfo(u, p) && (
               <LabelInfoDialog
                 projectId={p.id}
-                initial={{ finalName: b.finalName ?? "", facing: b.facing ?? "", languages: b.languages ?? [], markets: b.markets ?? [] }}
+                initial={{
+                  finalName: b.finalName ?? "",
+                  facing: b.facing ?? "",
+                  languages: b.languages ?? [],
+                  markets: b.markets ?? [],
+                  refs: multiRef ? sheet.refs.map((r) => ({ id: r.id, title: refTitleOf(r), finalName: r.finalName ?? "", facing: r.facing ?? "" })) : [],
+                }}
                 languages={catalogs.language}
                 markets={catalogs.market}
               />
@@ -698,6 +725,23 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="flex flex-col gap-6 lg:col-span-2">
+          {/* Referencias (variantes) del proyecto */}
+          {p.status !== "draft" && (multiRef || (canManageReferences(u, p) && (b.references ?? 0) >= 2)) && (
+            <ReferencesCard
+              projectId={p.id}
+              refs={sheet.refs.map((r) => ({
+                id: r.id,
+                label: r.label,
+                name: r.name,
+                unitPrice: refPriceOf(r.id)?.unitPrice ?? null,
+                finalUnitPrice: refPriceOf(r.id)?.finalUnitPrice ?? null,
+              }))}
+              canManage={canManageReferences(u, p)}
+              suggested={b.references ?? 0}
+              showPrices={sheet.refPrices.length > 0}
+            />
+          )}
+
           {/* 4. Departamentos: estados y detalles */}
           {showSheet && (
             <SheetPanel

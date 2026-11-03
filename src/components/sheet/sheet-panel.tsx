@@ -1,8 +1,10 @@
 import { Check, ChevronDown, FileText, RotateCcw } from "lucide-react";
+import type { ReactNode } from "react";
 import type { UploadedFile } from "@/components/uploader";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PHASES } from "@/lib/labels";
-import type { DeptCard, SheetEntry } from "@/lib/server/sheet";
+import type { RefInfo } from "@/lib/server/references";
+import type { DeptCard, DeptState, SheetEntry } from "@/lib/server/sheet";
 import { applicable, checkField, fieldLabelInSection, formatValue, resolveFieldRef, sanitizeData, type SheetCtx, type SheetData, type SheetField } from "@/lib/sheet/sections";
 import { cn, formatBytes, formatDate } from "@/lib/utils";
 import { DeptTransition } from "./dept-transition";
@@ -11,13 +13,20 @@ import { SectionEditor } from "./section-editor";
 
 const SAGE = "bg-[#eef0e6] text-[#56613f] ring-natu-sage";
 const DAY = 86_400_000;
+const CHIP = "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1";
 
 function daysSince(d: Date | null, now: number) {
   return d ? Math.max(0, Math.floor((now - d.getTime()) / DAY)) : null;
 }
 
-/** Estado resumido de una tarjeta (chip). */
+const refTitle = (r: Pick<RefInfo, "label" | "name">) => (r.name && r.name !== `Referencia ${r.label}` ? `${r.label} · ${r.name}` : `Referencia ${r.label}`);
+
+/** Estado resumido de una tarjeta (chip). Con varias referencias: cuántas están completadas. */
 function StateChip({ c }: { c: DeptCard }) {
+  if (c.perRef && !c.completed && c.due) {
+    const done = c.refs.filter((r) => r.completed).length;
+    return <span className={cn(CHIP, "bg-brand-50 text-brand-500 ring-brand-200")}>{`${done}/${c.refs.length} referencias`}</span>;
+  }
   const [label, cls] = c.completed
     ? ["Completado", SAGE]
     : !c.due
@@ -25,7 +34,16 @@ function StateChip({ c }: { c: DeptCard }) {
       : !c.started
         ? ["Sin empezar", "bg-slate-100 text-slate-600 ring-slate-300"]
         : [c.current?.name ?? "—", "bg-brand-50 text-brand-500 ring-brand-200"];
-  return <span className={cn("inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1", cls)}>{label}</span>;
+  return <span className={cn(CHIP, cls)}>{label}</span>;
+}
+
+function RefChip({ s }: { s: DeptState }) {
+  const [label, cls] = s.completed
+    ? ["Completada", SAGE]
+    : !s.started
+      ? ["Sin empezar", "bg-slate-100 text-slate-600 ring-slate-300"]
+      : [s.current?.name ?? "—", "bg-brand-50 text-brand-500 ring-brand-200"];
+  return <span className={cn(CHIP, cls)}>{label}</span>;
 }
 
 function Rounds({ n }: { n: number }) {
@@ -38,16 +56,16 @@ function Rounds({ n }: { n: number }) {
 }
 
 /** Stepper horizontal de subestados con fechas de los completados y días en el actual. */
-function Stepper({ c, now }: { c: DeptCard; now: number }) {
-  const curIdx = c.current ? c.steps.findIndex((s) => s.id === c.current!.id) : 0;
-  const days = daysSince(c.enteredAt, now);
+function Stepper({ s, label, now }: { s: DeptState; label: string; now: number }) {
+  const curIdx = s.current ? s.steps.findIndex((x) => x.id === s.current!.id) : 0;
+  const days = daysSince(s.enteredAt, now);
   return (
-    <ol className="flex gap-1 overflow-x-auto pb-1" aria-label={`Estados de ${c.dept.name}`}>
-      {c.steps.map((s, i) => {
-        const done = c.completed ? true : i < curIdx;
-        const current = !c.completed && i === curIdx && c.started;
+    <ol className="flex gap-1 overflow-x-auto pb-1" aria-label={`Estados de ${label}`}>
+      {s.steps.map((step, i) => {
+        const done = s.completed ? true : i < curIdx;
+        const current = !s.completed && i === curIdx && s.started;
         return (
-          <li key={s.id} className="flex min-w-24 flex-1 flex-col gap-1" aria-current={current ? "step" : undefined}>
+          <li key={step.id} className="flex min-w-24 flex-1 flex-col gap-1" aria-current={current ? "step" : undefined}>
             <div className="flex items-center gap-1">
               <span
                 className={cn(
@@ -57,12 +75,10 @@ function Stepper({ c, now }: { c: DeptCard; now: number }) {
               >
                 {done ? <Check className="size-3" aria-hidden /> : i + 1}
               </span>
-              {i < c.steps.length - 1 && <span className={cn("h-0.5 flex-1 rounded-full", done ? "bg-[#7f8f63]" : "bg-slate-200")} aria-hidden />}
+              {i < s.steps.length - 1 && <span className={cn("h-0.5 flex-1 rounded-full", done ? "bg-[#7f8f63]" : "bg-slate-200")} aria-hidden />}
             </div>
-            <p className={cn("text-xs leading-tight", current ? "font-semibold text-slate-900" : done ? "text-slate-700" : "text-slate-400")}>{s.name}</p>
-            <p className="text-[11px] text-slate-500">
-              {done && s.doneAt ? formatDate(s.doneAt) : current ? `${days ?? 0} día${days === 1 ? "" : "s"}` : " "}
-            </p>
+            <p className={cn("text-xs leading-tight", current ? "font-semibold text-slate-900" : done ? "text-slate-700" : "text-slate-400")}>{step.name}</p>
+            <p className="text-[11px] text-slate-500">{done && step.doneAt ? formatDate(step.doneAt) : current ? `${days ?? 0} día${days === 1 ? "" : "s"}` : " "}</p>
           </li>
         );
       })}
@@ -107,6 +123,9 @@ function FieldView({ f, data, files }: { f: SheetField; data: SheetData; files: 
   );
 }
 
+/** Apartados visibles para una referencia: los suyos y los comunes. */
+const entriesFor = (entries: SheetEntry[], refId: number) => entries.filter((e) => e.refId === 0 || e.refId === refId);
+
 /** Campos exigidos por un subestado que aún no tienen valor válido (sin contar los que se piden en el propio diálogo). */
 function missingFor(refs: string[], prompt: string[], entries: SheetEntry[]) {
   return refs
@@ -138,7 +157,8 @@ export function SheetSummary({ cards, now }: { cards: DeptCard[]; now: number })
       <ul className="divide-y divide-slate-100">
         {cards.map((c) => {
           const idx = c.current ? c.steps.findIndex((s) => s.id === c.current!.id) : 0;
-          const pos = c.completed ? c.steps.length : c.started ? idx + 1 : 0;
+          const doneRefs = c.refs.filter((r) => r.completed).length;
+          const [pos, total] = c.perRef ? [doneRefs, c.refs.length] : [c.completed ? c.steps.length : c.started ? idx + 1 : 0, c.steps.length];
           const days = daysSince(c.enteredAt, now);
           return (
             <li key={c.dept.key} className={cn("px-5 py-3", c.completed && "border-l-4 border-l-[#7f8f63] bg-[#f4f6ee]", !c.due && !c.started && "opacity-70")}>
@@ -150,24 +170,26 @@ export function SheetSummary({ cards, now }: { cards: DeptCard[]; now: number })
                       {c.dept.name}
                     </a>
                     <span className="flex items-center gap-1.5">
-                      <Rounds n={c.rounds} />
+                      {!c.perRef && <Rounds n={c.rounds} />}
                       <StateChip c={c} />
                     </span>
                   </div>
                   <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
                     <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100" aria-hidden>
-                      <span className={cn("block h-full rounded-full", c.completed ? "bg-[#7f8f63]" : "bg-brand-400")} style={{ width: `${(pos / Math.max(1, c.steps.length)) * 100}%` }} />
+                      <span className={cn("block h-full rounded-full", c.completed ? "bg-[#7f8f63]" : "bg-brand-400")} style={{ width: `${(pos / Math.max(1, total)) * 100}%` }} />
                     </div>
                     <span className="tabular-nums">
-                      {pos}/{c.steps.length}
+                      {pos}/{total}
                     </span>
                     <span>
                       ·{" "}
                       {c.completed
                         ? `completado el ${formatDate(c.completedAt)}`
-                        : c.started
-                          ? `${days} día${days === 1 ? "" : "s"} en este estado`
-                          : `Fase ${c.phase} · ${PHASES[c.phase]?.short}`}
+                        : c.perRef && c.due
+                          ? "referencias completadas"
+                          : c.started
+                            ? `${days} día${days === 1 ? "" : "s"} en este estado`
+                            : `Fase ${c.phase} · ${PHASES[c.phase]?.short}`}
                     </span>
                   </div>
                 </div>
@@ -177,6 +199,162 @@ export function SheetSummary({ cards, now }: { cards: DeptCard[]; now: number })
         })}
       </ul>
     </Card>
+  );
+}
+
+type PanelCtx = {
+  projectId: string;
+  cards: DeptCard[];
+  entries: SheetEntry[];
+  ctx: SheetCtx;
+  files: UploadedFile[];
+  maxMb: number;
+  now: number;
+};
+
+/** Texto de estado + botones de avanzar/retroceder (de un departamento o de una referencia). */
+function StateRow({ c, s, canEdit, refInfo, pc }: { c: DeptCard; s: DeptState; canEdit: boolean; refInfo: RefInfo | null; pc: PanelCtx }) {
+  const scope = refInfo ? entriesFor(pc.entries, refInfo.id) : pc.entries.filter((e) => e.refId === 0);
+  const deptName = refInfo ? `${c.dept.name} · ${refTitle(refInfo)}` : c.dept.name;
+  const promptValues = (refs: string[]) =>
+    Object.fromEntries(
+      refs.map((ref) => {
+        const r = resolveFieldRef(ref);
+        const e = r && scope.find((x) => x.section.key === r.section.key);
+        return [ref, r && e ? e.data[r.field.key] : undefined];
+      }),
+    );
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <p className="text-xs text-slate-500">
+        {s.completed
+          ? `Completado el ${formatDate(s.completedAt)}.`
+          : s.started
+            ? `En «${s.current?.name}» desde el ${formatDate(s.enteredAt)}.`
+            : c.due
+              ? "Aún no ha empezado."
+              : c.waitsP2
+                ? "Se activa cuando el cliente aprueba el presupuesto (P2)."
+                : `Empieza en la fase ${c.phase} · ${PHASES[c.phase]?.name}.`}
+      </p>
+      {c.auto && !c.completed && c.active && (
+        <p className="text-xs text-slate-500">Avanza con los botones de arriba: «Enviar cotización al comercial» y «Registrar respuesta del cliente (P2)».</p>
+      )}
+      {canEdit && !c.auto && (
+        <div className="flex items-center gap-2">
+          {s.backTargets.length > 0 && (
+            <DeptTransition
+              projectId={pc.projectId}
+              departmentId={c.dept.id}
+              referenceId={refInfo?.id}
+              deptName={deptName}
+              direction="back"
+              targets={s.backTargets.map((t) => ({ id: t.id, name: t.name, isFinal: t.isFinal, promptFields: [], missing: [] }))}
+              initialValues={{}}
+            />
+          )}
+          {s.next && (
+            <DeptTransition
+              projectId={pc.projectId}
+              departmentId={c.dept.id}
+              referenceId={refInfo?.id}
+              deptName={deptName}
+              direction="forward"
+              targets={[
+                {
+                  id: s.next.id,
+                  name: s.next.name,
+                  isFinal: s.next.isFinal,
+                  promptFields: s.next.promptFields,
+                  missing: missingFor(s.next.requiredFields, s.next.promptFields, scope),
+                },
+              ]}
+              initialValues={promptValues(s.next.promptFields)}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Apartados (datos) de un departamento, comunes o de una referencia. */
+function EntriesView({ list, canEdit, refInfo, pc }: { list: SheetEntry[]; canEdit: boolean; refInfo: RefInfo | null; pc: PanelCtx }) {
+  return (
+    <>
+      {list.map((e) => (
+        <div key={`${e.section.key}-${e.refId}`} className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h4 className="text-sm font-semibold text-slate-900">{e.title}</h4>
+            {canEdit && (
+              <SectionEditor
+                projectId={pc.projectId}
+                sectionKey={e.section.key}
+                referenceId={refInfo?.id}
+                title={refInfo ? `${e.title} · ${refTitle(refInfo)}` : e.title}
+                ctx={pc.ctx}
+                initial={e.data}
+                files={pc.files}
+                maxMb={pc.maxMb}
+              />
+            )}
+          </div>
+          {e.section.groups.map((g, gi) => {
+            const fields = applicable(g.fields, pc.ctx);
+            if (!fields.length) return null;
+            return (
+              <div key={gi}>
+                {g.title && <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{g.title}</p>}
+                <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+                  {fields.map((f) => (
+                    <FieldView key={f.key} f={f} data={e.data} files={pc.files} />
+                  ))}
+                </dl>
+              </div>
+            );
+          })}
+          <p className="text-[11px] text-slate-400">{e.updatedAt ? `Última edición: ${e.updatedBy ?? "—"} · ${formatDate(e.updatedAt, true)}` : "Sin datos todavía."}</p>
+        </div>
+      ))}
+    </>
+  );
+}
+
+/** Información de partida: apartados de otros departamentos que necesita este. */
+function Inputs({ deps, pc }: { deps: string[]; pc: PanelCtx }) {
+  if (!deps.length) return null;
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Información de partida</p>
+      <ul className="flex flex-col gap-1.5">
+        {deps.map((key) => {
+          const dep = pc.entries.find((x) => x.section.key === key);
+          const depCard = dep && pc.cards.find((x) => x.dept.key === dep.dept.key);
+          if (!dep) return null;
+          return (
+            <li key={key} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <a href={`#dept-${dep.dept.key}`} className="hover:underline">
+                <span className="mr-1.5 inline-block size-2 rounded-full align-middle" style={{ background: dep.dept.color }} aria-hidden />
+                {dep.title} <span className="text-xs text-slate-500">· {dep.dept.name}</span>
+              </a>
+              {depCard && <StateChip c={depCard} />}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function Details({ label = "Ver detalles", open, children }: { label?: string; open?: boolean; children: ReactNode }) {
+  return (
+    <details className="group rounded-lg border border-slate-200 bg-white" open={open || undefined}>
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+        <ChevronDown className="size-4 text-slate-400 transition-transform group-open:rotate-180" aria-hidden />
+        {label}
+      </summary>
+      <div className="flex flex-col gap-5 border-t border-slate-100 p-4">{children}</div>
+    </details>
   );
 }
 
@@ -191,36 +369,24 @@ export function SheetPanel({
   maxMb,
   now,
   formulaCost,
-}: {
-  projectId: string;
-  cards: DeptCard[];
-  entries: SheetEntry[];
-  ctx: SheetCtx;
-  files: UploadedFile[];
+}: PanelCtx & {
   editable: Record<string, boolean>;
-  maxMb: number;
-  now: number;
   /** Coste objetivo de la fórmula (confidencial); undefined si el usuario no puede verlo. */
   formulaCost?: number | null;
 }) {
+  const pc: PanelCtx = { projectId, cards, entries, ctx, files, maxMb, now };
   return (
     <Card id="ficha">
       <CardHeader
         title="Departamentos"
-        description="Cada departamento avanza por sus estados. Solo sus miembros (y el gestor de proyectos) pueden cambiar el estado y editar sus datos."
+        description="Cada departamento avanza por sus estados (por referencia si el proyecto tiene varias). Solo sus miembros (y el gestor de proyectos) pueden cambiar el estado y editar sus datos."
       />
       <div className="divide-y divide-slate-100">
         {cards.map((c) => {
           const canEdit = editable[c.dept.key] ?? false;
-          const deps = [...new Set(c.entries.flatMap((e) => e.section.dependsOn ?? []))];
-          const promptValues = (refs: string[]) =>
-            Object.fromEntries(
-              refs.map((ref) => {
-                const r = resolveFieldRef(ref);
-                const e = r && entries.find((x) => x.section.key === r.section.key);
-                return [ref, r && e ? e.data[r.field.key] : undefined];
-              }),
-            );
+          const allEntries = [...c.entries, ...c.refs.flatMap((r) => r.entries)];
+          const deps = [...new Set(allEntries.flatMap((e) => e.section.dependsOn ?? []))];
+          const titles = [...new Set(allEntries.map((e) => e.title))];
           return (
             <section
               key={c.dept.key}
@@ -231,127 +397,58 @@ export function SheetPanel({
                 <h3 className="flex items-center gap-2 font-semibold text-slate-900">
                   <span className="size-2.5 rounded-full" style={{ background: c.dept.color }} aria-hidden />
                   {c.dept.name}
-                  <span className="text-xs font-normal text-slate-500">· {c.entries.map((e) => e.title).join(" · ")}</span>
+                  <span className="text-xs font-normal text-slate-500">· {titles.join(" · ")}</span>
                 </h3>
                 <span className="flex items-center gap-1.5">
-                  <Rounds n={c.rounds} />
+                  {!c.perRef && <Rounds n={c.rounds} />}
                   <StateChip c={c} />
                 </span>
               </div>
 
               {c.dept.key === "idi" && formulaCost !== undefined && <FormulaCostBox projectId={projectId} value={formulaCost} />}
 
-              {c.steps.length ? (
-                <Stepper c={c} now={now} />
+              {!c.steps.length && <p className="text-sm text-slate-500">Este departamento no tiene estados configurados (Backoffice → Estados de departamento).</p>}
+
+              {!c.perRef ? (
+                <>
+                  {c.steps.length > 0 && <Stepper s={c} label={c.dept.name} now={now} />}
+                  <StateRow c={c} s={c} canEdit={canEdit} refInfo={null} pc={pc} />
+                  <Details open={c.auto && !c.completed}>
+                    <Inputs deps={deps} pc={pc} />
+                    <EntriesView list={c.entries} canEdit={canEdit} refInfo={null} pc={pc} />
+                  </Details>
+                </>
               ) : (
-                <p className="text-sm text-slate-500">Este departamento no tiene estados configurados (Backoffice → Estados de departamento).</p>
-              )}
-
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs text-slate-500">
-                  {c.completed
-                    ? `Completado el ${formatDate(c.completedAt)}.`
-                    : c.started
-                      ? `En «${c.current?.name}» desde el ${formatDate(c.enteredAt)}.`
-                      : c.due
-                        ? "Aún no ha empezado."
-                        : c.waitsP2
-                          ? "Se activa cuando el cliente aprueba el presupuesto (P2)."
-                          : `Empieza en la fase ${c.phase} · ${PHASES[c.phase]?.name}.`}
-                </p>
-                {c.auto && !c.completed && c.active && (
-                  <p className="text-xs text-slate-500">Avanza con los botones de arriba: «Enviar cotización al comercial» y «Registrar respuesta del cliente (P2)».</p>
-                )}
-                {canEdit && !c.auto && (
-                  <div className="flex items-center gap-2">
-                    {c.backTargets.length > 0 && (
-                      <DeptTransition
-                        projectId={projectId}
-                        departmentId={c.dept.id}
-                        deptName={c.dept.name}
-                        direction="back"
-                        targets={c.backTargets.map((t) => ({ id: t.id, name: t.name, isFinal: t.isFinal, promptFields: [], missing: [] }))}
-                        initialValues={{}}
-                      />
-                    )}
-                    {c.next && (
-                      <DeptTransition
-                        projectId={projectId}
-                        departmentId={c.dept.id}
-                        deptName={c.dept.name}
-                        direction="forward"
-                        targets={[
-                          {
-                            id: c.next.id,
-                            name: c.next.name,
-                            isFinal: c.next.isFinal,
-                            promptFields: c.next.promptFields,
-                            missing: missingFor(c.next.requiredFields, c.next.promptFields, entries),
-                          },
-                        ]}
-                        initialValues={promptValues(c.next.promptFields)}
-                      />
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <details className="group rounded-lg border border-slate-200" open={(c.auto && !c.completed) || undefined}>
-                <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                  <ChevronDown className="size-4 text-slate-400 transition-transform group-open:rotate-180" aria-hidden />
-                  Ver detalles
-                </summary>
-                <div className="flex flex-col gap-5 border-t border-slate-100 p-4">
-                  {deps.length > 0 && (
-                    <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
-                      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Información de partida</p>
-                      <ul className="flex flex-col gap-1.5">
-                        {deps.map((key) => {
-                          const dep = entries.find((x) => x.section.key === key);
-                          const depCard = dep && cards.find((x) => x.dept.key === dep.dept.key);
-                          if (!dep) return null;
-                          return (
-                            <li key={key} className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                              <a href={`#dept-${dep.dept.key}`} className="hover:underline">
-                                <span className="mr-1.5 inline-block size-2 rounded-full align-middle" style={{ background: dep.dept.color }} aria-hidden />
-                                {dep.title} <span className="text-xs text-slate-500">· {dep.dept.name}</span>
-                              </a>
-                              {depCard && <StateChip c={depCard} />}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
+                <>
+                  {(deps.length > 0 || c.entries.length > 0) && (
+                    <Details label="Común a todas las referencias">
+                      <Inputs deps={deps} pc={pc} />
+                      <EntriesView list={c.entries} canEdit={canEdit} refInfo={null} pc={pc} />
+                    </Details>
                   )}
-                  {c.entries.map((e) => (
-                    <div key={e.section.key} className="flex flex-col gap-3">
+                  {c.refs.map((r) => (
+                    <div
+                      key={r.ref.id}
+                      className={cn("flex flex-col gap-2 rounded-lg border p-3", r.completed ? "border-[#cdd5bd] bg-[#f4f6ee]" : "border-slate-200 bg-white")}
+                    >
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <h4 className="text-sm font-semibold text-slate-900">{e.title}</h4>
-                        {canEdit && (
-                          <SectionEditor projectId={projectId} sectionKey={e.section.key} title={e.title} ctx={ctx} initial={e.data} files={files} maxMb={maxMb} />
-                        )}
+                        <p className="text-sm font-semibold text-slate-900">{refTitle(r.ref)}</p>
+                        <span className="flex items-center gap-1.5">
+                          <Rounds n={r.rounds} />
+                          <RefChip s={r} />
+                        </span>
                       </div>
-                      {e.section.groups.map((g, gi) => {
-                        const fields = applicable(g.fields, ctx);
-                        if (!fields.length) return null;
-                        return (
-                          <div key={gi}>
-                            {g.title && <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{g.title}</p>}
-                            <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
-                              {fields.map((f) => (
-                                <FieldView key={f.key} f={f} data={e.data} files={files} />
-                              ))}
-                            </dl>
-                          </div>
-                        );
-                      })}
-                      <p className="text-[11px] text-slate-400">
-                        {e.updatedAt ? `Última edición: ${e.updatedBy ?? "—"} · ${formatDate(e.updatedAt, true)}` : "Sin datos todavía."}
-                      </p>
+                      {r.steps.length > 0 && <Stepper s={r} label={`${c.dept.name} · ${refTitle(r.ref)}`} now={now} />}
+                      <StateRow c={c} s={r} canEdit={canEdit} refInfo={r.ref} pc={pc} />
+                      {r.entries.length > 0 && (
+                        <Details>
+                          <EntriesView list={r.entries} canEdit={canEdit} refInfo={r.ref} pc={pc} />
+                        </Details>
+                      )}
                     </div>
                   ))}
-                </div>
-              </details>
+                </>
+              )}
             </section>
           );
         })}

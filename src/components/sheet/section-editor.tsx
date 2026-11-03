@@ -65,6 +65,7 @@ export function ScalarInput({ f, value, onChange, id }: { f: ScalarField; value:
 export function SectionEditor({
   projectId,
   sectionKey,
+  referenceId,
   title,
   ctx,
   initial,
@@ -73,6 +74,8 @@ export function SectionEditor({
 }: {
   projectId: string;
   sectionKey: string;
+  /** Referencia (apartados por referencia en proyectos con varias). */
+  referenceId?: number;
   title: string;
   ctx: SheetCtx;
   initial: SheetData;
@@ -88,7 +91,7 @@ export function SectionEditor({
 
   async function save() {
     setBusy(true);
-    const res = await saveSheetSectionAction(projectId, sectionKey, data);
+    const res = await saveSheetSectionAction(projectId, sectionKey, data, referenceId);
     setBusy(false);
     if (!res.ok) return toast.error(res.error);
     toast.success("Datos guardados");
