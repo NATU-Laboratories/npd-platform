@@ -120,7 +120,7 @@ async function resolveUser(a: Activity) {
 
 const RESET = /^\s*(\/?reiniciar|\/?reset|nueva conversaci[oó]n|empezar de nuevo)\s*$/i;
 const WELCOME =
-  "¡Hola! Soy el **Asistente NPD** de NATU. Pregúntame cómo va cualquier proyecto que puedas ver en la plataforma, qué tienes pendiente o cómo se hace algo.\n\nEscribe **reiniciar** para empezar una conversación nueva. Solo consulto, no hago cambios.";
+  "¡Hola! Soy **NIA**, la asistente de la plataforma de proyectos de NATU. Pregúntame cómo va cualquier proyecto que puedas ver en la plataforma, qué tienes pendiente o cómo se hace algo.\n\nEscribe **reiniciar** para empezar una conversación nueva. Solo consulto, no hago cambios.";
 
 /** Procesa un mensaje del chat personal (se ejecuta tras responder 200 a Teams). */
 export async function handleActivity(a: Activity) {

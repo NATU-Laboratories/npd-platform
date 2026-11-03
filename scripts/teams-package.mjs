@@ -14,13 +14,13 @@ const base = url.replace(/\/$/, "");
 const manifest = {
   $schema: "https://developer.microsoft.com/json-schemas/teams/v1.19/MicrosoftTeams.schema.json",
   manifestVersion: "1.19",
-  version: "1.0.0",
+  version: "1.1.0",
   id: appId,
   developer: { name: "NATU Laboratories", websiteUrl: base, privacyUrl: base, termsOfUseUrl: base },
-  name: { short: "Asistente NPD", full: "Asistente NPD · NATU Laboratories" },
+  name: { short: "NIA", full: "NIA · Asistente de NATU Laboratories" },
   description: {
-    short: "Consulta el estado de los proyectos NPD y tus pendientes.",
-    full: "Asistente de la plataforma NPD de NATU Laboratories: cómo va cada proyecto que puedes ver, qué tienes pendiente y cómo se usa la plataforma. Solo consulta, no hace cambios.",
+    short: "NIA, tu asistente: estado de los proyectos NPD y tus pendientes.",
+    full: "NIA es la asistente de la plataforma NPD de NATU Laboratories: cómo va cada proyecto que puedes ver, qué tienes pendiente y cómo se usa la plataforma. Solo consulta, no hace cambios.",
   },
   icons: { color: "color.png", outline: "outline.png" },
   accentColor: "#96A27A",
@@ -53,5 +53,5 @@ mkdirSync(out, { recursive: true });
 writeFileSync(join(out, "manifest.json"), JSON.stringify(manifest, null, 2));
 copyFileSync(join(dir, "color.png"), join(out, "color.png"));
 copyFileSync(join(dir, "outline.png"), join(out, "outline.png"));
-execFileSync("zip", ["-j", "-q", join(out, "asistente-npd-teams.zip"), "manifest.json", "color.png", "outline.png"], { cwd: out });
-console.log(`Paquete listo: ${join(out, "asistente-npd-teams.zip")}`);
+execFileSync("zip", ["-j", "-q", join(out, "nia-teams.zip"), "manifest.json", "color.png", "outline.png"], { cwd: out });
+console.log(`Paquete listo: ${join(out, "nia-teams.zip")}`);
