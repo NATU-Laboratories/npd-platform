@@ -1,71 +1,76 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, count, eq } from "drizzle-orm";
+import { Plus } from "lucide-react";
+import Link from "next/link";
 import { db } from "@/db";
-import { departments, templateTaskDeps, templateTasks, workflowTemplates } from "@/db/schema";
+import { departments, projects, templateTasks, workflowTemplates } from "@/db/schema";
 import { PageTitle } from "@/components/admin";
+import { TemplateRowActions } from "@/components/admin-templates/row-actions";
 import { DeptChip } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { PHASES } from "@/lib/labels";
+import { getCatalog } from "@/lib/server/catalogs";
+import { appliesToSummary } from "@/components/admin-templates/applies";
 
 export const metadata = { title: "Plantillas de flujo" };
 
 export default async function TemplatesPage() {
-  const [tpls, tasks, deps] = await Promise.all([
-    db.select().from(workflowTemplates).orderBy(asc(workflowTemplates.id)),
+  const [tpls, taskRows, usage, subtypes] = await Promise.all([
+    db.select().from(workflowTemplates).orderBy(asc(workflowTemplates.name)),
     db
-      .select({ t: templateTasks, dept: departments.name, color: departments.color })
+      .selectDistinct({ templateId: templateTasks.templateId, dept: departments.name, color: departments.color, sort: departments.sort })
       .from(templateTasks)
       .innerJoin(departments, eq(departments.id, templateTasks.departmentId))
-      .orderBy(asc(templateTasks.phase), asc(templateTasks.sort)),
-    db.select().from(templateTaskDeps),
+      .orderBy(asc(departments.sort)),
+    db.select({ templateId: projects.templateId, n: count() }).from(projects).groupBy(projects.templateId),
+    getCatalog("pl_subtype"),
   ]);
-  const title = (id: number | null) => tasks.find((x) => x.t.id === id)?.t.title;
+  const taskCount = await db.select({ templateId: templateTasks.templateId, n: count() }).from(templateTasks).groupBy(templateTasks.templateId);
   return (
     <>
       <PageTitle
         title="Plantillas de flujo"
-        description="Plantillas iniciales (seed). En V1 se usan para sugerir los departamentos al aprobar P1; el editor de tareas llega con V2."
+        description="Al aprobar P1 se propone la plantilla que mejor encaja con el proyecto (tipo, subtipo y categoría) y, con ella, los departamentos implicados. Quien aprueba puede cambiarlos."
+        actions={
+          <Button asChild>
+            <Link href="/admin/plantillas/nueva">
+              <Plus /> Nueva plantilla
+            </Link>
+          </Button>
+        }
       />
-      <div className="flex flex-col gap-4">
-        {tpls.map((tpl) => (
-          <Card key={tpl.id}>
-            <details>
-              <summary className="cursor-pointer px-4 py-3">
-                <span className="font-medium">{tpl.name}</span>{" "}
-                <span className="text-xs text-slate-500">
-                  · aplica a {[tpl.appliesTo.types?.join("/"), tpl.appliesTo.subtypes?.join(", "), tpl.appliesTo.categories?.join(", ")].filter(Boolean).join(" · ")}
-                </span>
-              </summary>
-              <div className="border-t border-slate-100 p-4">
-                {PHASES.slice(1).map((ph) => {
-                  const list = tasks.filter((x) => x.t.templateId === tpl.id && x.t.phase === ph.n);
-                  if (!list.length) return null;
-                  return (
-                    <div key={ph.n} className="mb-4">
-                      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Fase {ph.n} · {ph.name}
-                      </p>
-                      <ul className="space-y-1 text-sm">
-                        {list.map(({ t, dept, color }) => {
-                          const before = deps.filter((d) => d.taskId === t.id).map((d) => title(d.dependsOnTaskId));
-                          return (
-                            <li key={t.id} className="flex flex-wrap items-center gap-2">
-                              <DeptChip name={dept} color={color} />
-                              <span>{t.title}</span>
-                              {!t.isRequired && <span className="text-xs text-slate-400">(opcional)</span>}
-                              <span className="text-xs text-slate-400">{t.estDays} d</span>
-                              {before.length > 0 && <span className="text-xs text-slate-500">← depende de {before.join(", ")}</span>}
-                              {t.canReturnToTaskId && <span className="text-xs text-amber-700">↺ puede devolver «{title(t.canReturnToTaskId)}»</span>}
-                            </li>
-                          );
-                        })}
-                      </ul>
+      {!tpls.length && <p className="text-sm text-slate-500">Todavía no hay plantillas.</p>}
+      <div className="flex flex-col gap-3">
+        {tpls.map((tpl) => {
+          const depts = taskRows.filter((r) => r.templateId === tpl.id);
+          const used = usage.find((u) => u.templateId === tpl.id)?.n ?? 0;
+          const n = taskCount.find((t) => t.templateId === tpl.id)?.n ?? 0;
+          return (
+            <Card key={tpl.id} className={tpl.isActive ? "" : "opacity-70"}>
+              <div className="flex flex-wrap items-start gap-3 p-4">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link href={`/admin/plantillas/${tpl.id}`} className="font-medium text-slate-900 hover:underline">
+                      {tpl.name}
+                    </Link>
+                    {!tpl.isActive && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600">Inactiva</span>}
+                  </div>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {appliesToSummary(tpl.appliesTo, subtypes)} · {n} {n === 1 ? "tarea" : "tareas"}
+                    {used > 0 && ` · usada en ${used} ${used === 1 ? "proyecto" : "proyectos"}`}
+                  </p>
+                  {depts.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {depts.map((d) => (
+                        <DeptChip key={d.dept} name={d.dept} color={d.color} />
+                      ))}
                     </div>
-                  );
-                })}
+                  )}
+                </div>
+                <TemplateRowActions id={tpl.id} name={tpl.name} isActive={tpl.isActive} usedIn={used} />
               </div>
-            </details>
-          </Card>
-        ))}
+            </Card>
+          );
+        })}
       </div>
     </>
   );
