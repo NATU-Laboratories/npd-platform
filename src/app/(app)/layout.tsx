@@ -37,7 +37,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           <div className="ml-auto flex items-center gap-2">
             {canRequest(u) && (
               <form action={newDraftAction}>
-                <Button type="submit" size="sm" className="bg-natu-salmon font-semibold text-natu-dark hover:bg-brand-200">
+                <Button type="submit" size="sm" className="bg-natu-sage font-semibold text-natu-dark hover:bg-brand-300">
                   <Plus /> <span className="hidden sm:inline">Nueva solicitud</span>
                   <span className="sm:hidden">Nueva</span>
                 </Button>

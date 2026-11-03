@@ -93,10 +93,10 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
       {newRequests.length > 0 && (
         <section
           aria-label="Solicitudes nuevas pendientes de revisar"
-          className="overflow-hidden rounded-xl border-2 border-natu-salmon bg-[#fdf1ee] shadow-sm"
+          className="overflow-hidden rounded-xl border-2 border-brand-400 bg-brand-50 shadow-sm"
         >
           <div className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-natu-salmon text-natu-dark">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-natu-sage text-natu-dark">
               <BellRing className="size-5" aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
@@ -108,7 +108,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
               </p>
             </div>
           </div>
-          <ul className="divide-y divide-natu-salmon/40 border-t border-natu-salmon/40 bg-white/70">
+          <ul className="divide-y divide-brand-200 border-t border-brand-200 bg-white/70">
             {newRequests.slice(0, 5).map((r) => (
               <li key={r.id}>
                 <Link href={`/proyectos/${r.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm hover:bg-white sm:px-5">
@@ -128,7 +128,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
             ))}
           </ul>
           {newRequests.length > 5 && (
-            <Link href="/?status=g1" className="block border-t border-natu-salmon/40 bg-white/70 px-4 py-2 text-center text-sm font-medium text-natu-dark hover:bg-white sm:px-5">
+            <Link href="/?status=g1" className="block border-t border-brand-200 bg-white/70 px-4 py-2 text-center text-sm font-medium text-natu-dark hover:bg-white sm:px-5">
               Ver las {newRequests.length} solicitudes
             </Link>
           )}
