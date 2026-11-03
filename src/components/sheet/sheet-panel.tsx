@@ -11,7 +11,7 @@ import { DeptTransition } from "./dept-transition";
 import { FormulaCostBox } from "./formula-cost";
 import { SectionEditor } from "./section-editor";
 
-const SAGE = "bg-[#eef0e6] text-[#56613f] ring-natu-sage";
+const SAGE = "bg-[#7f8f63] text-white ring-[#7f8f63]";
 const DAY = 86_400_000;
 const CHIP = "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1";
 

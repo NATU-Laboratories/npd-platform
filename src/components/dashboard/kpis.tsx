@@ -86,7 +86,7 @@ export function DashboardKpis(k: KpiData) {
         <div
           className={cn(
             "flex flex-col justify-between rounded-xl border p-5 lg:col-span-2",
-            k.atRisk > 0 ? "border-brand-300 bg-brand-50" : "border-slate-200 bg-white",
+            k.atRisk > 0 ? "border-[#e2a29a] bg-[#fbf4f2]" : "border-slate-200 bg-white",
           )}
         >
           <div>
@@ -94,7 +94,7 @@ export function DashboardKpis(k: KpiData) {
               En riesgo
               <InfoTip text={`Proyectos abiertos cuya fecha de entrega requerida vence en menos de ${k.riskDays} días o ya ha vencido. Pulsa para verlos.`} />
             </h2>
-            <p className={cn("mt-1 flex items-center gap-2 text-4xl font-black tabular-nums", k.atRisk > 0 ? "text-brand-500" : "text-natu-dark")}>
+            <p className={cn("mt-1 flex items-center gap-2 text-4xl font-black tabular-nums", k.atRisk > 0 ? "text-[#b0675b]" : "text-natu-dark")}>
               {k.atRisk > 0 ? <AlertTriangle className="size-7" aria-hidden /> : <CheckCircle2 className="size-7 text-emerald-600" aria-hidden />}
               {k.atRisk}
             </p>
@@ -149,7 +149,7 @@ export function DashboardKpis(k: KpiData) {
               </p>
               <p className="mt-1 text-3xl font-black tabular-nums">{rate == null ? "—" : `${rate}%`}</p>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15" aria-hidden>
-                <span className="block h-full rounded-full bg-natu-salmon" style={{ width: `${rate ?? 0}%` }} />
+                <span className="block h-full rounded-full bg-natu-sage" style={{ width: `${rate ?? 0}%` }} />
               </div>
               <p className="mt-1 text-[11px] text-white/60">
                 {k.p2Approved} de {decided} presupuesto{decided === 1 ? "" : "s"} decidido{decided === 1 ? "" : "s"} por el cliente

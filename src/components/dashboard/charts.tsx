@@ -3,7 +3,7 @@ import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YA
 
 // Paleta de marca NATU (orden fijo): PL = gris oscuro, MP = salmón, MDD = salvia.
 // Tonos intensificados de los complementarios del brandbook para que se lean sobre blanco.
-export const SERIES = { pl: "#3e3f3e", mp: "#c47466", mdd: "#7f8f63", single: "#cf8579" };
+export const SERIES = { pl: "#3e3f3e", mp: "#c47466", mdd: "#7f8f63", single: "#96a27a" };
 const AXIS = { fontSize: 11, fill: "#5b5955" };
 const GRID = "#e4e1dc";
 

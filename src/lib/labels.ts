@@ -15,7 +15,8 @@ export const STATUS_COLOR: Record<ProjectStatus, string> = {
   draft: "bg-slate-100 text-slate-700 ring-slate-200",
   submitted: "bg-[#f9ede6] text-[#7a4f3b] ring-natu-peach",
   info_requested: "bg-amber-50 text-amber-800 ring-amber-200",
-  in_progress: "bg-brand-50 text-brand-500 ring-brand-200",
+  // Situación «En curso»: salmón de marca (el verde es «Validando cliente»)
+  in_progress: "bg-[#fbf4f2] text-[#b0675b] ring-[#efcfc9]",
   paused: "bg-slate-100 text-slate-600 ring-slate-300",
   in_production: "bg-natu-dark text-white ring-natu-dark",
   rejected: "bg-rose-50 text-rose-800 ring-rose-200",
@@ -45,7 +46,7 @@ export const SITUATIONS = [
   {
     key: "en_curso",
     label: "En curso",
-    color: "bg-brand-400",
+    color: "bg-[#cf8579]",
     hint: "El cliente ha aprobado el presupuesto (P2): en desarrollo, diseño y artes finales o preparación para producción.",
   },
   { key: "pausa", label: "En pausa", color: "bg-slate-400", hint: "Proyectos detenidos temporalmente en cualquier fase." },

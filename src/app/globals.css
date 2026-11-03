@@ -6,16 +6,17 @@
  *  - Complementarios (20 % acentos): salmón #E2A29A, melocotón #E4BCA5, verde salvia #D3D7C4, beige #DCD5BE.
  *  - Tipografía: Montserrat (principal) y Athelas/Georgia (acentos editoriales).
  *
- * `brand`: 50–400 tintes de salmón (selección, resaltados) y 600–900 gris oscuro NATU (acciones, cabecera).
+ * `brand`: 50–500 tintes de verde salvia (acento: selección, resaltados, estado en curso de departamentos)
+ * y 600–900 gris oscuro NATU (acciones, cabecera). El salmón queda para la situación «En curso» y avisos.
  * `slate` se redefine como escala de grises cálidos para que todo el interfaz use los neutros de marca.
  */
 @theme {
-  --color-brand-50: #fbf4f2;
-  --color-brand-100: #f6e5e1;
-  --color-brand-200: #efcfc9;
-  --color-brand-300: #e2a29a;
-  --color-brand-400: #cf8579;
-  --color-brand-500: #b0675b;
+  --color-brand-50: #f4f5ef;
+  --color-brand-100: #e9ecdf;
+  --color-brand-200: #d3d7c4;
+  --color-brand-300: #bcc3a6;
+  --color-brand-400: #96a27a;
+  --color-brand-500: #626d48;
   --color-brand-600: #3e3f3e;
   --color-brand-700: #333433;
   --color-brand-800: #2a2b2a;
