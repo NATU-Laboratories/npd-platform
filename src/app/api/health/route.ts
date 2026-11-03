@@ -5,6 +5,8 @@ import { db } from "@/db";
 import { graphConfigured } from "@/lib/graph/client";
 import { mailDriver } from "@/lib/graph/mail";
 import { storageDriver } from "@/lib/graph/storage";
+import { assistantEnabled } from "@/lib/server/assistant";
+import { teamsConfigured } from "@/lib/teams/bot";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +36,8 @@ export async function GET() {
     storage: storageDriver(),
     mail: mailDriver(),
     cron: env("CRON_SECRET"),
+    assistant: assistantEnabled(),
+    teamsBot: teamsConfigured(),
   };
   return NextResponse.json(body, { status: database.ok && body.auth.AUTH_SECRET ? 200 : 500 });
 }

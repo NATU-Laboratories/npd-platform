@@ -43,7 +43,7 @@ export class AuthzError extends Error {
 /** Cookie del modo «Ver como» (solo la honra el servidor si el usuario real es admin). */
 export const VIEW_AS_COOKIE = "npd_view_as";
 
-async function loadUser(id: string): Promise<CurrentUser | null> {
+export async function loadUser(id: string): Promise<CurrentUser | null> {
   const [u] = await db.select().from(users).where(eq(users.id, id));
   if (!u) return null;
   const [roleRows, deptRows, deciderRows] = await Promise.all([
