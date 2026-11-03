@@ -22,11 +22,11 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         </div>
       )}
       <header className="sticky top-0 z-30 bg-natu-dark text-white shadow-sm">
-        <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4">
+        <div className="mx-auto flex h-14 max-w-7xl items-center gap-2 px-3 sm:h-16 sm:gap-3 sm:px-4">
           <Link href="/" className="shrink-0">
             <Logo onDark />
           </Link>
-          <nav className="ml-2 flex items-center gap-1 text-sm sm:ml-4">
+          <nav className="ml-1 flex min-w-0 items-center gap-0.5 text-sm sm:ml-4 sm:gap-1">
             <MainNav showReplenishments={canAccessReplenishments(u)} />
             {isAdmin(u) && (
               <Link href="/admin" className="hidden items-center gap-1.5 rounded px-3 py-1.5 hover:bg-white/10 sm:inline-flex">
@@ -34,7 +34,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
               </Link>
             )}
           </nav>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-2">
             <HeaderNewButton canNpd={canRequest(u)} canRep={canCreateReplenishment(u)} />
             <details className="relative">
               <summary className="flex cursor-pointer list-none items-center rounded-full bg-white/15 size-8 justify-center text-xs font-semibold hover:bg-white/25" title={u.name}>

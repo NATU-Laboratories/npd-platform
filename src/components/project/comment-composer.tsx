@@ -80,7 +80,7 @@ export function CommentComposer({ projectId, users, departments }: { projectId: 
         rows={3}
         value={body}
         onChange={onChange}
-        placeholder="Escribe un comentario… usa @ para mencionar a personas o departamentos"
+        placeholder="Escribe un comentario… usa @ para mencionar a personas o departamentos…"
         aria-label="Nuevo comentario"
         onKeyDown={(e) => {
           if (query && matches.length) {

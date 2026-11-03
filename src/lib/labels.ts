@@ -72,7 +72,7 @@ export const CATEGORY_LABEL = {
 export const PRIORITY_LABEL = { low: "Baja", medium: "Media", high: "Alta", urgent: "Urgente" } as const;
 export const PRIORITY_COLOR = {
   low: "text-slate-500",
-  medium: "text-sky-700",
+  medium: "text-slate-600",
   high: "text-amber-700",
   urgent: "text-rose-700 font-semibold",
 } as const;

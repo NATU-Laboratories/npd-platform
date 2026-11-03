@@ -23,7 +23,7 @@ export type GateDialogProps = {
 };
 
 const TABS: { k: Kind; label: string; icon: React.ElementType; tone: string }[] = [
-  { k: "approve", label: "Aprobar", icon: CheckCircle2, tone: "text-emerald-700" },
+  { k: "approve", label: "Aprobar", icon: CheckCircle2, tone: "text-[#56613f]" },
   { k: "request_info", label: "Pedir más info", icon: HelpCircle, tone: "text-amber-700" },
   { k: "reject", label: "Rechazar", icon: XCircle, tone: "text-rose-700" },
   { k: "pause", label: "Pausar", icon: PauseCircle, tone: "text-slate-700" },

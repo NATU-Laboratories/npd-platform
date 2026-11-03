@@ -293,7 +293,7 @@ export function QuoteDialog({
 
 type BudgetKind = "approve" | "changes" | "reject" | "pause";
 const TABS: { k: BudgetKind; label: string; icon: React.ElementType; tone: string }[] = [
-  { k: "approve", label: "Cliente aprueba", icon: CheckCircle2, tone: "text-emerald-700" },
+  { k: "approve", label: "Cliente aprueba", icon: CheckCircle2, tone: "text-[#56613f]" },
   { k: "changes", label: "Pide cambios", icon: RotateCcw, tone: "text-amber-700" },
   { k: "reject", label: "Cliente rechaza", icon: XCircle, tone: "text-rose-700" },
   { k: "pause", label: "Pausar", icon: PauseCircle, tone: "text-slate-700" },
@@ -431,7 +431,7 @@ export function BudgetDialog({
                   {ppMode === "waived" && (
                     <div className="mt-3 flex flex-col gap-3 rounded-md bg-white p-3 ring-1 ring-amber-200">
                       <Field label="Nombre del responsable" required error={errors.responsible}>
-                        <Input value={responsible} onChange={(e) => setResponsible(e.target.value)} placeholder="Nombre y apellidos" />
+                        <Input value={responsible} onChange={(e) => setResponsible(e.target.value)} placeholder="Nombre y apellidos…" />
                       </Field>
                       <Checkbox
                         label={`${responsible.trim() || "El responsable"} se hace responsable de que el proyecto se inicie sin el anticipo del 30 %.`}

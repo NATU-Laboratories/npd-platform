@@ -115,7 +115,7 @@ export default async function SubstatesPage() {
                   ))}
                   <form action={addSubstateAction} className="flex gap-2">
                     <input type="hidden" name="departmentId" value={d.id} />
-                    <Input name="name" placeholder="Nuevo estado" required className="h-8 w-64 text-sm" aria-label={`Nuevo estado de ${d.name}`} />
+                    <Input name="name" placeholder="Nuevo estado…" required className="h-8 w-64 text-sm" aria-label={`Nuevo estado de ${d.name}`} />
                     <Button type="submit" size="sm" variant="secondary">
                       Añadir
                     </Button>

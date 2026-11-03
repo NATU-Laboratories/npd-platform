@@ -79,7 +79,7 @@ export function LabelInfoDialog({
               <fieldset key={r.id} className="flex flex-col gap-3 rounded-lg border border-slate-200 p-3">
                 <legend className="px-1 text-sm font-semibold text-slate-900">{r.title}</legend>
                 <Field label="Naming definitivo" required htmlFor={`li-name-${r.id}`} error={errors[`ref.${r.id}.finalName`]}>
-                  <Input id={`li-name-${r.id}`} value={r.finalName} onChange={(e) => setRef(r.id, "finalName", e.target.value)} placeholder="Nombre comercial con el que se venderá" />
+                  <Input id={`li-name-${r.id}`} value={r.finalName} onChange={(e) => setRef(r.id, "finalName", e.target.value)} placeholder="Nombre comercial con el que se venderá…" />
                 </Field>
                 <Field label="Facing" required htmlFor={`li-facing-${r.id}`} hint="Textos, claims y logos de la cara frontal." error={errors[`ref.${r.id}.facing`]}>
                   <Textarea id={`li-facing-${r.id}`} rows={2} value={r.facing} onChange={(e) => setRef(r.id, "facing", e.target.value)} />
@@ -89,7 +89,7 @@ export function LabelInfoDialog({
           ) : (
             <>
               <Field label="Naming definitivo" required htmlFor="li-name" error={errors.finalName}>
-                <Input id="li-name" value={v.finalName} onChange={(e) => set("finalName", e.target.value)} placeholder="Nombre comercial con el que se venderá" />
+                <Input id="li-name" value={v.finalName} onChange={(e) => set("finalName", e.target.value)} placeholder="Nombre comercial con el que se venderá…" />
               </Field>
               <Field label="Facing del producto" required htmlFor="li-facing" hint="Textos, claims y logos que deben ir en la cara frontal." error={errors.facing}>
                 <Textarea id="li-facing" rows={3} value={v.facing} onChange={(e) => set("facing", e.target.value)} />

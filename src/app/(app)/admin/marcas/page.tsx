@@ -41,7 +41,7 @@ export default async function BrandsPage() {
         </tbody>
       </Table>
       <form action={saveBrandAction} className="mt-4 flex gap-2 rounded-xl border border-slate-200 bg-white p-4">
-        <Input name="name" placeholder="Nueva marca" required className="w-64" aria-label="Nueva marca" />
+        <Input name="name" placeholder="Nueva marca…" required className="w-64" aria-label="Nueva marca" />
         <Button type="submit" variant="secondary">
           Añadir
         </Button>

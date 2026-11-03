@@ -97,7 +97,7 @@ export function TemplateEditor({ initial, departments, subtypes }: { initial: Ed
     <div className="flex flex-col gap-4 pb-20">
       <Card className="grid gap-4 p-4 sm:grid-cols-[1fr_auto] sm:items-end">
         <Field label="Nombre de la plantilla" required htmlFor="tpl-name">
-          <Input id="tpl-name" value={tpl.name} onChange={(e) => set({ name: e.target.value })} placeholder="p. ej. PL/MDD – Desarrollo completo" maxLength={200} />
+          <Input id="tpl-name" value={tpl.name} onChange={(e) => set({ name: e.target.value })} placeholder="p. ej. PL/MDD – Desarrollo completo…" maxLength={200} />
         </Field>
         <Checkbox label="Activa (se propone al aprobar P1)" checked={tpl.isActive} onChange={(e) => set({ isActive: e.target.checked })} className="pb-2" />
       </Card>
@@ -179,7 +179,7 @@ export function TemplateEditor({ initial, departments, subtypes }: { initial: Ed
                           <Input
                             value={x.title}
                             onChange={(e) => setTask(x.key, { title: e.target.value })}
-                            placeholder="Título de la tarea"
+                            placeholder="Título de la tarea…"
                             className={cn("h-8 min-w-48 flex-1 text-sm", !x.title.trim() && "border-amber-300")}
                             aria-label="Título de la tarea"
                             maxLength={200}
@@ -218,7 +218,7 @@ export function TemplateEditor({ initial, departments, subtypes }: { initial: Ed
                         {expanded && (
                           <div className="grid gap-3 border-t border-slate-100 p-3 sm:grid-cols-2">
                             <Field label="Descripción" className="sm:col-span-2">
-                              <Textarea value={x.description} onChange={(e) => setTask(x.key, { description: e.target.value })} placeholder="Qué hay que hacer (opcional)" maxLength={2000} className="min-h-16" />
+                              <Textarea value={x.description} onChange={(e) => setTask(x.key, { description: e.target.value })} placeholder="Qué hay que hacer (opcional)…" maxLength={2000} className="min-h-16" />
                             </Field>
                             <Field label="Fase">
                               <Select value={x.phase} onChange={(e) => changePhase(x.key, Number(e.target.value))}>

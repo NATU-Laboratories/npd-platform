@@ -55,8 +55,8 @@ export function OlfactoryFields({
   const setInsp = (idx: number, patch: Partial<Inspiration>) => set("inspirations", insp.map((x, j) => (j === idx ? { ...x, ...patch } : x)));
 
   return (
-    <fieldset className="flex flex-col gap-5 rounded-xl border border-violet-200 bg-violet-50/40 p-4">
-      <legend className="px-2 text-sm font-semibold text-violet-900">Bloque olfativo</legend>
+    <fieldset className="flex flex-col gap-5 rounded-xl border border-natu-sage bg-brand-50 p-4">
+      <legend className="px-2 text-sm font-semibold text-[#56613f]">Bloque olfativo</legend>
 
       <Field label="Familia(s) olfativa(s)" recommended error={errorFor("olfactory.families")} highlight={highlight("olfactory.families")}>
         <ChipGroup options={asOptions(families)} value={value.families ?? []} onChange={(v) => set("families", v)} ariaLabel="Familias olfativas" />
@@ -78,7 +78,7 @@ export function OlfactoryFields({
                 onClick={() => set("intensity", Number(value.intensity) === n ? undefined : n)}
                 className={cn(
                   "size-9 rounded-full text-sm font-medium ring-1",
-                  Number(value.intensity) >= n ? "bg-violet-600 text-white ring-violet-600" : "bg-white text-slate-600 ring-slate-300",
+                  Number(value.intensity) >= n ? "bg-natu-dark text-white ring-natu-dark" : "bg-white text-slate-600 ring-slate-300",
                 )}
               >
                 {n}
@@ -87,7 +87,7 @@ export function OlfactoryFields({
           </div>
         </Field>
         <Field label="Duración deseada" recommended highlight={highlight("olfactory.duration")}>
-          <Input value={value.duration ?? ""} onChange={(e) => set("duration", e.target.value)} placeholder="p. ej. 6-8 h en piel" />
+          <Input value={value.duration ?? ""} onChange={(e) => set("duration", e.target.value)} placeholder="p. ej. 6-8 h en piel…" />
         </Field>
       </div>
 
@@ -95,12 +95,12 @@ export function OlfactoryFields({
         <div className="flex flex-col gap-2">
           {insp.map((i, idx) => (
             <div key={idx} className="grid gap-2 rounded-lg bg-white p-2 ring-1 ring-slate-200 sm:grid-cols-[1fr_1fr_auto]">
-              <Input placeholder="Producto" value={i.product} onChange={(e) => setInsp(idx, { product: e.target.value })} aria-label="Producto de referencia" />
-              <Input placeholder="Marca" value={i.brand} onChange={(e) => setInsp(idx, { brand: e.target.value })} aria-label="Marca de referencia" />
+              <Input placeholder="Producto…" value={i.product} onChange={(e) => setInsp(idx, { product: e.target.value })} aria-label="Producto de referencia" />
+              <Input placeholder="Marca…" value={i.brand} onChange={(e) => setInsp(idx, { brand: e.target.value })} aria-label="Marca de referencia" />
               <Button type="button" variant="ghost" size="icon" aria-label="Quitar referencia" onClick={() => set("inspirations", insp.filter((_, j) => j !== idx))}>
                 <Trash2 />
               </Button>
-              <Input className="sm:col-span-3" placeholder="Qué gusta de ella" value={i.likes} onChange={(e) => setInsp(idx, { likes: e.target.value })} aria-label="Qué gusta" />
+              <Input className="sm:col-span-3" placeholder="Qué gusta de ella…" value={i.likes} onChange={(e) => setInsp(idx, { likes: e.target.value })} aria-label="Qué gusta" />
               <div className="flex items-center gap-2 sm:col-span-3">
                 <Input
                   type="url"
