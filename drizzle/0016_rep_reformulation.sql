@@ -1,0 +1,1 @@
+ALTER TYPE "public"."replenishment_status" ADD VALUE 'reformulation' BEFORE 'art_approved';

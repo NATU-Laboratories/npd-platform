@@ -28,9 +28,10 @@ export const ELEMENT_LABEL: Record<string, string> = Object.fromEntries(ELEMENTS
 /** Elementos impresos: pasan por revisión de diseño y validación del arte final. */
 export const PRINTED_ELEMENTS = ["etiqueta", "estuche", "caja_master", "prospecto"];
 
-export const STATUS_STEPS: { key: ReplenishmentStatus; label: string; dept: "diseno" | "calidad" | "compras" | null }[] = [
+export const STATUS_STEPS: { key: ReplenishmentStatus; label: string; dept: "diseno" | "calidad" | "compras" | "idi" | null }[] = [
   { key: "design_review", label: "Revisión de diseño", dept: "diseno" },
   { key: "design_changes", label: "Correcciones de diseño", dept: "diseno" },
+  { key: "reformulation", label: "Reformulación", dept: "idi" },
   { key: "quality_review", label: "Validación de calidad", dept: "calidad" },
   { key: "art_approved", label: "Arte final aprobado", dept: "compras" },
   { key: "sent_to_print", label: "Enviado a imprenta", dept: "compras" },
@@ -41,6 +42,7 @@ export const REP_STATUS_LABEL: Record<ReplenishmentStatus, string> = {
   design_review: "Revisión de diseño",
   design_changes: "Correcciones de diseño",
   quality_review: "Validación de calidad",
+  reformulation: "Reformulación (Laboratorio)",
   art_approved: "Arte final aprobado",
   sent_to_print: "Enviado a imprenta",
   closed: "Cerrada",
@@ -51,13 +53,14 @@ export const REP_STATUS_COLOR: Record<ReplenishmentStatus, string> = {
   design_review: "bg-pink-50 text-pink-800 ring-pink-200",
   design_changes: "bg-amber-50 text-amber-800 ring-amber-200",
   quality_review: "bg-sky-50 text-sky-800 ring-sky-200",
+  reformulation: "bg-violet-50 text-violet-800 ring-violet-200",
   art_approved: "bg-[#eef0e6] text-[#56613f] ring-natu-sage",
   sent_to_print: "bg-natu-dark text-white ring-natu-dark",
   closed: "bg-slate-100 text-slate-600 ring-slate-200",
   cancelled: "bg-rose-50 text-rose-700 ring-rose-200",
 };
 
-export const OPEN_REP_STATUSES: ReplenishmentStatus[] = ["design_review", "design_changes", "quality_review", "art_approved", "sent_to_print"];
+export const OPEN_REP_STATUSES: ReplenishmentStatus[] = ["design_review", "design_changes", "quality_review", "reformulation", "art_approved", "sent_to_print"];
 
 export const QUOTE_STATUS_LABEL: Record<string, string> = {
   pending: "Sin pedir",
@@ -81,6 +84,8 @@ export const REP_ACTION_LABEL: Record<string, string> = {
   "replenishment.design_ready": "entregó el arte final para validar",
   "replenishment.quality_approved": "validó el arte final",
   "replenishment.quality_corrections": "pidió correcciones del arte final",
+  "replenishment.quality_reformulate": "pidió reformular el producto (pasa a Laboratorio / I+D)",
+  "replenishment.lab_reformulated": "terminó la reformulación y la devolvió a Calidad",
   "replenishment.sent_to_print": "envió a imprenta",
   "replenishment.closed": "cerró la reposición",
   "replenishment.cancelled": "canceló la reposición",

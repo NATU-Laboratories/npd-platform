@@ -32,7 +32,7 @@ const isManager = (u: CurrentUser) => hasRole(u, "admin", "global_decider");
 
 /** Quién ve el apartado de reposiciones. */
 export function canAccessReplenishments(u: CurrentUser) {
-  return isManager(u) || hasRole(u, "global_reader") || ["compras", "diseno", "calidad", "operaciones", "produccion"].some((k) => inDept(u, k));
+  return isManager(u) || hasRole(u, "global_reader") || ["compras", "diseno", "calidad", "idi", "operaciones", "produccion"].some((k) => inDept(u, k));
 }
 
 /** La solicitud la abre Compras (y el admin / gestor de proyectos). */
@@ -41,7 +41,7 @@ export function canCreateReplenishment(u: CurrentUser) {
 }
 
 type Rep = typeof replenishments.$inferSelect;
-export type RepRole = "diseno" | "calidad" | "compras";
+export type RepRole = "diseno" | "calidad" | "compras" | "idi";
 
 /** ¿Puede actuar como ese departamento en esta reposición? */
 export function canActAs(u: CurrentUser, r: Pick<Rep, "requesterId">, role: RepRole) {
@@ -508,7 +508,7 @@ export async function updateItem(u: CurrentUser, raw: unknown) {
 
 // ─── Flujo (plantilla «Repetición») ───────────────────────────────────────
 
-export const REP_ACTIONS = ["design_no_changes", "design_changes", "design_ready", "quality_approved", "quality_corrections", "sent_to_print", "close", "cancel"] as const;
+export const REP_ACTIONS = ["design_no_changes", "design_changes", "design_ready", "quality_approved", "quality_corrections", "quality_reformulate", "lab_reformulated", "sent_to_print", "close", "cancel"] as const;
 export type RepAction = (typeof REP_ACTIONS)[number];
 
 const FLOW: Record<RepAction, { from: ReplenishmentStatus[]; to: ReplenishmentStatus; role: RepRole; label: string; needsComment?: boolean }> = {
@@ -517,6 +517,8 @@ const FLOW: Record<RepAction, { from: ReplenishmentStatus[]; to: ReplenishmentSt
   design_ready: { from: ["design_changes"], to: "quality_review", role: "diseno", label: "Arte final corregido: enviar a Calidad" },
   quality_approved: { from: ["quality_review"], to: "art_approved", role: "calidad", label: "Validar arte final" },
   quality_corrections: { from: ["quality_review"], to: "design_changes", role: "calidad", label: "Pedir correcciones", needsComment: true },
+  quality_reformulate: { from: ["quality_review"], to: "reformulation", role: "calidad", label: "Reformular", needsComment: true },
+  lab_reformulated: { from: ["reformulation"], to: "quality_review", role: "idi", label: "Reformulación terminada: devolver a Calidad", needsComment: true },
   sent_to_print: { from: ["art_approved"], to: "sent_to_print", role: "compras", label: "Enviado a imprenta" },
   close: { from: ["sent_to_print"], to: "closed", role: "compras", label: "Cerrar (material recibido)" },
   cancel: { from: OPEN_REP_STATUSES, to: "cancelled", role: "compras", label: "Cancelar reposición", needsComment: true },
@@ -562,7 +564,8 @@ export async function transition(
   }
   const comment =
     opts.comment?.trim() || (corrections.length ? corrections.map((x, n) => `${n + 1}. ${x.text}${x.fileIds.length ? ` (${x.fileIds.length} captura${x.fileIds.length > 1 ? "s" : ""})` : ""}`).join("\n") : null);
-  if (step.needsComment && !comment) throw new Error(action === "cancel" ? "Indica el motivo de la cancelación" : "Añade al menos una corrección");
+  if (step.needsComment && !comment)
+    throw new Error(action === "cancel" ? "Indica el motivo de la cancelación" : action === "quality_reformulate" ? "Explica qué hay que reformular y por qué" : action === "lab_reformulated" ? "Indica qué se ha reformulado" : "Añade al menos una corrección");
 
   // Para pasar a Calidad tiene que haber arte final (de esta ronda si ha habido correcciones)
   if ((action === "design_no_changes" || action === "design_ready") && needsArt(c.itemRows)) {
@@ -602,13 +605,17 @@ export async function transition(
         html: renderEmail({ title, intro, message: msg, extraRows: summaryRows(ctx), ctaPath: ctaPath(ctx), ctaLabel: cta, subtitle: SUBTITLE }),
       });
     };
-    if (step.to === "quality_review")
+    if (step.to === "quality_review" && action !== "lab_reformulated")
       await internal("replenishment.quality_review", ["calidad"], [], "Arte final listo para validar", `${u.name} (Diseño) ha entregado el arte final. Revísalo y valídalo o pide correcciones.`, "Validar el arte final");
+    if (action === "quality_reformulate")
+      await internal("replenishment.reformulation", ["idi"], [c.requesterEmail], "Reformulación pedida por Calidad", `${u.name} (Calidad) pide reformular el producto. Laboratorio / I+D entra en la reposición: revisa los comentarios de reformulación y, al terminar, devuélvela a Calidad.`, "Ver la reformulación");
+    if (action === "lab_reformulated")
+      await internal("replenishment.reformulated", ["calidad"], [c.requesterEmail], "Reformulación terminada", `${u.name} (Laboratorio / I+D) ha terminado la reformulación. Calidad debe volver a validar (y pedir correcciones del arte final si cambia el etiquetado).`, "Validar de nuevo");
     if (action === "quality_corrections")
       await internal("replenishment.corrections", ["diseno"], [], "Correcciones en el arte final", `Calidad pide ${corrections.length > 1 ? `${corrections.length} correcciones` : "correcciones"} (ronda ${round}). Revísalas en la plataforma (con sus capturas), añade el enlace al arte final corregido y vuelve a enviarlo.`, "Ver las correcciones");
     if (action === "quality_approved")
       await internal("replenishment.art_approved", ["compras"], [c.requesterEmail], "Arte final aprobado", "Calidad ha validado el arte final. Ya puedes enviarlo a imprenta.", "Enviar a imprenta");
-    if (action === "cancel") await internal("replenishment.cancelled", ["diseno", "calidad", "compras"], [c.requesterEmail], "Reposición cancelada", `${u.name} ha cancelado la reposición.`);
+    if (action === "cancel") await internal("replenishment.cancelled", ["diseno", "calidad", "compras", ...(r.status === "reformulation" ? ["idi"] : [])], [c.requesterEmail], "Reposición cancelada", `${u.name} ha cancelado la reposición.`);
     if (action === "sent_to_print" && opts.sendSupplierEmails) {
       for (const e of await supplierEmails(u, id, "print", null, opts.supplierMessage ?? "")) await queue(id, "replenishment.sent_to_print", e);
     }

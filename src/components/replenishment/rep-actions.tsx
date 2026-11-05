@@ -17,10 +17,18 @@ const META: Record<RepAction, { label: string; variant: "default" | "secondary" 
   design_changes: { label: "Hay cambios de diseño", variant: "warning", hint: "Indica qué cambia. Cuando subas el arte final corregido, lo enviarás a Calidad.", comment: "optional" },
   design_ready: { label: "Enviar arte final a Calidad", variant: "default", hint: "Confirmas que el arte final corregido de esta ronda está subido. Calidad lo validará.", comment: "optional" },
   quality_approved: { label: "Validar arte final", variant: "default", hint: "El arte final es correcto y se puede enviar a imprenta. Se avisará a Compras.", comment: "optional" },
+  quality_reformulate: { label: "Reformular", variant: "warning", hint: "El producto necesita reformularse: la reposición pasa a Laboratorio / I+D, que entra a reformular. Cuando termine, volverá a Calidad.", comment: "required" },
+  lab_reformulated: { label: "Reformulación terminada", variant: "default", hint: "Devuelve la reposición a Calidad para que vuelva a validar. Indica qué se ha cambiado (código de la nueva referencia, ingredientes que cambian en etiqueta…).", comment: "required" },
   quality_corrections: { label: "Pedir correcciones", variant: "warning", hint: "Vuelve a Diseño con una nueva ronda. Añade cada corrección con su indicación y, si ayuda, capturas." },
   sent_to_print: { label: "Marcar como enviado a imprenta", variant: "default", hint: "El arte final aprobado se ha enviado al proveedor / imprenta.", comment: "optional" },
   close: { label: "Cerrar (material recibido)", variant: "secondary", hint: "La reposición ha terminado.", comment: "optional" },
   cancel: { label: "Cancelar reposición", variant: "danger", hint: "Se avisará a los departamentos implicados.", comment: "required" },
+};
+
+const COMMENT_LABEL: Partial<Record<RepAction, string>> = {
+  cancel: "Motivo",
+  quality_reformulate: "Comentarios de reformulación",
+  lab_reformulated: "Qué se ha reformulado",
 };
 
 const PRINT_MESSAGE = "El arte final está aprobado. Podéis proceder con la impresión según la cotización acordada. Os enviamos los archivos del arte final por separado.\n\nGracias.";
@@ -67,7 +75,8 @@ function ActionDialog({ id, action, onClose }: { id: string; action: RepAction; 
     setPreview({ key: message, emails: res.data ?? [] });
   }
   async function confirm() {
-    if (m.comment === "required" && !comment.trim()) return toast.error(action === "cancel" ? "Indica el motivo" : "Explica qué hay que corregir");
+    if (m.comment === "required" && !comment.trim())
+      return toast.error(action === "cancel" ? "Indica el motivo" : action === "quality_reformulate" ? "Explica qué hay que reformular" : action === "lab_reformulated" ? "Indica qué se ha reformulado" : "Explica qué hay que corregir");
     if (isCorrections) {
       if (corrections.some((c) => c.images.some((i) => i.uploading))) return toast.error("Espera a que terminen de subirse las capturas");
       const filled = corrections.filter((c) => c.text.trim() || c.images.length);
@@ -97,7 +106,7 @@ function ActionDialog({ id, action, onClose }: { id: string; action: RepAction; 
         <div className="flex flex-col gap-4">
           {isCorrections && <CorrectionsEditor repId={id} value={corrections} onChange={setCorrections} />}
           {m.comment && (
-            <Field label={m.comment === "required" ? (action === "cancel" ? "Motivo" : "Qué hay que corregir") : "Comentario (opcional)"} required={m.comment === "required"} htmlFor="ra-comment">
+            <Field label={m.comment === "required" ? (COMMENT_LABEL[action] ?? "Qué hay que corregir") : "Comentario (opcional)"} required={m.comment === "required"} htmlFor="ra-comment">
               <Textarea id="ra-comment" value={comment} onChange={(e) => setComment(e.target.value)} maxLength={4000} autoFocus={typeof window !== "undefined" && window.matchMedia("(pointer: fine)").matches} />
             </Field>
           )}

@@ -720,6 +720,7 @@ export const replenishmentStatus = pgEnum("replenishment_status", [
   "design_review", // Revisión de diseño (Diseño)
   "design_changes", // Correcciones de diseño (Diseño)
   "quality_review", // Validación del arte final (Calidad)
+  "reformulation", // Reformulación pedida por Calidad (Laboratorio / I+D)
   "art_approved", // Arte final aprobado: Compras envía a imprenta
   "sent_to_print", // Enviado a imprenta / proveedor
   "closed", // Cerrada (material recibido)
