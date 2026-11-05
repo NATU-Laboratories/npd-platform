@@ -70,6 +70,7 @@ export const REP_FILE_TAGS = {
   prueba: "Prueba / maqueta",
   referencia: "Referencia (versión anterior)",
   cotizacion: "Cotización del proveedor",
+  correccion: "Captura de corrección",
   otro: "Otro",
 } as const;
 
@@ -89,5 +90,6 @@ export const REP_ACTION_LABEL: Record<string, string> = {
   "replenishment.edited": "editó la solicitud",
   "replenishment.comment": "comentó",
   "replenishment.file_uploaded": "subió un archivo",
+  "replenishment.art_link": "añadió el enlace al arte final",
   "replenishment.file_deleted": "eliminó un archivo",
 };

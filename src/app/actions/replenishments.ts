@@ -83,7 +83,7 @@ export async function lastItemsForProjectAction(npdProjectId: string) {
 export async function replenishmentTransitionAction(
   id: string,
   action: RepAction,
-  opts: { comment?: string | null; sendSupplierEmails?: boolean; supplierMessage?: string },
+  opts: { comment?: string | null; sendSupplierEmails?: boolean; supplierMessage?: string; corrections?: { text: string; fileIds: number[] }[] },
 ): Promise<ActionResult> {
   return run(
     "rep:transition",
@@ -189,13 +189,35 @@ export async function registerRepFileAction(id: string, itemId: string, tag: str
   });
 }
 
+/** El arte final se indica con un enlace de OneDrive o SharePoint (no se sube el archivo). */
+export async function addRepArtLinkAction(id: string, url: string, label: string): Promise<ActionResult> {
+  return run("rep:artLink", async () => {
+    const u = await requireActionUser();
+    if (!canAccessReplenishments(u)) throw new AuthzError();
+    const link = z
+      .string()
+      .trim()
+      .max(2000)
+      .regex(/^https:\/\/[^\s]+\.(sharepoint\.com|onedrive\.live\.com|1drv\.ms)(\/|$)\S*$/i, "Pega un enlace de OneDrive o SharePoint (empieza por https://)")
+      .parse(url);
+    const [r] = await db.select().from(replenishments).where(eq(replenishments.id, z.string().uuid().parse(id)));
+    if (!r) throw new Error("Reposición no encontrada");
+    if (["closed", "cancelled"].includes(r.status)) throw new Error("La reposición está cerrada");
+    const name = z.string().trim().max(200).parse(label) || `Arte final · ronda ${r.round}`;
+    await db.insert(replenishmentFiles).values({ replenishmentId: r.id, storageItemId: "", url: link, name, tag: "arte_final", round: r.round, uploadedBy: u.id });
+    await logActivity({ actorId: u.id, action: "replenishment.art_link", entity: "replenishment", entityId: r.id, diff: { name, round: r.round } });
+    touch(r.id);
+    return undefined;
+  });
+}
+
 export async function deleteRepFileAction(fileId: number): Promise<ActionResult> {
   return run("rep:deleteFile", async () => {
     const u = await requireActionUser();
     const [f] = await db.select({ f: replenishmentFiles, status: replenishments.status }).from(replenishmentFiles).innerJoin(replenishments, eq(replenishments.id, replenishmentFiles.replenishmentId)).where(eq(replenishmentFiles.id, fileId));
     if (!f) throw new Error("Archivo no encontrado");
     if (!(f.f.uploadedBy === u.id && !["closed", "cancelled"].includes(f.status)) && !isAdmin(u)) throw new AuthzError("Solo quien lo subió puede borrarlo");
-    await getStorage().deleteItem(f.f.storageItemId).catch(() => undefined);
+    if (f.f.storageItemId) await getStorage().deleteItem(f.f.storageItemId).catch(() => undefined);
     await db.delete(replenishmentFiles).where(and(eq(replenishmentFiles.id, fileId)));
     await logActivity({ actorId: u.id, action: "replenishment.file_deleted", entity: "replenishment", entityId: f.f.replenishmentId, diff: { name: f.f.name } });
     touch(f.f.replenishmentId);

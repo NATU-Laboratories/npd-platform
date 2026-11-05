@@ -130,7 +130,7 @@ export default async function ReplenishmentPage({ params }: PageProps<"/reposici
               canUpload={open}
               canDeleteAll={isAdmin(u)}
               defaultTag={isDesign && ["design_review", "design_changes"].includes(r.status) ? "arte_final" : isCompras ? "cotizacion" : "otro"}
-              files={d.files.map(({ f, by }) => ({ id: f.id, name: f.name, size: f.size, tag: f.tag, round: f.round, by, createdAt: f.createdAt.toISOString(), mine: f.uploadedBy === u.id }))}
+              files={d.files.map(({ f, by }) => ({ id: f.id, name: f.name, size: f.size, tag: f.tag, round: f.round, by, createdAt: f.createdAt.toISOString(), mine: f.uploadedBy === u.id, url: f.url }))}
             />
           </Card>
 
@@ -148,7 +148,29 @@ export default async function ReplenishmentPage({ params }: PageProps<"/reposici
                       <span className="ml-1 text-xs text-slate-400">{formatDate(a.createdAt, true)}</span>
                     </p>
                     {isComment && <p className="mt-0.5 whitespace-pre-line rounded-md bg-slate-50 px-3 py-2 text-slate-800">{String(diff.body ?? "")}</p>}
-                    {!isComment && typeof diff.comment === "string" && diff.comment && <p className="mt-0.5 whitespace-pre-line rounded-md bg-amber-50 px-3 py-2 text-slate-800">{diff.comment}</p>}
+                    {Array.isArray(diff.corrections) ? (
+                      <ol className="mt-1 flex flex-col gap-2 rounded-md bg-amber-50 px-3 py-2">
+                        {(diff.corrections as { text: string; fileIds: number[] }[]).map((c, n) => (
+                          <li key={n} className="text-slate-800">
+                            <p className="whitespace-pre-line">
+                              <strong className="font-semibold">{n + 1}.</strong> {c.text}
+                            </p>
+                            {c.fileIds.length > 0 && (
+                              <div className="mt-1.5 flex flex-wrap gap-2">
+                                {c.fileIds.map((fid) => (
+                                  <a key={fid} href={`/api/rep-files/${fid}`} target="_blank" rel="noreferrer" className="block size-20 overflow-hidden rounded-md bg-white ring-1 ring-amber-200 hover:ring-amber-400" title="Abrir la captura">
+                                    {/* eslint-disable-next-line @next/next/no-img-element -- archivo servido por la ruta protegida */}
+                                    <img src={`/api/rep-files/${fid}`} alt={`Captura de la corrección ${n + 1}`} className="size-full object-cover" loading="lazy" />
+                                  </a>
+                                ))}
+                              </div>
+                            )}
+                          </li>
+                        ))}
+                      </ol>
+                    ) : (
+                      !isComment && typeof diff.comment === "string" && diff.comment && <p className="mt-0.5 whitespace-pre-line rounded-md bg-amber-50 px-3 py-2 text-slate-800">{diff.comment}</p>
+                    )}
                     {a.action === "replenishment.quote_requested" && Array.isArray(diff.suppliers) && <p className="text-xs text-slate-500">A: {(diff.suppliers as string[]).join(", ")}</p>}
                   </li>
                 );
