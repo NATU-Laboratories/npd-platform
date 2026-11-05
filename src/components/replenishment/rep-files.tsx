@@ -1,21 +1,35 @@
 "use client";
-import { FileText, Loader2, Trash2, UploadCloud } from "lucide-react";
+import { ExternalLink, FileText, Link2, Loader2, Trash2, UploadCloud } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
-import { addRepCommentAction, createRepUploadAction, deleteRepFileAction, registerRepFileAction } from "@/app/actions/replenishments";
+import { addRepArtLinkAction, addRepCommentAction, createRepUploadAction, deleteRepFileAction, registerRepFileAction } from "@/app/actions/replenishments";
 import { Button } from "@/components/ui/button";
-import { Select, Textarea } from "@/components/ui/form";
+import { Input, Select, Textarea } from "@/components/ui/form";
 import { uploadChunks } from "@/components/uploader";
 import { REP_FILE_TAGS } from "@/lib/replenishment/config";
 import { cn, formatBytes, formatDate } from "@/lib/utils";
 
-export type RepFileRow = { id: number; name: string; size: number; tag: string; round: number; by: string; createdAt: string; mine: boolean };
+export type RepFileRow = { id: number; name: string; size: number; tag: string; round: number; by: string; createdAt: string; mine: boolean; url?: string | null };
 
 /** Archivos de la reposición (arte final por rondas, pruebas, cotizaciones…). */
 export function RepFiles({ id, files, round, canUpload, defaultTag, canDeleteAll }: { id: string; files: RepFileRow[]; round: number; canUpload: boolean; defaultTag: string; canDeleteAll: boolean }) {
   const router = useRouter();
-  const [tag, setTag] = React.useState(defaultTag);
+  // El arte final va como enlace (OneDrive / SharePoint); los archivos, para el resto
+  const [tag, setTag] = React.useState(defaultTag === "arte_final" ? "prueba" : defaultTag);
+  const [link, setLink] = React.useState("");
+  const [linkName, setLinkName] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  async function addLink() {
+    setSaving(true);
+    const res = await addRepArtLinkAction(id, link, linkName);
+    setSaving(false);
+    if (!res.ok) return toast.error(res.error);
+    setLink("");
+    setLinkName("");
+    toast.success("Enlace al arte final añadido");
+    router.refresh();
+  }
   const [progress, setProgress] = React.useState<number | null>(null);
   const input = React.useRef<HTMLInputElement>(null);
 
@@ -52,9 +66,34 @@ export function RepFiles({ id, files, round, canUpload, defaultTag, canDeleteAll
   return (
     <div className="flex flex-col gap-3">
       {canUpload && (
+        <div className="flex flex-col gap-2 rounded-lg bg-[#f4f5ef] p-3 ring-1 ring-natu-sage">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#56613f]">Enlace al arte final · ronda {round}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              type="url"
+              inputMode="url"
+              spellCheck={false}
+              autoComplete="off"
+              value={link}
+              onChange={(e) => setLink(e.target.value)}
+              placeholder="https://natuaromatic.sharepoint.com/…"
+              aria-label="Enlace de OneDrive o SharePoint al arte final"
+              className="h-8 min-w-56 flex-1 text-xs"
+            />
+            <Input value={linkName} onChange={(e) => setLinkName(e.target.value)} placeholder="Descripción (opcional)…" aria-label="Descripción del enlace" className="h-8 w-48 text-xs" maxLength={200} />
+            <Button size="sm" onClick={addLink} disabled={saving || !link.trim()}>
+              {saving ? <Loader2 className="animate-spin" /> : <Link2 aria-hidden />} Añadir enlace
+            </Button>
+          </div>
+          <p className="text-[11px] text-[#56613f]">Pega el enlace de la carpeta o del archivo en OneDrive o SharePoint, con permiso para el equipo.</p>
+        </div>
+      )}
+      {canUpload && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-slate-300 p-3">
           <Select value={tag} onChange={(e) => setTag(e.target.value)} className="h-8 w-56 text-xs" aria-label="Tipo de archivo">
-            {Object.entries(REP_FILE_TAGS).map(([k, l]) => (
+            {Object.entries(REP_FILE_TAGS)
+              .filter(([k]) => k !== "arte_final")
+              .map(([k, l]) => (
               <option key={k} value={k}>
                 {l}
               </option>
@@ -85,12 +124,12 @@ function FileList({ title, files, round, onDelete, canDeleteAll }: { title: stri
       <ul className="flex flex-col gap-1">
         {files.map((f) => (
           <li key={f.id} className={cn("flex items-center gap-2 rounded-md px-2 py-1.5 text-sm", f.tag === "arte_final" && f.round === round ? "bg-[#eef0e6]" : "bg-slate-50")}>
-            <FileText className="size-4 shrink-0 text-slate-400" />
-            <a href={`/api/rep-files/${f.id}`} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate font-medium text-slate-800 hover:underline">
+            {f.url ? <ExternalLink className="size-4 shrink-0 text-brand-500" aria-hidden /> : <FileText className="size-4 shrink-0 text-slate-400" aria-hidden />}
+            <a href={f.url ?? `/api/rep-files/${f.id}`} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate font-medium text-slate-800 hover:underline">
               {f.name}
             </a>
             <span className="hidden shrink-0 text-xs text-slate-500 sm:inline">
-              {REP_FILE_TAGS[f.tag as keyof typeof REP_FILE_TAGS] ?? f.tag} · ronda {f.round} · {f.by} · {formatDate(f.createdAt)} · {formatBytes(f.size)}
+              {REP_FILE_TAGS[f.tag as keyof typeof REP_FILE_TAGS] ?? f.tag} · ronda {f.round} · {f.by} · {formatDate(f.createdAt)}{f.url ? " · enlace" : ` · ${formatBytes(f.size)}`}
             </span>
             {(f.mine || canDeleteAll) && (
               <button type="button" onClick={() => onDelete(f)} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600" aria-label={`Eliminar ${f.name}`}>

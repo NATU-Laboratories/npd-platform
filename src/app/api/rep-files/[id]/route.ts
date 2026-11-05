@@ -13,8 +13,9 @@ export async function GET(req: Request, ctx: RouteContext<"/api/rep-files/[id]">
   if (!u || !isActive(u)) return new NextResponse("Unauthorized", { status: 401 });
   if (!canAccessReplenishments(u)) return new NextResponse("Forbidden", { status: 403 });
   const { id } = await ctx.params;
-  const [row] = await db.select({ itemId: replenishmentFiles.storageItemId }).from(replenishmentFiles).where(eq(replenishmentFiles.id, Number(id)));
+  const [row] = await db.select({ itemId: replenishmentFiles.storageItemId, url: replenishmentFiles.url }).from(replenishmentFiles).where(eq(replenishmentFiles.id, Number(id)));
   if (!row) return new NextResponse("Not found", { status: 404 });
+  if (row.url) return NextResponse.redirect(row.url, 302);
   try {
     const url = await getStorage().downloadUrl(row.itemId);
     return NextResponse.redirect(new URL(url, req.url), 302);

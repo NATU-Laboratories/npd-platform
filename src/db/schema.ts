@@ -790,6 +790,8 @@ export const replenishmentFiles = pgTable(
       .notNull()
       .references(() => replenishments.id, { onDelete: "cascade" }),
     storageItemId: text("storage_item_id").notNull(),
+    /** Enlace (OneDrive / SharePoint) en lugar de archivo subido: el arte final va así */
+    url: text("url"),
     name: text("name").notNull(),
     mime: text("mime"),
     size: integer("size").notNull().default(0),

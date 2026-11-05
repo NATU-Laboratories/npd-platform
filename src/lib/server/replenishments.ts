@@ -531,15 +531,38 @@ export function availableActions(u: CurrentUser, r: Pick<Rep, "status" | "reques
 /** Elementos impresos de la reposición (los que necesitan arte final). */
 const needsArt = (items: { element: string }[]) => items.some((i) => PRINTED_ELEMENTS.includes(i.element));
 
-export async function transition(u: CurrentUser, id: string, action: RepAction, opts: { comment?: string | null; sendSupplierEmails?: boolean; supplierMessage?: string } = {}) {
+export type Correction = { text: string; fileIds: number[] };
+
+export async function transition(
+  u: CurrentUser,
+  id: string,
+  action: RepAction,
+  opts: { comment?: string | null; sendSupplierEmails?: boolean; supplierMessage?: string; corrections?: Correction[] } = {},
+) {
   const step = FLOW[action];
   if (!step) throw new Error("Acción no válida");
   const c = await emailCtx(id);
   const r = c.rep;
   if (!step.from.includes(r.status)) throw new Error(`La reposición está en «${REP_STATUS_LABEL[r.status]}»: no se puede hacer esto ahora`);
   if (!canActAs(u, r, step.role)) throw new AuthzError("No tienes permiso para esta acción");
-  const comment = opts.comment?.trim() || null;
-  if (step.needsComment && !comment) throw new Error(action === "cancel" ? "Indica el motivo de la cancelación" : "Explica qué hay que corregir");
+  // Correcciones de Calidad: una a una, con texto y capturas (solo capturas de esta reposición)
+  let corrections: Correction[] = [];
+  if (action === "quality_corrections" && opts.corrections?.length) {
+    const parsed = z
+      .array(z.object({ text: z.string().trim().max(2000), fileIds: z.array(z.number().int().positive()).max(10) }))
+      .max(30)
+      .parse(opts.corrections)
+      .filter((x) => x.text || x.fileIds.length);
+    const ids = parsed.flatMap((x) => x.fileIds);
+    const valid = ids.length
+      ? new Set((await db.select({ id: replenishmentFiles.id }).from(replenishmentFiles).where(and(eq(replenishmentFiles.replenishmentId, id), inArray(replenishmentFiles.id, ids)))).map((f) => f.id))
+      : new Set<number>();
+    corrections = parsed.map((x) => ({ text: x.text, fileIds: x.fileIds.filter((f) => valid.has(f)) }));
+    if (corrections.some((x) => !x.text)) throw new Error("Cada corrección necesita una indicación de qué hay que cambiar");
+  }
+  const comment =
+    opts.comment?.trim() || (corrections.length ? corrections.map((x, n) => `${n + 1}. ${x.text}${x.fileIds.length ? ` (${x.fileIds.length} captura${x.fileIds.length > 1 ? "s" : ""})` : ""}`).join("\n") : null);
+  if (step.needsComment && !comment) throw new Error(action === "cancel" ? "Indica el motivo de la cancelación" : "Añade al menos una corrección");
 
   // Para pasar a Calidad tiene que haber arte final (de esta ronda si ha habido correcciones)
   if ((action === "design_no_changes" || action === "design_ready") && needsArt(c.itemRows)) {
@@ -548,7 +571,7 @@ export async function transition(u: CurrentUser, id: string, action: RepAction, 
       .from(replenishmentFiles)
       .where(and(eq(replenishmentFiles.replenishmentId, id), eq(replenishmentFiles.tag, "arte_final")));
     const ok = action === "design_no_changes" ? arts.length > 0 : arts.some((a) => a.round === r.round);
-    if (!ok) throw new Error(action === "design_no_changes" ? "Sube el arte final (etiqueta «Arte final») antes de enviarlo a Calidad" : `Sube el arte final corregido (ronda ${r.round}) antes de enviarlo a Calidad`);
+    if (!ok) throw new Error(action === "design_no_changes" ? "Añade el enlace al arte final antes de enviarlo a Calidad" : `Añade el enlace al arte final corregido (ronda ${r.round}) antes de enviarlo a Calidad`);
   }
 
   const now = new Date();
@@ -559,7 +582,7 @@ export async function transition(u: CurrentUser, id: string, action: RepAction, 
       .set({ status: step.to, round, updatedAt: now, ...(step.to === "closed" || step.to === "cancelled" ? { closedAt: now } : {}) })
       .where(and(eq(replenishments.id, id), eq(replenishments.status, r.status)));
     await logActivity(
-      { actorId: u.id, action: action === "close" ? "replenishment.closed" : action === "cancel" ? "replenishment.cancelled" : `replenishment.${action}`, entity: "replenishment", entityId: id, diff: { from: r.status, to: step.to, comment, round } },
+      { actorId: u.id, action: action === "close" ? "replenishment.closed" : action === "cancel" ? "replenishment.cancelled" : `replenishment.${action}`, entity: "replenishment", entityId: id, diff: { from: r.status, to: step.to, comment, round, ...(corrections.length ? { corrections } : {}) } },
       tx,
     );
   });
@@ -582,7 +605,7 @@ export async function transition(u: CurrentUser, id: string, action: RepAction, 
     if (step.to === "quality_review")
       await internal("replenishment.quality_review", ["calidad"], [], "Arte final listo para validar", `${u.name} (Diseño) ha entregado el arte final. Revísalo y valídalo o pide correcciones.`, "Validar el arte final");
     if (action === "quality_corrections")
-      await internal("replenishment.corrections", ["diseno"], [], "Correcciones en el arte final", `Calidad pide correcciones (ronda ${round}). Sube el arte final corregido y vuelve a enviarlo.`, "Ver las correcciones");
+      await internal("replenishment.corrections", ["diseno"], [], "Correcciones en el arte final", `Calidad pide ${corrections.length > 1 ? `${corrections.length} correcciones` : "correcciones"} (ronda ${round}). Revísalas en la plataforma (con sus capturas), añade el enlace al arte final corregido y vuelve a enviarlo.`, "Ver las correcciones");
     if (action === "quality_approved")
       await internal("replenishment.art_approved", ["compras"], [c.requesterEmail], "Arte final aprobado", "Calidad ha validado el arte final. Ya puedes enviarlo a imprenta.", "Enviar a imprenta");
     if (action === "cancel") await internal("replenishment.cancelled", ["diseno", "calidad", "compras"], [c.requesterEmail], "Reposición cancelada", `${u.name} ha cancelado la reposición.`);

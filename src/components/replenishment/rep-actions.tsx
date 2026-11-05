@@ -9,6 +9,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Field, Textarea } from "@/components/ui/form";
 import type { RepAction, RepEmail } from "@/lib/server/replenishments";
 import { cn } from "@/lib/utils";
+import { CorrectionsEditor, newCorrection, type CorrectionDraft } from "./corrections-editor";
 import { EmailPreview } from "./email-preview";
 
 const META: Record<RepAction, { label: string; variant: "default" | "secondary" | "warning" | "danger"; hint: string; comment?: "required" | "optional" }> = {
@@ -16,7 +17,7 @@ const META: Record<RepAction, { label: string; variant: "default" | "secondary" 
   design_changes: { label: "Hay cambios de diseño", variant: "warning", hint: "Indica qué cambia. Cuando subas el arte final corregido, lo enviarás a Calidad.", comment: "optional" },
   design_ready: { label: "Enviar arte final a Calidad", variant: "default", hint: "Confirmas que el arte final corregido de esta ronda está subido. Calidad lo validará.", comment: "optional" },
   quality_approved: { label: "Validar arte final", variant: "default", hint: "El arte final es correcto y se puede enviar a imprenta. Se avisará a Compras.", comment: "optional" },
-  quality_corrections: { label: "Pedir correcciones", variant: "warning", hint: "Vuelve a Diseño con una nueva ronda. Explica qué hay que corregir.", comment: "required" },
+  quality_corrections: { label: "Pedir correcciones", variant: "warning", hint: "Vuelve a Diseño con una nueva ronda. Añade cada corrección con su indicación y, si ayuda, capturas." },
   sent_to_print: { label: "Marcar como enviado a imprenta", variant: "default", hint: "El arte final aprobado se ha enviado al proveedor / imprenta.", comment: "optional" },
   close: { label: "Cerrar (material recibido)", variant: "secondary", hint: "La reposición ha terminado.", comment: "optional" },
   cancel: { label: "Cancelar reposición", variant: "danger", hint: "Se avisará a los departamentos implicados.", comment: "required" },
@@ -49,6 +50,8 @@ function ActionDialog({ id, action, onClose }: { id: string; action: RepAction; 
   const router = useRouter();
   const m = META[action];
   const [comment, setComment] = React.useState("");
+  const [corrections, setCorrections] = React.useState<CorrectionDraft[]>(() => [newCorrection()]);
+  const isCorrections = action === "quality_corrections";
   const [sendSupplier, setSendSupplier] = React.useState<boolean | null>(action === "sent_to_print" ? null : false);
   const [message, setMessage] = React.useState(PRINT_MESSAGE);
   const [preview, setPreview] = React.useState<{ key: string; emails: RepEmail[] } | null>(null);
@@ -65,9 +68,22 @@ function ActionDialog({ id, action, onClose }: { id: string; action: RepAction; 
   }
   async function confirm() {
     if (m.comment === "required" && !comment.trim()) return toast.error(action === "cancel" ? "Indica el motivo" : "Explica qué hay que corregir");
+    if (isCorrections) {
+      if (corrections.some((c) => c.images.some((i) => i.uploading))) return toast.error("Espera a que terminen de subirse las capturas");
+      const filled = corrections.filter((c) => c.text.trim() || c.images.length);
+      if (!filled.length) return toast.error("Añade al menos una corrección");
+      if (filled.some((c) => !c.text.trim())) return toast.error("Cada corrección necesita una indicación de qué hay que cambiar");
+    }
     if (isPrint && sendSupplier === null) return toast.error("Indica si quieres avisar al proveedor por email");
     setBusy(true);
-    const res = await replenishmentTransitionAction(id, action, { comment, sendSupplierEmails: !!sendSupplier, supplierMessage: message });
+    const res = await replenishmentTransitionAction(id, action, {
+      comment,
+      sendSupplierEmails: !!sendSupplier,
+      supplierMessage: message,
+      ...(isCorrections
+        ? { corrections: corrections.filter((c) => c.text.trim() || c.images.length).map((c) => ({ text: c.text.trim(), fileIds: c.images.flatMap((i) => (i.fileId ? [i.fileId] : [])) })) }
+        : {}),
+    });
     setBusy(false);
     if (!res.ok) return toast.error(res.error);
     toast.success("Hecho");
@@ -77,8 +93,9 @@ function ActionDialog({ id, action, onClose }: { id: string; action: RepAction; 
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent title={m.label} description={m.hint} wide={isPrint}>
+      <DialogContent title={m.label} description={m.hint} wide={isPrint || isCorrections}>
         <div className="flex flex-col gap-4">
+          {isCorrections && <CorrectionsEditor repId={id} value={corrections} onChange={setCorrections} />}
           {m.comment && (
             <Field label={m.comment === "required" ? (action === "cancel" ? "Motivo" : "Qué hay que corregir") : "Comentario (opcional)"} required={m.comment === "required"} htmlFor="ra-comment">
               <Textarea id="ra-comment" value={comment} onChange={(e) => setComment(e.target.value)} maxLength={4000} autoFocus={typeof window !== "undefined" && window.matchMedia("(pointer: fine)").matches} />

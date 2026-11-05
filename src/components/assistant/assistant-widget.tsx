@@ -1,5 +1,5 @@
 "use client";
-import { Check, Loader2, MessageCircle, RotateCcw, Send, Sparkles, X } from "lucide-react";
+import { Check, Loader2, MessageCircle, Mic, RotateCcw, Send, Sparkles, Square, Volume2, VolumeX, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import * as React from "react";
@@ -81,6 +81,7 @@ export function AssistantWidget({ firstName }: { firstName: string }) {
   const pathname = usePathname();
   const endRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLTextAreaElement>(null);
+  const voice = useVoice();
 
   React.useEffect(() => {
     try {
@@ -146,7 +147,7 @@ export function AssistantWidget({ firstName }: { firstName: string }) {
     }
   }
 
-  async function send(text: string) {
+  async function send(text: string, spoken = false) {
     const q = text.trim();
     if (!q || busy) return;
     const next: Turn[] = [...turns, { role: "user", content: q }];
@@ -165,7 +166,12 @@ export function AssistantWidget({ firstName }: { firstName: string }) {
         setError(data.error ?? "No he podido responder. Inténtalo de nuevo.");
         setTurns(turns); // se puede reenviar la pregunta
         setInput(q);
-      } else setTurns([...next, { role: "assistant", content: data.text, actions: data.actions?.length ? data.actions : undefined }]);
+      } else {
+        const idx = next.length;
+        setTurns([...next, { role: "assistant", content: data.text, actions: data.actions?.length ? data.actions : undefined }]);
+        // Si le ha hablado o tiene el modo voz activado, Alexia contesta también en voz alta
+        if (spoken || voice.mode) void voice.play(idx, data.text);
+      }
     } catch {
       setError("Sin conexión. Inténtalo de nuevo.");
       setTurns(turns);
@@ -206,6 +212,18 @@ export function AssistantWidget({ firstName }: { firstName: string }) {
               <p className="text-sm font-semibold tracking-wide">ALEXIA</p>
               <p className="text-[11px] text-white/70">Asistente virtual</p>
             </div>
+            {voice.supported && (
+              <button
+                type="button"
+                onClick={voice.toggleMode}
+                aria-pressed={voice.mode}
+                className={cn("rounded p-1.5 hover:bg-white/10", voice.mode ? "text-natu-sage" : "text-white/80")}
+                title={voice.mode ? "Modo voz activado: Alexia lee sus respuestas" : "Activar modo voz: Alexia lee sus respuestas en voz alta"}
+                aria-label={voice.mode ? "Desactivar el modo voz" : "Activar el modo voz"}
+              >
+                {voice.mode ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}
+              </button>
+            )}
             {turns.length > 0 && (
               <button type="button" onClick={() => setTurns([])} className="rounded p-1.5 text-white/80 hover:bg-white/10" title="Nueva conversación" aria-label="Nueva conversación">
                 <RotateCcw className="size-4" />
@@ -241,6 +259,17 @@ export function AssistantWidget({ firstName }: { firstName: string }) {
                   )}
                 >
                   {t.role === "assistant" ? <Rich text={t.content} /> : <p className="whitespace-pre-wrap">{t.content}</p>}
+                  {t.role === "assistant" && voice.supported && (
+                    <button
+                      type="button"
+                      onClick={() => (voice.playing === i ? voice.stop() : voice.play(i, t.content))}
+                      className="mt-1 inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-700"
+                      aria-label={voice.playing === i ? "Parar la lectura" : "Escuchar esta respuesta"}
+                    >
+                      {voice.loading === i ? <Loader2 className="size-3 animate-spin" aria-hidden /> : voice.playing === i ? <Square className="size-3" aria-hidden /> : <Volume2 className="size-3" aria-hidden />}
+                      {voice.playing === i ? "Parar" : "Escuchar"}
+                    </button>
+                  )}
                   {t.actions?.map((a) => (
                     <div key={a.id} className="mt-2 rounded-xl bg-[#f4f5ef] p-3 ring-1 ring-natu-sage">
                       <p className="text-xs font-semibold uppercase tracking-wide text-[#56613f]">{a.status === "done" ? "Hecho" : a.status === "failed" ? "No se ha podido hacer" : a.status === "cancelled" ? "Cancelado" : "Pendiente de tu confirmación"}</p>
@@ -292,6 +321,20 @@ export function AssistantWidget({ firstName }: { firstName: string }) {
             </div>
           </div>
 
+          {voice.recording && (
+            <div className="flex items-center gap-2 border-t border-rose-100 bg-rose-50 px-3 py-2 text-xs text-rose-800" role="status">
+              <span className="size-2.5 animate-pulse rounded-full bg-rose-500" aria-hidden />
+              Te escucho… {formatSecs(voice.seconds)} · pulsa ■ para enviar
+              <button type="button" onClick={voice.cancel} className="ml-auto rounded px-2 py-0.5 text-rose-700 hover:bg-rose-100">
+                Cancelar
+              </button>
+            </div>
+          )}
+          {voice.transcribing && (
+            <div className="flex items-center gap-2 border-t border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600" role="status">
+              <Loader2 className="size-3.5 animate-spin" aria-hidden /> Pasando tu audio a texto…
+            </div>
+          )}
           <form
             className="flex items-end gap-2 border-t border-slate-200 bg-white p-2"
             onSubmit={(e) => {
@@ -315,6 +358,26 @@ export function AssistantWidget({ firstName }: { firstName: string }) {
               maxLength={4000}
               className="max-h-32 min-h-9 flex-1 resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
             />
+            {voice.canRecord && !input.trim() ? (
+              <button
+                type="button"
+                disabled={busy || voice.transcribing}
+                onClick={async () => {
+                  if (!voice.recording) return voice.start((m) => setError(m));
+                  setError(null);
+                  const text = await voice.finish((m) => setError(m));
+                  if (text) void send(text, true);
+                }}
+                className={cn(
+                  "flex size-9 shrink-0 items-center justify-center rounded-lg text-white disabled:opacity-40",
+                  voice.recording ? "bg-rose-600 hover:bg-rose-700" : "bg-natu-dark hover:bg-brand-700",
+                )}
+                aria-label={voice.recording ? "Terminar y enviar el audio" : "Hablar con Alexia"}
+                title={voice.recording ? "Terminar y enviar" : "Pulsa para hablar"}
+              >
+                {voice.recording ? <Square className="size-4" /> : <Mic className="size-4" />}
+              </button>
+            ) : (
             <button
               type="submit"
               disabled={busy || !input.trim()}
@@ -323,10 +386,166 @@ export function AssistantWidget({ firstName }: { firstName: string }) {
             >
               <Send className="size-4" />
             </button>
+            )}
           </form>
           <p className="bg-white px-3 pb-2 text-[10px] text-slate-400">Asistente con IA: puede equivocarse. Los emails a proveedores siempre se confirman antes.</p>
         </section>
       )}
     </>
   );
+}
+
+const formatSecs = (n: number) => `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}`;
+const MAX_SECONDS = 120;
+const VOICE_KEY = "npd-assistant-voice";
+
+/**
+ * Voz de Alexia en el navegador: grabar una nota de voz (se transcribe en el servidor) y
+ * reproducir sus respuestas (audio generado en el servidor; si falla, la voz del navegador).
+ */
+function useVoice() {
+  const [canRecord, setCanRecord] = React.useState(false);
+  const [supported, setSupported] = React.useState(false);
+  const [mode, setMode] = React.useState(false);
+  const [recording, setRecording] = React.useState(false);
+  const [transcribing, setTranscribing] = React.useState(false);
+  const [seconds, setSeconds] = React.useState(0);
+  const [playing, setPlaying] = React.useState<number | null>(null);
+  const [loading, setLoading] = React.useState<number | null>(null);
+  const rec = React.useRef<{ mr: MediaRecorder; chunks: Blob[]; stream: MediaStream; timer: ReturnType<typeof setInterval>; cancelled: boolean } | null>(null);
+  const audio = React.useRef<HTMLAudioElement | null>(null);
+
+  React.useEffect(() => {
+    // Solo en el navegador (evita diferencias con el HTML del servidor)
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- capacidades del navegador
+    setCanRecord(typeof window !== "undefined" && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== "undefined");
+    setSupported(typeof window !== "undefined" && typeof Audio !== "undefined");
+    try {
+      setMode(localStorage.getItem(VOICE_KEY) === "1");
+    } catch {}
+  }, []);
+
+  const stop = React.useCallback(() => {
+    audio.current?.pause();
+    audio.current = null;
+    if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
+    setPlaying(null);
+  }, []);
+
+  const play = React.useCallback(
+    async (idx: number, text: string) => {
+      stop();
+      setLoading(idx);
+      try {
+        const res = await fetch("/api/assistant/speech", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+        if (!res.ok) throw new Error("tts");
+        const url = URL.createObjectURL(await res.blob());
+        const a = new Audio(url);
+        audio.current = a;
+        a.onended = () => {
+          URL.revokeObjectURL(url);
+          setPlaying((p) => (p === idx ? null : p));
+        };
+        setPlaying(idx);
+        await a.play();
+      } catch {
+        // Plan B: la voz del propio navegador
+        if (typeof speechSynthesis !== "undefined") {
+          const u = new SpeechSynthesisUtterance(text.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/[*_`#>]/g, ""));
+          u.lang = "es-ES";
+          u.onend = () => setPlaying((p) => (p === idx ? null : p));
+          setPlaying(idx);
+          speechSynthesis.speak(u);
+        }
+      } finally {
+        setLoading(null);
+      }
+    },
+    [stop],
+  );
+
+  const cleanup = () => {
+    const r = rec.current;
+    if (!r) return;
+    clearInterval(r.timer);
+    r.stream.getTracks().forEach((t) => t.stop());
+    rec.current = null;
+    setRecording(false);
+    setSeconds(0);
+  };
+
+  async function start(onError: (m: string) => void) {
+    stop();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const type = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"].find((t) => MediaRecorder.isTypeSupported(t));
+      const mr = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+      const chunks: Blob[] = [];
+      mr.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+      const timer = setInterval(() => {
+        setSeconds((s) => {
+          if (s + 1 >= MAX_SECONDS && mr.state === "recording") mr.stop();
+          return s + 1;
+        });
+      }, 1000);
+      rec.current = { mr, chunks, stream, timer, cancelled: false };
+      mr.start();
+      setRecording(true);
+    } catch {
+      onError("No puedo acceder al micrófono. Revisa el permiso del navegador.");
+    }
+  }
+
+  /** Termina la grabación y devuelve el texto transcrito. */
+  async function finish(onError: (m: string) => void): Promise<string | null> {
+    const r = rec.current;
+    if (!r) return null;
+    // Si ya se paró (límite de tiempo), no hay que esperar al evento
+    if (r.mr.state === "recording") {
+      const done = new Promise<void>((resolve) => (r.mr.onstop = () => resolve()));
+      r.mr.stop();
+      await done;
+    }
+    const blob = new Blob(r.chunks, { type: r.mr.mimeType || "audio/webm" });
+    cleanup();
+    if (r.cancelled || blob.size < 1000) return null;
+    setTranscribing(true);
+    try {
+      const fd = new FormData();
+      const ext = blob.type.includes("mp4") ? "m4a" : blob.type.includes("ogg") ? "ogg" : "webm";
+      fd.append("audio", blob, `nota.${ext}`);
+      const res = await fetch("/api/assistant/transcribe", { method: "POST", body: fd });
+      const data = (await res.json().catch(() => ({}))) as { text?: string; error?: string };
+      if (!res.ok || !data.text) {
+        onError(data.error ?? "No he podido entender el audio.");
+        return null;
+      }
+      return data.text;
+    } catch {
+      onError("Sin conexión. Inténtalo de nuevo.");
+      return null;
+    } finally {
+      setTranscribing(false);
+    }
+  }
+
+  function cancel() {
+    if (rec.current) {
+      rec.current.cancelled = true;
+      if (rec.current.mr.state === "recording") rec.current.mr.stop();
+    }
+    cleanup();
+  }
+
+  function toggleMode() {
+    setMode((m) => {
+      try {
+        localStorage.setItem(VOICE_KEY, m ? "0" : "1");
+      } catch {}
+      if (m) stop();
+      return !m;
+    });
+  }
+
+  return { canRecord, supported, mode, toggleMode, recording, transcribing, seconds, start, finish, cancel, play, stop, playing, loading };
 }

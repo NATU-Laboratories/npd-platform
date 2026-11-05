@@ -1,0 +1,1 @@
+ALTER TABLE "replenishment_files" ADD COLUMN "url" text;
