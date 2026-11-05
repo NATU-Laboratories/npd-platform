@@ -3,6 +3,7 @@ import { Clock, FlaskConical, Loader2, Lock, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
+import { addRepLabNoteAction } from "@/app/actions/replenishments";
 import { addDeptNoteAction } from "@/app/actions/sheet";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/form";
@@ -16,7 +17,7 @@ const STATUS: Record<string, [string, string]> = {
 };
 
 /** Bitácora de Laboratorio: notas del trabajo en curso y esperas (con su motivo). */
-export function LabNotes({ projectId, notes, canWrite, limit }: { projectId: string; notes: NoteView[]; canWrite: boolean; limit?: number }) {
+export function LabNotes({ projectId, repId, notes, canWrite, limit }: { projectId?: string; repId?: string; notes: NoteView[]; canWrite: boolean; limit?: number }) {
   const router = useRouter();
   const [body, setBody] = React.useState("");
   const [wait, setWait] = React.useState(false);
@@ -25,7 +26,7 @@ export function LabNotes({ projectId, notes, canWrite, limit }: { projectId: str
   const shown = limit && !all ? notes.slice(0, limit) : notes;
   async function add() {
     setBusy(true);
-    const res = await addDeptNoteAction(projectId, "idi", body, wait);
+    const res = repId ? await addRepLabNoteAction(repId, body, wait) : await addDeptNoteAction(projectId!, "idi", body, wait);
     setBusy(false);
     if (!res.ok) return toast.error(res.error);
     setBody("");

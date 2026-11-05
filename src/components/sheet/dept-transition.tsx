@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, Lock, Plus, Trash2 } from
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
+import { repLabTransitionAction } from "@/app/actions/replenishments";
 import { transitionDeptAction } from "@/app/actions/sheet";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
@@ -30,6 +31,7 @@ export function DeptTransition({
   targets,
   initialValues,
   lab,
+  repId,
 }: {
   projectId: string;
   departmentId: number;
@@ -41,6 +43,8 @@ export function DeptTransition({
   /** Valores actuales de los campos que pide el destino («apartado.campo»). */
   initialValues: Record<string, unknown>;
   lab?: LabMode;
+  /** Reformulación de una reposición: el estado de Laboratorio es el de la reposición. */
+  repId?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
@@ -71,7 +75,9 @@ export function DeptTransition({
     }
     setBusy(true);
     const promptValues = forward ? Object.fromEntries(target!.promptFields.map((ref) => [ref, values[ref]])) : undefined;
-    const res = await transitionDeptAction(projectId, departmentId, target!.id, comment, promptValues, referenceId, labData);
+    const res = repId
+      ? await repLabTransitionAction(repId, target!.id, comment, labData)
+      : await transitionDeptAction(projectId, departmentId, target!.id, comment, promptValues, referenceId, labData);
     setBusy(false);
     if (!res.ok) return toast.error(res.error);
     toast.success(res.data?.completed ? `${deptName}: completado` : `${deptName}: ${target!.name}`);

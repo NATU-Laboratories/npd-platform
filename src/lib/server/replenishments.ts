@@ -24,6 +24,7 @@ import { AuthzError, hasRole, type CurrentUser } from "./authz";
 import { renderEmail } from "./email-template";
 import { logError } from "./errors";
 import { queueNotification, uniqEmails } from "./notifications";
+import { addRepLabNote, startRepLab, transitionRepLab } from "./rep-lab";
 
 // ─── Permisos ─────────────────────────────────────────────────────────────
 
@@ -527,7 +528,8 @@ export const REP_FLOW = FLOW;
 
 /** Acciones disponibles para el usuario en el estado actual. */
 export function availableActions(u: CurrentUser, r: Pick<Rep, "status" | "requesterId">): RepAction[] {
-  return REP_ACTIONS.filter((a) => FLOW[a].from.includes(r.status) && canActAs(u, r, FLOW[a].role));
+  // «Reformulación terminada» la lanza Laboratorio al completar su estado final (no es un botón)
+  return REP_ACTIONS.filter((a) => a !== "lab_reformulated" && FLOW[a].from.includes(r.status) && canActAs(u, r, FLOW[a].role));
 }
 
 /** Elementos impresos de la reposición (los que necesitan arte final). */
@@ -539,10 +541,11 @@ export async function transition(
   u: CurrentUser,
   id: string,
   action: RepAction,
-  opts: { comment?: string | null; sendSupplierEmails?: boolean; supplierMessage?: string; corrections?: Correction[] } = {},
+  opts: { comment?: string | null; sendSupplierEmails?: boolean; supplierMessage?: string; corrections?: Correction[]; fromLab?: boolean } = {},
 ) {
   const step = FLOW[action];
   if (!step) throw new Error("Acción no válida");
+  if (action === "lab_reformulated" && !opts.fromLab) throw new Error("La reformulación termina cuando Laboratorio completa su último estado");
   const c = await emailCtx(id);
   const r = c.rep;
   if (!step.from.includes(r.status)) throw new Error(`La reposición está en «${REP_STATUS_LABEL[r.status]}»: no se puede hacer esto ahora`);
@@ -584,6 +587,7 @@ export async function transition(
       .update(replenishments)
       .set({ status: step.to, round, updatedAt: now, ...(step.to === "closed" || step.to === "cancelled" ? { closedAt: now } : {}) })
       .where(and(eq(replenishments.id, id), eq(replenishments.status, r.status)));
+    if (action === "quality_reformulate") await startRepLab(tx, r, now);
     await logActivity(
       { actorId: u.id, action: action === "close" ? "replenishment.closed" : action === "cancel" ? "replenishment.cancelled" : `replenishment.${action}`, entity: "replenishment", entityId: id, diff: { from: r.status, to: step.to, comment, round, ...(corrections.length ? { corrections } : {}) } },
       tx,
@@ -622,6 +626,35 @@ export async function transition(
   } catch (err) {
     await logError("replenishment:notify", err, { id, action });
   }
+}
+
+// ─── Reformulación (Laboratorio / I+D) ────────────────────────────────────
+
+async function repForLab(u: CurrentUser, id: string) {
+  assertAccess(u);
+  const [r] = await db.select().from(replenishments).where(eq(replenishments.id, id));
+  if (!r) throw new Error("Reposición no encontrada");
+  if (!canActAs(u, r, "idi")) throw new AuthzError("Solo Laboratorio / I+D puede hacer esto");
+  return r;
+}
+
+/** Laboratorio avanza o retrocede su estado; al completar el último, la reposición vuelve a Calidad. */
+export async function repLabTransition(u: CurrentUser, id: string, targetId: number, comment: string | null, lab: unknown) {
+  const r = await repForLab(u, id);
+  const text = z.string().trim().max(4000).nullable().parse(comment ?? null) || null;
+  const res = await transitionRepLab(u, r, targetId, text, lab);
+  if (res.completed)
+    await transition(u, id, "lab_reformulated", {
+      fromLab: true,
+      comment: [res.approved.length ? `Referencia aprobada: ${res.approved.join(", ")}` : null, text].filter(Boolean).join("\n") || "Reformulación terminada",
+    });
+  return res;
+}
+
+export async function repLabNote(u: CurrentUser, id: string, body: string, isWait: boolean) {
+  const r = await repForLab(u, id);
+  if (["closed", "cancelled"].includes(r.status)) throw new Error("La reposición está cerrada");
+  await addRepLabNote(u, r, body, isWait);
 }
 
 // ─── Comentarios ──────────────────────────────────────────────────────────

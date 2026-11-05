@@ -748,6 +748,13 @@ export const replenishments = pgTable(
       .notNull()
       .references(() => users.id),
     storageFolderId: text("storage_folder_id"),
+    /** Reformulación: estado de Laboratorio / I+D (mismos subestados que en NPD). */
+    labSubstateId: integer("lab_substate_id").references(() => deptSubstates.id, { onDelete: "set null" }),
+    labEnteredAt: timestamp("lab_entered_at", { withTimezone: true }),
+    labRounds: integer("lab_rounds").notNull().default(0),
+    labCompletedAt: timestamp("lab_completed_at", { withTimezone: true }),
+    /** Códigos de las muestras aprobadas en la reformulación. */
+    approvedReference: text("approved_reference"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     closedAt: timestamp("closed_at", { withTimezone: true }),
@@ -871,9 +878,9 @@ export const labSamples = pgTable(
   "lab_samples",
   {
     id: serial("id").primaryKey(),
-    projectId: uuid("project_id")
-      .notNull()
-      .references(() => projects.id, { onDelete: "cascade" }),
+    /** Proyecto NPD o, en una reformulación, la reposición. */
+    projectId: uuid("project_id").references(() => projects.id, { onDelete: "cascade" }),
+    replenishmentId: uuid("replenishment_id").references(() => replenishments.id, { onDelete: "cascade" }),
     /** Referencia del proyecto (0 = proyecto de una sola referencia) */
     referenceId: integer("reference_id").notNull().default(0),
     round: integer("round").notNull().default(1),
@@ -896,9 +903,9 @@ export const deptNotes = pgTable(
   "dept_notes",
   {
     id: serial("id").primaryKey(),
-    projectId: uuid("project_id")
-      .notNull()
-      .references(() => projects.id, { onDelete: "cascade" }),
+    /** Proyecto NPD o, en una reformulación, la reposición. */
+    projectId: uuid("project_id").references(() => projects.id, { onDelete: "cascade" }),
+    replenishmentId: uuid("replenishment_id").references(() => replenishments.id, { onDelete: "cascade" }),
     departmentKey: text("department_key").notNull(),
     referenceId: integer("reference_id").notNull().default(0),
     body: text("body").notNull(),
