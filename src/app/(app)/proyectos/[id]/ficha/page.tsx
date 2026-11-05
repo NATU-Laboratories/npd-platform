@@ -2,12 +2,14 @@ import { ExternalLink, FileText } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PrintButton } from "@/components/print-button";
+import { LabSamples } from "@/components/sheet/lab-box";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { briefSections, type Lookups } from "@/lib/brief/display";
 import { FILE_TAGS, PHASES, statusLabel } from "@/lib/labels";
 import { canViewProject, requireUser } from "@/lib/server/authz";
 import { getActiveUsers, getAllCatalogs, getBrands } from "@/lib/server/catalogs";
 import { loadProjectDetail } from "@/lib/server/project-detail";
+import { canSeeLabFormula, listSamples } from "@/lib/server/lab";
 import { loadSheet, type SheetEntry } from "@/lib/server/sheet";
 import { applicable, formatValue, SHEET_SECTIONS, type ScalarField, type SheetCtx } from "@/lib/sheet/sections";
 import { cn, formatDate } from "@/lib/utils";
@@ -50,7 +52,7 @@ export default async function FullSheetPage({ params }: PageProps<"/proyectos/[i
   const d = await loadProjectDetail(id);
   if (!d || d.p.status === "draft") notFound();
   const p = d.p;
-  const [catalogs, brands, users, sheet] = await Promise.all([getAllCatalogs(), getBrands(false), getActiveUsers(), loadSheet(p)]);
+  const [catalogs, brands, users, sheet, samples] = await Promise.all([getAllCatalogs(), getBrands(false), getActiveUsers(), loadSheet(p), listSamples(u, id)]);
   const lookups: Lookups = {
     catalog: Object.fromEntries(Object.entries(catalogs).map(([k, v]) => [k, Object.fromEntries(v.map((o) => [o.value, o.label]))])),
     brands: Object.fromEntries(brands.map((x) => [x.id, x.name])),
@@ -131,6 +133,12 @@ export default async function FullSheetPage({ params }: PageProps<"/proyectos/[i
           ))}
         </CardBody>
       </Card>
+
+      {samples.length > 0 && (
+        <div id="muestras" className="scroll-mt-20 break-inside-avoid">
+          <LabSamples samples={samples} canSeeFormula={canSeeLabFormula(u)} {...(multi ? { refNames: Object.fromEntries(sheet.refs.map((r) => [r.id, refTitle(r)])) } : {})} />
+        </div>
+      )}
 
       {!sections.length && <p className="text-sm text-slate-500">Los departamentos todavía no han añadido datos a la ficha técnica.</p>}
 

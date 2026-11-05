@@ -7,7 +7,9 @@ import type { RefInfo } from "@/lib/server/references";
 import type { DeptCard, DeptState, SheetEntry } from "@/lib/server/sheet";
 import { applicable, checkField, fieldLabelInSection, formatValue, resolveFieldRef, sanitizeData, type SheetCtx, type SheetData, type SheetField } from "@/lib/sheet/sections";
 import { cn, formatBytes, formatDate } from "@/lib/utils";
-import { DeptTransition } from "./dept-transition";
+import { DeptTransition, type LabMode } from "./dept-transition";
+import { LabNotes, LabSamples } from "./lab-box";
+import type { NoteView, SampleView } from "@/lib/server/lab";
 import { FormulaCostBox } from "./formula-cost";
 import { Button } from "@/components/ui/button";
 import { SectionEditor } from "./section-editor";
@@ -228,7 +230,30 @@ type PanelCtx = {
   files: UploadedFile[];
   maxMb: number;
   now: number;
+  /** Laboratorio: muestras y bitácora (la fórmula ya viene vacía si no se puede ver). */
+  lab?: { samples: SampleView[]; notes: NoteView[]; canSeeFormula: boolean };
 };
+
+/** Modo de la ventana de Laboratorio según el estado al que se avanza. */
+function labModeFor(c: DeptCard, next: { name: string; isFinal: boolean } | null | undefined, refId: number, pc: PanelCtx): LabMode | undefined {
+  if (c.dept.key !== "idi" || !next || !pc.lab) return undefined;
+  const pending = pc.lab.samples.filter((x) => x.referenceId === refId && x.status === "evaluation");
+  if (next.isFinal) return { mode: "approve", pending, canSeeFormula: pc.lab.canSeeFormula };
+  if (/evaluaci/i.test(next.name)) return { mode: "evaluation", pending, canSeeFormula: pc.lab.canSeeFormula };
+  return undefined;
+}
+
+/** Bitácora + muestras del Laboratorio (por referencia o del proyecto). */
+function LabBlock({ c, refId, canEdit, pc, compact }: { c: DeptCard; refId: number | null; canEdit: boolean; pc: PanelCtx; compact?: boolean }) {
+  if (c.dept.key !== "idi" || !pc.lab) return null;
+  const samples = refId === null ? pc.lab.samples : pc.lab.samples.filter((x) => x.referenceId === refId);
+  return (
+    <div className="flex flex-col gap-2">
+      <LabSamples samples={samples} canSeeFormula={pc.lab.canSeeFormula} {...(c.perRef ? { refNames: Object.fromEntries(c.refs.map((r) => [r.ref.id, refTitle(r.ref)])) } : {})} />
+      <LabNotes projectId={pc.projectId} notes={pc.lab.notes} canWrite={canEdit} limit={compact ? 3 : 10} />
+    </div>
+  );
+}
 
 /** Texto de estado + botones de avanzar/retroceder (de un departamento o de una referencia). */
 function StateRow({ c, s, canEdit, refInfo, pc }: { c: DeptCard; s: DeptState; canEdit: boolean; refInfo: RefInfo | null; pc: PanelCtx }) {
@@ -316,6 +341,7 @@ function StateRow({ c, s, canEdit, refInfo, pc }: { c: DeptCard; s: DeptState; c
                 },
               ]}
               initialValues={promptValues(s.next.promptFields)}
+              lab={labModeFor(c, s.next, refInfo?.id ?? 0, pc)}
             />
           )}
         </div>
@@ -422,6 +448,7 @@ export function SheetPanel({
   now,
   formulaCost,
   mine = [],
+  lab,
 }: PanelCtx & {
   editable: Record<string, boolean>;
   /** Coste objetivo de la fórmula (confidencial); undefined si el usuario no puede verlo. */
@@ -429,7 +456,7 @@ export function SheetPanel({
   /** Departamentos de la persona: van primero y destacados. */
   mine?: string[];
 }) {
-  const pc: PanelCtx = { projectId, cards, entries, ctx, files, maxMb, now };
+  const pc: PanelCtx = { projectId, cards, entries, ctx, files, maxMb, now, lab };
   const ordered = [...cards.filter((c) => mine.includes(c.dept.key)), ...cards.filter((c) => !mine.includes(c.dept.key))];
   const firstOther = ordered.findIndex((c) => !mine.includes(c.dept.key));
   return (
@@ -472,6 +499,8 @@ export function SheetPanel({
               </div>
 
               {c.dept.key === "idi" && formulaCost !== undefined && <FormulaCostBox projectId={projectId} value={formulaCost} />}
+
+              {c.dept.key === "idi" && c.active && <LabBlock c={c} refId={null} canEdit={canEdit} pc={pc} />}
 
               {!c.steps.length && <p className="text-sm text-slate-500">Este departamento no tiene estados configurados (Backoffice → Estados de departamento).</p>}
 
@@ -617,6 +646,7 @@ export function MyWork({
                     </div>
                   ))
               )}
+              <LabBlock c={c} refId={null} canEdit={canEdit} pc={ctx} compact />
             </div>
           );
         })}

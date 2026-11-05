@@ -4,7 +4,10 @@ import { AuthzError, requireActionUser } from "@/lib/server/authz";
 import { logError } from "@/lib/server/errors";
 import { db } from "@/db";
 import { canManageReferences, deleteReference, ensureReferences, ReferenceError, renameReference } from "@/lib/server/references";
-import { loadProjectRow, saveSection, setFormulaTargetCost, SheetError, transitionDept } from "@/lib/server/sheet";
+import { canEditSection, deptStartPhases, loadProjectRow, saveSection, setFormulaTargetCost, SheetError, transitionDept } from "@/lib/server/sheet";
+import { z } from "zod";
+import { deptNotes } from "@/db/schema";
+import { logActivity } from "@/lib/server/activity";
 import type { ActionResult } from "./projects";
 
 async function run<T>(name: string, projectId: string, fn: () => Promise<T>): Promise<ActionResult<T>> {
@@ -14,6 +17,7 @@ async function run<T>(name: string, projectId: string, fn: () => Promise<T>): Pr
     return { ok: true, data };
   } catch (err) {
     if (err instanceof SheetError || err instanceof AuthzError) return { ok: false, error: err.message };
+    if (err instanceof z.ZodError) return { ok: false, error: err.issues[0]?.message ?? "Datos no válidos" };
     await logError(`action:${name}`, err, { projectId });
     return { ok: false, error: "Se ha producido un error inesperado. Queda registrado en el log." };
   }
@@ -32,8 +36,24 @@ export async function transitionDeptAction(
   comment?: string | null,
   values?: Record<string, unknown>,
   referenceId?: number,
+  lab?: unknown,
 ) {
-  return run("transitionDept", projectId, async () => transitionDept(await requireActionUser(), projectId, departmentId, targetId, comment, values, referenceId));
+  return run("transitionDept", projectId, async () => transitionDept(await requireActionUser(), projectId, departmentId, targetId, comment, values, referenceId, lab));
+}
+
+/** Nota en la bitácora de un departamento (Laboratorio: trabajo en curso, esperas y su motivo). */
+export async function addDeptNoteAction(projectId: string, departmentKey: string, body: string, isWait: boolean, referenceId?: number) {
+  return run("addDeptNote", projectId, async () => {
+    const u = await requireActionUser();
+    const p = await loadProjectRow(projectId);
+    if (!p) throw new SheetError("Proyecto no encontrado");
+    const key = z.string().max(40).parse(departmentKey);
+    const phase = (await deptStartPhases())[key];
+    if (phase == null || !canEditSection(u, key, phase, p)) throw new SheetError("Solo el departamento puede escribir en su bitácora");
+    const text = z.string().trim().min(1, "Escribe la nota").max(4000).parse(body);
+    await db.insert(deptNotes).values({ projectId, departmentKey: key, referenceId: referenceId ?? 0, body: text, isWait: !!isWait, authorId: u.id });
+    await logActivity({ projectId, actorId: u.id, action: "dept.note", entity: "department", entityId: key, diff: { body: text.slice(0, 300), wait: !!isWait } });
+  });
 }
 
 // ─── Referencias del proyecto ─────────────────────────────────────────────

@@ -862,3 +862,49 @@ export const teamsConversations = pgTable("teams_conversations", {
   botId: text("bot_id").notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// ─── Laboratorio: muestras en evaluación y bitácora ───────────────────────
+
+/** Muestras que Laboratorio pasa a evaluación (por referencia del proyecto y ronda). */
+export const labSamples = pgTable(
+  "lab_samples",
+  {
+    id: serial("id").primaryKey(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    /** Referencia del proyecto (0 = proyecto de una sola referencia) */
+    referenceId: integer("reference_id").notNull().default(0),
+    round: integer("round").notNull().default(1),
+    /** Código de referencia de la muestra (visible para todos) */
+    code: text("code").notNull(),
+    /** Fórmula: confidencial (solo Laboratorio, Calidad y admin) */
+    formula: text("formula"),
+    /** evaluation · approved · not_approved */
+    status: text("status").notNull().default("evaluation"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    decidedBy: uuid("decided_by").references(() => users.id, { onDelete: "set null" }),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+  },
+  (t) => [index("lab_samples_project_idx").on(t.projectId)],
+);
+
+/** Bitácora de un departamento en un proyecto (p. ej. Laboratorio en «Desarrollo de muestras»). */
+export const deptNotes = pgTable(
+  "dept_notes",
+  {
+    id: serial("id").primaryKey(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    departmentKey: text("department_key").notNull(),
+    referenceId: integer("reference_id").notNull().default(0),
+    body: text("body").notNull(),
+    /** Nota de espera (motivo por el que el trabajo está parado) */
+    isWait: boolean("is_wait").notNull().default(false),
+    authorId: uuid("author_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("dept_notes_project_idx").on(t.projectId, t.departmentKey)],
+);
