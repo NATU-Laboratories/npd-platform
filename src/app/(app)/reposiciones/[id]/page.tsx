@@ -15,7 +15,7 @@ import { cn, formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Reposición" };
 
-const WHO: Record<string, string> = { diseno: "Diseño", calidad: "Calidad", compras: "Compras" };
+const WHO: Record<string, string> = { diseno: "Diseño", calidad: "Calidad", compras: "Compras", idi: "Laboratorio / I+D" };
 
 export default async function ReplenishmentPage({ params }: PageProps<"/reposiciones/[id]">) {
   const u = await requireUser();
@@ -30,7 +30,8 @@ export default async function ReplenishmentPage({ params }: PageProps<"/reposici
   const isCompras = canActAs(u, r, "compras");
   const isDesign = canActAs(u, r, "diseno");
   // Paso actual en el stepper (las correcciones son una vuelta de la revisión de diseño)
-  const steps = STATUS_STEPS.filter((s) => s.key !== "design_changes" || r.status === "design_changes" || r.round > 1);
+  const reformulated = r.status === "reformulation" || d.activity.some(({ a }) => a.action === "replenishment.quality_reformulate");
+  const steps = STATUS_STEPS.filter((s) => (s.key !== "design_changes" || r.status === "design_changes" || r.round > 1) && (s.key !== "reformulation" || reformulated));
   const currentIdx = steps.findIndex((s) => s.key === r.status);
   const current = STATUS_STEPS.find((s) => s.key === r.status);
 
