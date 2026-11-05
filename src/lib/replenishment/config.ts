@@ -86,6 +86,8 @@ export const REP_ACTION_LABEL: Record<string, string> = {
   "replenishment.quality_corrections": "pidió correcciones del arte final",
   "replenishment.quality_reformulate": "pidió reformular el producto (pasa a Laboratorio / I+D)",
   "replenishment.lab_reformulated": "terminó la reformulación y la devolvió a Calidad",
+  "replenishment.lab_state": "cambió el estado de Laboratorio / I+D",
+  "replenishment.lab_note": "escribió en la bitácora de Laboratorio",
   "replenishment.sent_to_print": "envió a imprenta",
   "replenishment.closed": "cerró la reposición",
   "replenishment.cancelled": "canceló la reposición",

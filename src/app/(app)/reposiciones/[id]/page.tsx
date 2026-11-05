@@ -7,9 +7,14 @@ import { suppliers } from "@/db/schema";
 import { RepActions } from "@/components/replenishment/rep-actions";
 import { RepCommentBox, RepFiles } from "@/components/replenishment/rep-files";
 import { RepItems } from "@/components/replenishment/rep-items";
+import { DeptTransition } from "@/components/sheet/dept-transition";
+import { LabNotes, LabSamples } from "@/components/sheet/lab-box";
+import { Stepper } from "@/components/sheet/sheet-panel";
 import { Card } from "@/components/ui/card";
 import { REP_ACTION_LABEL, REP_STATUS_COLOR, REP_STATUS_LABEL, REPLENISHMENT_TEMPLATES, STATUS_STEPS } from "@/lib/replenishment/config";
 import { isAdmin, requireUser } from "@/lib/server/authz";
+import { canSeeLabFormula } from "@/lib/server/lab";
+import { labSteps, listRepNotes, listRepSamples, repLabState, serverNow } from "@/lib/server/rep-lab";
 import { canAccessReplenishments, canActAs, loadReplenishment } from "@/lib/server/replenishments";
 import { cn, formatDate } from "@/lib/utils";
 
@@ -34,6 +39,12 @@ export default async function ReplenishmentPage({ params }: PageProps<"/reposici
   const steps = STATUS_STEPS.filter((s) => (s.key !== "design_changes" || r.status === "design_changes" || r.round > 1) && (s.key !== "reformulation" || reformulated));
   const currentIdx = steps.findIndex((s) => s.key === r.status);
   const current = STATUS_STEPS.find((s) => s.key === r.status);
+  // Reformulación: Laboratorio / I+D trabaja dentro de la reposición como en un proyecto NPD
+  const labState = await repLabState(r);
+  const [labDept, samples, notes] = labState ? await Promise.all([labSteps().then((x) => x.dept), listRepSamples(u, r.id), listRepNotes(r.id)]) : [null, [], []];
+  const isLab = canActAs(u, r, "idi");
+  const seeFormula = canSeeLabFormula(u);
+  const reformComment = d.activity.find(({ a }) => a.action === "replenishment.quality_reformulate");
 
   return (
     <div className="flex flex-col gap-4">
@@ -95,6 +106,70 @@ export default async function ReplenishmentPage({ params }: PageProps<"/reposici
         </Card>
       )}
 
+      {labState && labDept && (
+        <Card className={cn("flex flex-col gap-3 p-4", r.status === "reformulation" ? "border-l-4 border-l-natu-dark" : "border-l-4 border-l-[#7f8f63] bg-[#f4f6ee]")} id="laboratorio">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 font-semibold text-slate-900">
+              <span className="size-2.5 rounded-full" style={{ background: labDept.color }} aria-hidden />
+              {labDept.name} · Reformulación
+              {isLab && r.status === "reformulation" && <span className="rounded-full bg-natu-dark px-2 py-0.5 text-[11px] font-medium text-white">Tu departamento</span>}
+            </h2>
+            <span className="text-xs text-slate-500">
+              {labState.rounds > 1 && `Reformulación ${labState.rounds} · `}
+              {labState.completed ? `Terminada el ${formatDate(labState.completedAt!)}` : `En «${labState.current?.name}» desde el ${formatDate(labState.enteredAt!)}`}
+            </span>
+          </div>
+          {reformComment && typeof (reformComment.a.diff as { comment?: string })?.comment === "string" && (
+            <div className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              <p className="text-xs font-semibold">Comentarios de reformulación ({reformComment.who ?? "Calidad"})</p>
+              <p className="whitespace-pre-line">{(reformComment.a.diff as { comment: string }).comment}</p>
+            </div>
+          )}
+          <Stepper s={labState} label={labDept.name} now={serverNow()} />
+          {r.approvedReference && (
+            <p className="text-sm text-slate-700">
+              <span className="text-slate-500">Referencia aprobada:</span> <strong className="font-semibold">{r.approvedReference}</strong>
+            </p>
+          )}
+          {isLab && r.status === "reformulation" && (
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {labState.backTargets.length > 0 && (
+                <DeptTransition
+                  projectId=""
+                  repId={r.id}
+                  departmentId={labDept.id}
+                  deptName={labDept.name}
+                  direction="back"
+                  targets={labState.backTargets.map((t) => ({ id: t.id, name: t.name, isFinal: t.isFinal, promptFields: [], missing: [] }))}
+                  initialValues={{}}
+                />
+              )}
+              {labState.next && (
+                <DeptTransition
+                  projectId=""
+                  repId={r.id}
+                  departmentId={labDept.id}
+                  deptName={labDept.name}
+                  direction="forward"
+                  targets={[{ id: labState.next.id, name: labState.next.name, isFinal: labState.next.isFinal, promptFields: [], missing: [] }]}
+                  initialValues={{}}
+                  lab={
+                    labState.next.isFinal || /evaluaci/i.test(labState.next.name)
+                      ? { mode: labState.next.isFinal ? "approve" : "evaluation", pending: samples.filter((x) => x.status === "evaluation"), canSeeFormula: seeFormula }
+                      : undefined
+                  }
+                />
+              )}
+            </div>
+          )}
+          {isLab && labState.next?.isFinal && r.status === "reformulation" && (
+            <p className="text-xs text-slate-500">Al completar «{labState.next.name}» la reposición vuelve a Calidad para validar.</p>
+          )}
+          <LabSamples samples={samples} canSeeFormula={seeFormula} />
+          <LabNotes repId={r.id} notes={notes} canWrite={isLab && open} limit={10} />
+        </Card>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-[1fr_22rem]">
         <div className="flex min-w-0 flex-col gap-4">
           <Card className="p-4">
@@ -146,6 +221,9 @@ export default async function ReplenishmentPage({ params }: PageProps<"/reposici
                   <li key={a.id} className="text-sm">
                     <p className="text-slate-700">
                       <strong className="font-medium text-slate-900">{who ?? "Sistema"}</strong> {REP_ACTION_LABEL[a.action] ?? a.action}
+                      {a.action === "replenishment.lab_state" && typeof diff.to === "string" && ` a «${diff.to}»`}
+                      {Array.isArray(diff.samples) && ` · muestras: ${(diff.samples as string[]).join(", ")}`}
+                      {Array.isArray(diff.approved) && ` · aprobadas: ${(diff.approved as string[]).join(", ")}`}
                       <span className="ml-1 text-xs text-slate-400">{formatDate(a.createdAt, true)}</span>
                     </p>
                     {isComment && <p className="mt-0.5 whitespace-pre-line rounded-md bg-slate-50 px-3 py-2 text-slate-800">{String(diff.body ?? "")}</p>}

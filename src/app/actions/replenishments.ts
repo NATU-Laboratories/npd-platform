@@ -19,6 +19,8 @@ import {
   previewCreationEmails,
   registerQuote,
   repFolder,
+  repLabNote,
+  repLabTransition,
   REP_ACTIONS,
   sendQuoteRequests,
   supplierEmails,
@@ -95,6 +97,26 @@ export async function replenishmentTransitionAction(
     },
     { id, action },
   );
+}
+
+export async function repLabTransitionAction(id: string, targetId: number, comment: string | null, lab?: unknown): Promise<ActionResult<{ completed: boolean }>> {
+  return run(
+    "rep:labTransition",
+    async () => {
+      const res = await repLabTransition(await requireActionUser(), z.string().uuid().parse(id), z.number().int().positive().parse(targetId), comment, lab);
+      touch(id);
+      return { completed: res.completed };
+    },
+    { id, targetId },
+  );
+}
+
+export async function addRepLabNoteAction(id: string, body: string, isWait: boolean): Promise<ActionResult> {
+  return run("rep:labNote", async () => {
+    await repLabNote(await requireActionUser(), z.string().uuid().parse(id), body, isWait);
+    touch(id);
+    return undefined;
+  });
 }
 
 export async function previewSupplierEmailsAction(id: string, kind: "quote" | "print", supplierId: number | null, message: string): Promise<ActionResult<RepEmail[]>> {

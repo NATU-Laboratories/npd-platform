@@ -59,7 +59,7 @@ function Rounds({ n }: { n: number }) {
 }
 
 /** Stepper horizontal de subestados con fechas de los completados y días en el actual. */
-function Stepper({ s, label, now }: { s: DeptState; label: string; now: number }) {
+export function Stepper({ s, label, now }: { s: DeptState; label: string; now: number }) {
   const curIdx = s.current ? s.steps.findIndex((x) => x.id === s.current!.id) : 0;
   const days = daysSince(s.enteredAt, now);
   return (
