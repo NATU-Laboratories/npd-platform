@@ -193,6 +193,7 @@ export const ACTION_LABEL: Record<string, string> = {
   "comment.created": "comentó",
   "file.uploaded": "subió un archivo",
   "sheet.updated": "actualizó la ficha técnica",
+  "dept.note": "escribió en la bitácora del departamento",
   "sheet.done": "terminó un apartado de la ficha técnica",
   "sheet.na": "marcó un apartado como no aplicable",
   "sheet.reopened": "reabrió un apartado de la ficha técnica",

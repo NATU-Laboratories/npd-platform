@@ -39,6 +39,7 @@ import { canCompleteLabelInfo, canDecideGate, canEditBrief, canManageProject, ca
 import { getActiveUsers, getAllCatalogs, getBrands, getDepartments } from "@/lib/server/catalogs";
 import { loadProjectDetail, templatesWithDepartments, templateScore } from "@/lib/server/project-detail";
 import { getSettings } from "@/lib/server/settings";
+import { canSeeLabFormula, listNotes, listSamples } from "@/lib/server/lab";
 import { canEditSection, getFormulaTargetCost, loadSheet, pendingUpTo } from "@/lib/server/sheet";
 import { canTransition } from "@/lib/server/state-machine";
 import { cn, formatBytes, formatDate, formatEuro, formatNumber } from "@/lib/utils";
@@ -106,6 +107,9 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
   // Coste objetivo de fórmula: confidencial (Laboratorio, gestor de proyectos, admin y Operaciones)
   const seeFormulaCost = canSeeFormulaCost(u);
   const formulaCost = seeFormulaCost ? await getFormulaTargetCost(p.id) : null;
+  // Laboratorio: muestras (fórmula solo para Laboratorio, Calidad y admin) y bitácora
+  const [labSampleRows, labNoteRows] = await Promise.all([listSamples(u, p.id), listNotes(p.id, "idi")]);
+  const lab = { samples: labSampleRows, notes: labNoteRows, canSeeFormula: canSeeLabFormula(u) };
   const lookups: Lookups = {
     catalog: Object.fromEntries(Object.entries(catalogs).map(([k, v]) => [k, Object.fromEntries(v.map((o) => [o.value, o.label]))])),
     brands: Object.fromEntries(brands.map((x) => [x.id, x.name])),
@@ -537,6 +541,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
         maxMb={settings.max_file_mb}
         editable={Object.fromEntries(sheet.cards.map((c) => [c.dept.key, canEditSection(u, c.dept.key, c.phase, p)]))}
         mine={u.departmentKeys.filter(Boolean)}
+        lab={lab}
         actions={[
           ...(canDecide ? [{ label: "Revisar la solicitud (P1)", hint: "Apruébala, pide más información o recházala con el botón de arriba." }] : []),
           ...(canQuote ? [{ label: "Enviar la cotización al comercial", hint: "Con el botón «Enviar cotización al comercial» de arriba." }] : []),
@@ -796,6 +801,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
               maxMb={settings.max_file_mb}
               {...(seeFormulaCost ? { formulaCost } : {})}
               mine={u.departmentKeys.filter(Boolean)}
+              lab={lab}
             />
           )}
 

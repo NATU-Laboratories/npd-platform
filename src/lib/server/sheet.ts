@@ -1,21 +1,23 @@
 import "server-only";
+import { labTransitionSchema } from "./lab";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db, type DbOrTx } from "@/db";
 import {
+  clients,
   departmentMembers,
   departments,
   deptSubstates,
   files,
+  labSamples,
+  projectConfidential,
   projectDepartments,
   projectDeptProgress,
   projectDeptTransitions,
   projects,
   projectSheet,
-  projectConfidential,
-  clients,
-  users,
   type DeptSubstate,
   type Project,
+  users,
 } from "@/db/schema";
 import { briefSections, type Lookups } from "@/lib/brief/display";
 import { needsOlfactory, parseBriefLenient } from "@/lib/brief/schema";
@@ -526,6 +528,7 @@ export async function transitionDept(
   comment?: string | null,
   values?: Record<string, unknown>,
   referenceId?: number,
+  labRaw?: unknown,
 ) {
   const p = await loadProjectRow(projectId);
   if (!p) throw new SheetError("Proyecto no encontrado");
@@ -555,6 +558,27 @@ export async function transitionDept(
   if (!direction) throw new SheetError("Ese cambio de subestado no está permitido desde el estado actual");
   const text = comment?.trim() || null;
 
+  // Laboratorio: al pasar a evaluación indica las muestras (código + fórmula); al aprobar,
+  // marca cuáles se aprueban (la «referencia aprobada» de la ficha se rellena con sus códigos)
+  const lab = labRaw ? labTransitionSchema.parse(labRaw) : {};
+  const isLab = dept.key === "idi" && direction === "forward";
+  const toEvaluation = isLab && !target.isFinal && /evaluaci/i.test(target.name);
+  const toApproved = isLab && target.isFinal;
+  const newSamples = toEvaluation ? (lab.samples ?? []).filter((x) => x.code) : [];
+  if (toEvaluation && !newSamples.length) throw new SheetError("Indica al menos una muestra (código de referencia y fórmula) que pasa a evaluación");
+  let pendingSamples: { id: number; code: string }[] = [];
+  let approvedSamples: { id: number; code: string }[] = [];
+  if (toApproved) {
+    pendingSamples = await db
+      .select({ id: labSamples.id, code: labSamples.code })
+      .from(labSamples)
+      .where(and(eq(labSamples.projectId, projectId), eq(labSamples.referenceId, refId), eq(labSamples.status, "evaluation")));
+    if (pendingSamples.length) {
+      approvedSamples = pendingSamples.filter((x) => lab.approvedIds?.includes(x.id));
+      if (!approvedSamples.length) throw new SheetError("Marca la muestra o muestras aprobadas");
+    }
+  }
+
   // Campos pedidos al entrar (se guardan en la ficha) y obligatorios del destino.
   // Los apartados por referencia se leen/escriben en la fila de esa referencia.
   const ctx = await sheetContext(p);
@@ -568,6 +592,11 @@ export async function transitionDept(
     const merged = rid ? { ...(saved(section.key, 0) ?? {}), ...(own ?? {}) } : own;
     return effectiveData(section, ctxForRef(ctx, rid ? ref : null), merged);
   };
+  if (approvedSamples.length) {
+    const base = { ...(saved("formula", rowRef("formula")) ?? {}) };
+    base.approvedReference = approvedSamples.map((x) => x.code).join(", ");
+    updates.set("formula", base);
+  }
   if (direction === "forward") {
     for (const fref of target.promptFields) {
       const r = resolveFieldRef(fref);
@@ -595,6 +624,16 @@ export async function transitionDept(
       await writeSection(u, p, section, data, ctxForRef(ctx, rid ? ref : null), tx, rid, rid && ref ? refTitle(ref) : undefined);
     }
     const rounds = (prog?.rounds ?? 1) + (direction === "back" ? 1 : 0);
+    if (newSamples.length)
+      await tx
+        .insert(labSamples)
+        .values(newSamples.map((x) => ({ projectId, referenceId: refId, round: rounds, code: x.code, formula: x.formula || null, createdBy: u.id })));
+    if (pendingSamples.length)
+      for (const x of pendingSamples)
+        await tx
+          .update(labSamples)
+          .set({ status: approvedSamples.some((a) => a.id === x.id) ? "approved" : "not_approved", decidedBy: u.id, decidedAt: now })
+          .where(eq(labSamples.id, x.id));
     const completedAt = target.isFinal ? now : null;
     await tx
       .insert(projectDeptProgress)
@@ -621,7 +660,16 @@ export async function transitionDept(
         action: direction === "forward" ? (target.isFinal ? "dept.completed" : "dept.advanced") : "dept.returned",
         entity: "department",
         entityId: departmentId,
-        diff: { department: deptLabel, from: current?.name ?? steps[0]?.name ?? null, to: target.name, round: rounds, comment: text },
+        diff: {
+          department: deptLabel,
+          from: current?.name ?? steps[0]?.name ?? null,
+          to: target.name,
+          round: rounds,
+          comment: text,
+          // Solo códigos: la fórmula es confidencial y no va al historial
+          ...(newSamples.length ? { samples: newSamples.map((x) => x.code) } : {}),
+          ...(approvedSamples.length ? { approved: approvedSamples.map((x) => x.code) } : {}),
+        },
       },
       tx,
     );
