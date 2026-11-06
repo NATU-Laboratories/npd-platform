@@ -24,6 +24,7 @@ import { needsOlfactory, parseBriefLenient } from "@/lib/brief/schema";
 import { FIRST_RUNNING_PHASE, PHASES } from "@/lib/labels";
 import {
   checkField,
+  fieldApplies,
   effectiveData,
   fieldLabelInSection,
   isPerReferenceSection,
@@ -117,6 +118,7 @@ export async function sheetContext(p: Project, tx: DbOrTx = db): Promise<SheetCt
       rrp: p.brief.rrp ?? null,
       unitsFirstOrder: p.unitsFirstOrder ?? null,
       capacityMl: p.brief.capacityMl ?? null,
+      category: p.brief.category ?? null,
       references: p.brief.references ?? null,
       finalName: p.brief.finalName ?? null,
       languages: p.brief.languages ?? [],
@@ -608,7 +610,7 @@ export async function transitionDept(
     const missing = target.requiredFields
       .map((fref) => {
         const r = resolveFieldRef(fref);
-        if (!r) return null;
+        if (!r || !fieldApplies(r.field, ctx)) return null;
         const res = checkField(r.field, sanitizeData(r.section, effective(r.section)));
         return res.ok ? null : `${fieldLabelInSection(r.section, r.field.key)} (${r.section.title})`;
       })

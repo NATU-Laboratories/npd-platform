@@ -75,3 +75,41 @@ describe("isPerReferenceSection", () => {
     expect(isPerReferenceSection("formula", false, "per_reference")).toBe(false);
   });
 });
+
+describe("Calidad y regulatorio según la categoría", () => {
+  const reg = SECTION_BY_KEY.regulatorio!;
+  const keys = (category: string) => reg.groups.flatMap((g) => g.fields).filter((f) => !f.when || f.when({ ...ctx, brief: { ...ctx.brief, category } })).map((f) => f.key);
+  it("ambientación: sin INCI ni PAO, con frases H/P, EUH y palabra de advertencia", () => {
+    const k = keys("ambient");
+    expect(k).not.toContain("inci");
+    expect(k).not.toContain("pao");
+    expect(k).toEqual(expect.arrayContaining(["hPhrases", "pPhrases", "euh", "signalWord", "labelSize"]));
+  });
+  it("perfumería: INCI y llama; sin alérgenos ni CPNP", () => {
+    const k = keys("perfume");
+    expect(k).toEqual(expect.arrayContaining(["inci", "flame", "pao", "responsibles"]));
+    expect(k).not.toContain("allergens");
+    expect(k).not.toContain("cpnp");
+    expect(k).not.toContain("hPhrases");
+  });
+  it("varios responsables: limpia filas vacías y opciones no válidas", () => {
+    const out = sanitizeData(reg, {
+      responsibles: [
+        { role: "fabricante", name: " NATU ", web: "www.natu.es", phone: "+34 968 000 000" },
+        { role: "inventado", name: "Otro SL" },
+        {},
+      ],
+    });
+    expect(out.responsibles).toEqual([
+      { role: "fabricante", name: "NATU", web: "www.natu.es", phone: "+34 968 000 000" },
+      { name: "Otro SL" },
+    ]);
+  });
+  it("precauciones: ejemplo distinto por tipo de producto", () => {
+    const f = reg.groups.flatMap((g) => g.fields).find((x) => x.key === "warnings")!;
+    const ex = (category: string) => f.placeholderFor?.({ ...ctx, brief: { ...ctx.brief, category } });
+    expect(ex("perfume")).toMatch(/INFLAMABLE/);
+    expect(ex("ambient")).toMatch(/No ingerir/);
+    expect(ex("cosmetic")).toMatch(/Uso externo/);
+  });
+});
