@@ -277,7 +277,10 @@ async function execute(u: CurrentUser, a: Row): Promise<string> {
     const target = p.target as Target;
     const message = String(p.message);
     const urgent = !!p.urgent;
-    const recipients = [...new Set([...target.userIds, ...(await deptUserIds(target.deptKeys))])].filter((id) => id !== u.id);
+    const everyone = [...new Set([...target.userIds, ...(await deptUserIds(target.deptKeys))])];
+    // A quien envía no le llega copia, salvo que el aviso sea solo para sí mismo (p. ej. para probar)
+    const toSelfOnly = everyone.length > 0 && everyone.every((id) => id === u.id);
+    const recipients = toSelfOnly ? everyone : everyone.filter((id) => id !== u.id);
     const title = `${urgent ? "Urgente · " : ""}Aviso de ${u.name}${subject ? ` sobre ${subject.code}` : ""}`;
     // 1) Aviso en el chat de Alexia (web y Teams)
     if (recipients.length) {
@@ -296,7 +299,7 @@ async function execute(u: CurrentUser, a: Row): Promise<string> {
     const emails = uniqEmails([
       ...(await departmentRecipients(target.deptKeys)),
       ...(target.userIds.length ? (await db.select({ email: users.email }).from(users).where(inArray(users.id, target.userIds))).map((x) => x.email) : []),
-    ]).filter((e) => e !== u.email.toLowerCase());
+    ]).filter((e) => toSelfOnly || e !== u.email.toLowerCase());
     if (emails.length)
       await queueNotification({
         event: "nia.notice",
