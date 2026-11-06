@@ -4,7 +4,8 @@ import { jobs, notificationLog, projects } from "@/db/schema";
 import { PageTitle, Table, Td, Th } from "@/components/admin";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { resendNotificationAction, retryJobAction } from "@/app/actions/admin";
+import { resendNotificationAction, retryJobAction, sendTestEmailAction } from "@/app/actions/admin";
+import { mailDriver, mailRedirect } from "@/lib/graph/mail";
 import { formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Notificaciones" };
@@ -25,7 +26,23 @@ export default async function NotificationsPage({ searchParams }: PageProps<"/ad
   ]);
   return (
     <>
-      <PageTitle title="Notificaciones" description="Log de envíos por email (Graph sendMail) con estado, intentos y reenvío manual." />
+      <PageTitle title="Notificaciones" description="Registro de los emails de la plataforma con su estado, intentos y reenvío manual." />
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm">
+        <p className="text-slate-700">
+          Envío:{" "}
+          <strong className="font-semibold">
+            {mailDriver() === "graph" ? "Microsoft 365 (Graph)" : mailDriver() === "smtp" ? `SMTP · ${process.env.MAIL_FROM || process.env.SMTP_USER}` : mailDriver() === "fail" ? "fallo simulado" : "desactivado (solo se registran)"}
+          </strong>
+          {mailRedirect().length > 0 && mailDriver() !== "log" && (
+            <span className="mt-0.5 block text-xs text-amber-800">Modo pruebas: todos los emails se desvían a {mailRedirect().join(", ")}, indicando a quién iban.</span>
+          )}
+        </p>
+        <form action={sendTestEmailAction}>
+          <Button type="submit" variant="secondary" size="sm">
+            Enviarme un email de prueba
+          </Button>
+        </form>
+      </div>
       {queue.length > 0 && (
         <div className="mb-6">
           <h2 className="mb-2 text-sm font-semibold">Cola de trabajos pendientes / fallidos</h2>
