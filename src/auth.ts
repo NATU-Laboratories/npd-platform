@@ -122,7 +122,8 @@ const providers: NextAuthConfig["providers"] = [
   MicrosoftEntraID({
     clientId: process.env.AUTH_MICROSOFT_ENTRA_ID_ID,
     clientSecret: process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET,
-    issuer: process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER,
+    // Microsoft publica el emisor sin barra final («…/v2.0») y se compara literalmente: con «…/v2.0/» el login falla
+    issuer: process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER?.trim().replace(/\/+$/, "") || undefined,
     authorization: { params: { scope: "openid profile email User.Read" } },
   }),
 ];

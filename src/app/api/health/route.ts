@@ -64,17 +64,25 @@ async function entraDiagnostics() {
   let discovery: "ok" | string = "sin comprobar";
   const m = issuer.match(/^https:\/\/login\.microsoftonline\.com\/([^/]+)\/v2\.0\/?$/);
   if (!issuer) problems.push("Falta AUTH_MICROSOFT_ENTRA_ID_ISSUER");
-  else if (!m) problems.push("AUTH_MICROSOFT_ENTRA_ID_ISSUER debe ser https://login.microsoftonline.com/<Id. de inquilino>/v2.0/");
+  else if (!m) problems.push("AUTH_MICROSOFT_ENTRA_ID_ISSUER debe ser https://login.microsoftonline.com/<Id. de inquilino>/v2.0");
   else {
+    // Se compara con el emisor que publica Microsoft (la barra final se quita en src/auth.ts)
     if (tenant && m[1] !== tenant) problems.push("El inquilino del ISSUER no coincide con AUTH_MICROSOFT_ENTRA_ID_TENANT_ID");
     try {
       const r = await fetch(`${issuer.replace(/\/$/, "")}/.well-known/openid-configuration`, { cache: "no-store", signal: AbortSignal.timeout(5000) });
       discovery = r.ok ? "ok" : `Microsoft responde ${r.status} (revisa el Id. de inquilino del ISSUER)`;
       if (!r.ok) problems.push(discovery);
+      else {
+        // Misma comparación que hace el login: el emisor publicado debe coincidir con el configurado (sin barra final)
+        const published = String(((await r.json()) as { issuer?: string }).issuer ?? "");
+        if (published && published !== issuer.replace(/\/+$/, "")) problems.push("El emisor que publica Microsoft no coincide con AUTH_MICROSOFT_ENTRA_ID_ISSUER");
+      }
     } catch (err) {
       discovery = `No se pudo contactar con Microsoft: ${err instanceof Error ? err.message : String(err)}`;
       problems.push(discovery);
     }
   }
+  const appUrl = process.env.APP_URL ?? "";
+  if (appUrl && !/^https:\/\/[^/\s]+\/?$/.test(appUrl)) problems.push("APP_URL debe ser la dirección pública completa, p. ej. https://npd.natulaboratories.es");
   return { ok: problems.length === 0, discovery, problems, redirectUri: `${(process.env.APP_URL ?? "").replace(/\/$/, "")}/api/auth/callback/microsoft-entra-id` };
 }
