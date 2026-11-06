@@ -406,7 +406,7 @@ export async function decideGate(u: CurrentUser, projectId: string, decision: Ga
           tx,
         );
         const reason = await reasonLabel(decision.reasonCode, decision.reasonText);
-        return () => notifyStatusChange(projectId, "gate.rejected", reason);
+        return () => notifyStatusChange(projectId, "gate.rejected", reason, u.email);
       }
       case "pause": {
         const reason = decision.reason.trim();
@@ -417,7 +417,7 @@ export async function decideGate(u: CurrentUser, projectId: string, decision: Ga
           .set({ status: "paused", statusBeforePause: p.status, updatedAt: now })
           .where(eq(projects.id, projectId));
         await logActivity({ projectId, actorId: u.id, action: "gate.paused", entity: "gate", entityId: gate, diff: { gate, reason } }, tx);
-        return () => notifyStatusChange(projectId, "gate.paused", reason);
+        return () => notifyStatusChange(projectId, "gate.paused", reason, u.email);
       }
     }
   });
@@ -469,7 +469,7 @@ export async function resumeProject(u: CurrentUser, projectId: string, comment?:
     }
     await logActivity({ projectId, actorId: u.id, action: "project.resumed", entity: "project", entityId: projectId, diff: { to: back, comment: comment ?? null } }, tx);
   });
-  await notifyStatusChange(projectId, "project.resumed", comment);
+  await notifyStatusChange(projectId, "project.resumed", comment, u.email);
 }
 
 export async function cancelProject(u: CurrentUser, projectId: string, reason: string) {
@@ -481,7 +481,7 @@ export async function cancelProject(u: CurrentUser, projectId: string, reason: s
     await tx.update(projects).set({ status: "cancelled", closedAt: new Date(), updatedAt: new Date() }).where(eq(projects.id, projectId));
     await logActivity({ projectId, actorId: u.id, action: "project.cancelled", entity: "project", entityId: projectId, diff: { reason } }, tx);
   });
-  await notifyStatusChange(projectId, "project.cancelled", reason);
+  await notifyStatusChange(projectId, "project.cancelled", reason, u.email);
 }
 
 export async function deleteDraft(u: CurrentUser, projectId: string) {
@@ -509,7 +509,7 @@ export async function pauseProject(u: CurrentUser, projectId: string, reason: st
       .where(eq(projects.id, projectId));
     await logActivity({ projectId, actorId: u.id, action: "gate.paused", entity: "project", entityId: projectId, diff: { reason } }, tx);
   });
-  await notifyStatusChange(projectId, "gate.paused", reason);
+  await notifyStatusChange(projectId, "gate.paused", reason, u.email);
 }
 
 // ─── Cotización (fase 1 → 2) ──────────────────────────────────────────────
@@ -684,14 +684,15 @@ export async function decideBudget(u: CurrentUser, projectId: string, decision: 
               : null;
         return async () => {
           await notifyProjectEvent(projectId, "gate.approved.g2", {
-            title: "Presupuesto aprobado por el cliente",
-            intro: "El proyecto pasa a En curso · Desarrollo.",
+            title: "Presupuesto aprobado (P2)",
+            intro: `${u.name} ha registrado que el cliente ha aprobado el presupuesto. El proyecto pasa a En curso · Desarrollo.`,
             message: [decision.comment?.trim(), ppText].filter(Boolean).length
               ? { label: "Detalle", body: [ppText, decision.comment?.trim()].filter(Boolean).join("\n") }
               : null,
-            // Los departamentos reciben un único email: «tienes trabajo» (Desarrollo) o «proyecto en marcha» (el resto)
-            to: { requester: true, accountManager: true },
-            // Quien registra la aprobación (normalmente el comercial solicitante) no necesita el aviso
+            // Lo registra el comercial: se informa a Marketing / NPD (coordina) y al gestor de cuenta; al
+            // solicitante solo si lo registró otra persona. Los demás departamentos reciben su propio email
+            // («tienes trabajo» o «proyecto en marcha»).
+            to: { requester: true, accountManager: true, departmentKeys: ["marketing"] },
             exclude: u.email,
           });
           await notifyPhaseSections(projectId, FIRST_RUNNING_PHASE);
@@ -727,7 +728,7 @@ export async function decideBudget(u: CurrentUser, projectId: string, decision: 
           tx,
         );
         const reason = await reasonLabel(decision.reasonCode, decision.reasonText);
-        return () => notifyStatusChange(projectId, "gate.rejected", reason);
+        return () => notifyStatusChange(projectId, "gate.rejected", reason, u.email);
       }
       case "pause": {
         const reason = decision.reason.trim();
@@ -735,7 +736,7 @@ export async function decideBudget(u: CurrentUser, projectId: string, decision: 
         await tx.update(gates).set({ ...decided, status: "paused", comment: reason }).where(eq(gates.id, g!.id));
         await tx.update(projects).set({ status: "paused", statusBeforePause: p.status, updatedAt: now }).where(eq(projects.id, projectId));
         await logActivity({ projectId, actorId: u.id, action: "gate.paused", entity: "gate", entityId: "G2", diff: { gate: "G2", reason } }, tx);
-        return () => notifyStatusChange(projectId, "gate.paused", reason);
+        return () => notifyStatusChange(projectId, "gate.paused", reason, u.email);
       }
     }
   });

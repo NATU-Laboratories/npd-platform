@@ -322,6 +322,8 @@ export function notifyStatusChange(
   projectId: string,
   event: "gate.rejected" | "gate.paused" | "project.resumed" | "project.cancelled",
   reason?: string | null,
+  /** Email de quien ha hecho la acción: no se le avisa de lo que acaba de hacer. */
+  exclude?: string | null,
 ) {
   const titles = {
     "gate.rejected": ["Proyecto rechazado", "La solicitud ha sido rechazada."],
@@ -343,7 +345,7 @@ export function notifyStatusChange(
     await queueNotification({
       event,
       projectId,
-      recipients: [requesterEmail, amEmail, ...deptEmails],
+      recipients: [requesterEmail, amEmail, ...deptEmails].filter((r) => !exclude || r?.trim().toLowerCase() !== exclude.trim().toLowerCase()),
       subject: subjectFor(summary, title),
       html: renderEmail({ title, intro, message: reason ? { label: "Motivo", body: reason } : null, project: summary }),
     });
