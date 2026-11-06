@@ -18,6 +18,8 @@ const DEMO = [
 
 const ERRORS: Record<string, string> = {
   disabled: "Tu usuario está desactivado. Contacta con el administrador.",
+  notAuthorized: "Tu cuenta corporativa todavía no tiene acceso a la plataforma. Pide al administrador que te dé de alta (con tu rol y departamento) y vuelve a entrar.",
+  pending: "Tu acceso todavía no está activado. El administrador debe activarlo en el Backoffice.",
   AccessDenied: "Acceso denegado. Usa tu cuenta corporativa de Microsoft 365.",
   CredentialsSignin: "Email o clave de acceso incorrectos.",
   Configuration: "El inicio de sesión con Microsoft aún no está configurado.",
@@ -28,7 +30,9 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   if (session?.user?.id) redirect("/");
   const { error, code } = await searchParams;
   const errorMsg =
-    code === "backend"
+    typeof code === "string" && code in ERRORS
+      ? ERRORS[code]
+      : code === "backend"
       ? "No se pudo conectar con la base de datos. Revisa DATABASE_URL en Vercel o consulta /api/health."
       : typeof error === "string"
         ? (ERRORS[error] ?? "No se pudo iniciar sesión.")
@@ -75,7 +79,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
                 } catch (e) {
                   if (e instanceof AuthError) {
                     const code = (e as { code?: string }).code;
-                    redirect(`/login?error=${e.type}${code === "backend" ? "&code=backend" : ""}`);
+                    redirect(`/login?error=${e.type}${code && code !== "credentials" ? `&code=${encodeURIComponent(code)}` : ""}`);
                   }
                   throw e;
                 }
