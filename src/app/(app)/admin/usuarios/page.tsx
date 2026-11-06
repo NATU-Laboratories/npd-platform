@@ -1,7 +1,7 @@
 import * as React from "react";
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { departmentMembers, roles, userRoles, users } from "@/db/schema";
+import { activityLog, departmentMembers, roles, userRoles, users } from "@/db/schema";
 import { PageTitle, Table, Td, Th } from "@/components/admin";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/form";
@@ -16,7 +16,7 @@ import { formatDate } from "@/lib/utils";
 export const metadata = { title: "Usuarios" };
 
 export default async function UsersPage({ searchParams }: PageProps<"/admin/usuarios">) {
-  const { estado } = await searchParams;
+  const { estado, autorizar, nombre } = await searchParams;
   const me = await requireAdmin();
   const [list, roleRows, memberRows, depts] = await Promise.all([
     db
@@ -28,11 +28,22 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/usua
     db.select().from(departmentMembers),
     getDepartments(false),
   ]);
+  // Cuentas corporativas que han intentado entrar sin estar autorizadas (últimos 30 días)
+  const attempts = await db
+    .select({ email: activityLog.entityId, diff: activityLog.diff, at: activityLog.createdAt })
+    .from(activityLog)
+    .where(and(eq(activityLog.action, "auth.denied"), gte(activityLog.createdAt, sql`now() - interval '30 days'`)))
+    .orderBy(desc(activityLog.createdAt))
+    .limit(200);
+  const known = new Set(list.map((u) => u.email.toLowerCase()));
+  const denied = [...new Map(attempts.filter((a) => a.email && !known.has(a.email) && (a.diff as { reason?: string })?.reason === "notAuthorized").map((a) => [a.email!, a])).values()].slice(0, 20);
+  const prefillEmail = typeof autorizar === "string" ? autorizar : "";
+  const prefillName = typeof nombre === "string" ? nombre : "";
   return (
     <>
       <PageTitle
         title="Usuarios"
-        description="Los usuarios se crean al iniciar sesión con Microsoft 365. Quedan pendientes hasta que los actives."
+        description="Solo pueden entrar con su cuenta corporativa de Microsoft 365 las personas autorizadas aquí, con su email, rol y departamentos. Para quitar el acceso, pon el estado en «Desactivado»."
       />
       <details className="mb-4 rounded-lg border border-slate-200 bg-white text-sm">
         <summary className="cursor-pointer px-4 py-2.5 font-medium text-slate-700">¿Qué da cada rol y cada departamento?</summary>
@@ -52,6 +63,27 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/usua
           <dd className="text-slate-600">No es una casilla: se asignan en Backoffice → Aprobadores (quién aprueba P1/P2 de cada tipo de proyecto).</dd>
         </dl>
       </details>
+      {denied.length > 0 && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">
+          <p className="font-medium text-amber-900">Han intentado entrar sin estar autorizados</p>
+          <p className="mb-2 text-xs text-amber-800">Cuentas corporativas de los últimos 30 días. Si deben tener acceso, autorízalas con su rol y departamentos.</p>
+          <ul className="flex flex-col gap-1">
+            {denied.map((a) => {
+              const n = String((a.diff as { name?: string })?.name ?? "");
+              return (
+                <li key={a.email} className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium text-slate-900">{n || a.email}</span>
+                  {n && <span className="text-slate-600">{a.email}</span>}
+                  <span className="text-xs text-slate-500">· {formatDate(a.at, true)}</span>
+                  <a href={`?autorizar=${encodeURIComponent(a.email!)}&nombre=${encodeURIComponent(n)}#autorizar`} className="text-xs font-medium text-brand-600 underline underline-offset-2 hover:text-brand-800">
+                    Autorizar
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
       <div className="mb-4 flex flex-wrap gap-2 text-sm">
         {[
           ["", "Todos"],
@@ -156,17 +188,56 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/usua
           })}
         </tbody>
       </Table>
-      <form action={createUserAction} className="mt-6 flex flex-wrap items-end gap-2 rounded-xl border border-slate-200 bg-white p-4">
-        <p className="w-full text-sm font-medium">Pre-registrar usuario</p>
-        <Input name="name" placeholder="Nombre…" required className="w-56" />
-        <Input name="email" type="email" placeholder="email@empresa.com (opcional)…" className="w-64" />
-        <Button type="submit" variant="secondary">
-          Añadir
-        </Button>
-        <p className="w-full text-xs text-slate-500">
-          Útil para asignar roles antes de su primer acceso; el SSO lo vinculará por email. Sin email queda como usuario de pruebas (no recibe correos ni puede
-          entrar): úsalo con «Ver como» y añádele el email cuando quieras darle acceso.
-        </p>
+      <form id="autorizar" action={createUserAction} className="mt-6 flex scroll-mt-24 flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4">
+        <div>
+          <p className="text-sm font-semibold text-slate-900">Autorizar usuario</p>
+          <p className="text-xs text-slate-500">
+            Con su email corporativo podrá entrar con «Entrar con Microsoft». Con rol o departamento queda activo al momento; sin ninguno, queda pendiente.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Input name="name" placeholder="Nombre y apellidos…" required className="w-64" defaultValue={prefillName} aria-label="Nombre y apellidos" autoComplete="off" />
+          <Input
+            name="email"
+            type="email"
+            placeholder="nombre@natuaromatic.com…"
+            className="w-72"
+            defaultValue={prefillEmail}
+            aria-label="Email corporativo"
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <Select name="notifPref" defaultValue="immediate" className="w-auto" aria-label="Notificaciones">
+            <option value="immediate">Avisos inmediatos</option>
+            <option value="daily">Resumen diario</option>
+          </Select>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <fieldset>
+            <legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Roles</legend>
+            <div className="flex flex-col gap-1">
+              {EDITABLE_ROLES.map((k) => (
+                <label key={k} className="flex items-center gap-1.5 text-sm" title={ROLE_HELP[k]}>
+                  <input type="checkbox" name="roles" value={k} className="accent-brand-600" /> {ROLE_LABEL[k]}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Departamentos</legend>
+            <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+              {depts.map((d) => (
+                <label key={d.id} className="flex items-start gap-1.5 text-sm leading-snug">
+                  <input type="checkbox" name="departments" value={d.id} className="mt-0.5 accent-brand-600" /> {d.name}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+          <p className="text-xs text-slate-500">Sin email queda como usuario de pruebas: no recibe correos ni puede entrar (útil con «Ver como»).</p>
+          <Button type="submit">Autorizar</Button>
+        </div>
       </form>
     </>
   );

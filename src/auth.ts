@@ -41,11 +41,22 @@ const adminEmails = (process.env.ADMIN_EMAILS ?? "")
   .filter(Boolean);
 
 /**
- * Da de alta o actualiza al usuario tras autenticarse. Los usuarios nuevos
- * quedan "pendientes de activación" (§4) salvo los de ADMIN_EMAILS (arranque).
- * Devuelve null si el usuario está desactivado.
+ * Solo entra quien el administrador ha autorizado antes en Backoffice → Usuarios
+ * (email, roles y departamentos). Excepciones: ADMIN_EMAILS (arranque) y el login
+ * de demostración en local (sin clave), que da de alta a los usuarios demo.
  */
-async function upsertUser(p: { oid?: string; email: string; name: string }) {
+const autoRegister = devLoginEnabled && !devLoginRequiresPassword && !process.env.VERCEL;
+
+type LoginResult = { id: string } | { denied: "notAuthorized" | "pending" | "disabled" };
+
+/** Intento de acceso de una cuenta no autorizada: lo ve el admin en Backoffice → Usuarios. */
+async function logDenied(email: string, name: string, reason: string) {
+  const { logActivity } = await import("@/lib/server/activity");
+  await logActivity({ action: "auth.denied", entity: "auth", entityId: email, diff: { email, name, reason } }).catch(() => undefined);
+}
+
+/** Vincula la cuenta corporativa con el usuario autorizado (por OID de Entra o por email). */
+async function loginUser(p: { oid?: string; email: string; name: string }): Promise<LoginResult> {
   const email = p.email.toLowerCase();
   const [existing] = await db
     .select()
@@ -53,17 +64,28 @@ async function upsertUser(p: { oid?: string; email: string; name: string }) {
     .where(p.oid ? sql`${users.entraOid} = ${p.oid} or lower(${users.email}) = ${email}` : sql`lower(${users.email}) = ${email}`)
     .limit(1);
 
+  const bootstrapAdmin = adminEmails.includes(email);
   if (existing) {
-    if (existing.status === "disabled") return null;
+    if (existing.status === "disabled") {
+      await logDenied(email, p.name, "disabled");
+      return { denied: "disabled" };
+    }
+    if (existing.status !== "active" && !bootstrapAdmin && !autoRegister) {
+      await logDenied(email, p.name, "pending");
+      return { denied: "pending" };
+    }
     await db
       .update(users)
       .set({ lastLoginAt: new Date(), name: p.name || existing.name, entraOid: existing.entraOid ?? p.oid ?? null })
       .where(eq(users.id, existing.id));
     await db.insert(loginEvents).values({ userId: existing.id });
-    return existing.id;
+    return { id: existing.id };
   }
 
-  const bootstrapAdmin = adminEmails.includes(email);
+  if (!bootstrapAdmin && !autoRegister) {
+    await logDenied(email, p.name, "notAuthorized");
+    return { denied: "notAuthorized" };
+  }
   const [created] = await db
     .insert(users)
     .values({
@@ -85,7 +107,15 @@ async function upsertUser(p: { oid?: string; email: string; name: string }) {
     const { notifyPendingUser } = await import("@/lib/server/notifications");
     await notifyPendingUser(created!.id);
   }
-  return created!.id;
+  return { id: created!.id };
+}
+
+/** Motivo de rechazo del acceso provisional (se muestra en /login). */
+class LoginDeniedError extends CredentialsSignin {
+  constructor(reason: string) {
+    super();
+    this.code = reason;
+  }
 }
 
 const providers: NextAuthConfig["providers"] = [
@@ -108,13 +138,15 @@ if (devLoginEnabled) {
         const email = String(creds?.email ?? "").trim();
         if (!email.includes("@")) return null;
         const name = String(creds?.name ?? "").trim() || email.split("@")[0]!;
+        let res: LoginResult;
         try {
-          const id = await upsertUser({ email, name });
-          return id ? { id, email, name } : null;
+          res = await loginUser({ email, name });
         } catch (err) {
           console.error("[auth] fallo en el acceso provisional", err);
           throw new LoginBackendError();
         }
+        if ("denied" in res) throw new LoginDeniedError(res.denied);
+        return { id: res.id, email, name };
       },
     }),
   );
@@ -132,8 +164,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (tenant && profile?.tid && profile.tid !== tenant) return false;
       const email = String(profile?.email ?? profile?.preferred_username ?? "");
       if (!email) return false;
-      const id = await upsertUser({ oid: String(profile?.oid ?? ""), email, name: String(profile?.name ?? "") });
-      return id ? true : "/login?error=disabled";
+      const res = await loginUser({ oid: String(profile?.oid ?? ""), email, name: String(profile?.name ?? "") });
+      return "denied" in res ? `/login?error=${res.denied}` : true;
     },
     async jwt({ token, user, account, profile }) {
       if (account?.provider === "dev" && user?.id) token.uid = user.id;

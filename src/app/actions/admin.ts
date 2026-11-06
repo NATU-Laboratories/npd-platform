@@ -72,14 +72,31 @@ export async function updateUserAction(fd: FormData) {
   revalidatePath("/admin/usuarios");
 }
 
+/**
+ * Autoriza a una persona: solo quien está aquí (con su email corporativo) puede entrar
+ * con Microsoft 365. Se da de alta ya activa, con sus roles y departamentos.
+ */
 export async function createUserAction(fd: FormData) {
   const admin = await requireAdminAction();
-  const name = z.string().trim().min(1).parse(fd.get("name"));
+  const name = z.string().trim().min(1, "Pon el nombre").max(200).parse(fd.get("name"));
   const rawEmail = String(fd.get("email") ?? "").trim().toLowerCase();
-  // Sin email (pruebas): dirección ficticia que nunca recibe correos; se puede cambiar después
-  const email = rawEmail ? z.string().email().parse(rawEmail) : `pruebas-${crypto.randomUUID().slice(0, 8)}@${TEST_EMAIL_DOMAIN}`;
-  const [u] = await db.insert(users).values({ email, name, status: "pending" }).onConflictDoNothing().returning({ id: users.id });
-  if (u) await audit(admin.id, "admin.user.created", "user", u.id, { email });
+  // Sin email (pruebas): dirección ficticia que nunca recibe correos ni puede entrar; se puede cambiar después
+  const email = rawEmail ? z.string().email("Email no válido").parse(rawEmail) : `pruebas-${crypto.randomUUID().slice(0, 8)}@${TEST_EMAIL_DOMAIN}`;
+  const roleKeys = fd.getAll("roles").map(String).filter((r) => (EDITABLE_ROLES as readonly string[]).includes(r));
+  const deptIds = fd.getAll("departments").map(Number).filter(Number.isFinite);
+  const notifPref = z.enum(["immediate", "daily"]).parse(fd.get("notifPref") ?? "immediate");
+  const [dup] = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
+  if (dup) throw new Error("Ya hay un usuario con ese email: edítalo en la lista");
+  const status = rawEmail && (roleKeys.length || deptIds.length) ? "active" : "pending";
+  const id = await db.transaction(async (tx) => {
+    const [u] = await tx.insert(users).values({ email, name, status, isActive: status === "active", notifPref }).returning({ id: users.id });
+    const roleRows = await tx.select().from(roles);
+    const ids = roleRows.filter((r) => roleKeys.includes(r.key)).map((r) => r.id);
+    if (ids.length) await tx.insert(userRoles).values(ids.map((roleId) => ({ userId: u!.id, roleId })));
+    if (deptIds.length) await tx.insert(departmentMembers).values(deptIds.map((departmentId) => ({ userId: u!.id, departmentId })));
+    return u!.id;
+  });
+  await audit(admin.id, "admin.user.created", "user", id, { email, status, roles: roleKeys, departments: deptIds });
   revalidatePath("/admin/usuarios");
 }
 
