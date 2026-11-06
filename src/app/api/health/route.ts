@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { devLoginEnabled, devLoginRequiresPassword } from "@/auth";
 import { db } from "@/db";
 import { graphConfigured } from "@/lib/graph/client";
-import { mailDriver } from "@/lib/graph/mail";
+import { mailDriver, mailRedirect, verifySmtp } from "@/lib/graph/mail";
 import { storageDriver } from "@/lib/graph/storage";
 import { assistantEnabled } from "@/lib/server/assistant";
 import { teamsConfigured } from "@/lib/teams/bot";
@@ -36,7 +36,12 @@ export async function GET() {
     },
     graph: graphConfigured(),
     storage: storageDriver(),
-    mail: mailDriver(),
+    mail: {
+      driver: mailDriver(),
+      from: mailDriver() === "smtp" ? process.env.MAIL_FROM || process.env.SMTP_USER || null : mailDriver() === "graph" ? process.env.MAIL_SENDER ?? null : null,
+      testMode: mailRedirect().length > 0,
+      ...(mailDriver() === "smtp" ? { smtp: await verifySmtp() } : {}),
+    },
     cron: env("CRON_SECRET"),
     assistant: assistantEnabled(),
     teamsBot: teamsConfigured(),

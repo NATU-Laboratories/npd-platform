@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { PageTitle } from "@/components/admin";
 import { Card } from "@/components/ui/card";
 import { graphConfigured } from "@/lib/graph/client";
-import { mailDriver } from "@/lib/graph/mail";
+import { mailDriver, mailRedirect } from "@/lib/graph/mail";
 import { storageDriver } from "@/lib/graph/storage";
 
 export const metadata = { title: "Backoffice" };
@@ -50,7 +50,11 @@ export default async function AdminHome() {
               <span className="text-amber-700">{storageDriver() === "db" ? "base de datos (provisional, solo pruebas)" : "local (.storage) — solo desarrollo"}</span>
             )}
           </li>
-          <li>Email: {mailDriver() === "graph" ? "Graph sendMail" : <span className="text-amber-700">no se envían emails reales; puedes verlos en Notificaciones</span>}</li>
+          <li>
+            Email:{" "}
+            {mailDriver() === "graph" ? "Microsoft 365 (Graph)" : mailDriver() === "smtp" ? "SMTP (provisional)" : <span className="text-amber-700">no se envían emails reales; puedes verlos en Notificaciones</span>}
+            {mailRedirect().length > 0 && mailDriver() !== "log" && <span className="text-amber-700"> · modo pruebas: todo va a {mailRedirect().join(", ")}</span>}
+          </li>
         </ul>
       </Card>
     </>

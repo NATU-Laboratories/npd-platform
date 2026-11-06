@@ -328,6 +328,25 @@ export async function resendNotificationAction(fd: FormData) {
   revalidatePath("/admin/notificaciones");
 }
 
+/** Email de prueba a quien lo pide (comprueba el buzón remitente y el modo de envío). */
+export async function sendTestEmailAction() {
+  const admin = await requireAdminAction();
+  const { queueNotification } = await import("@/lib/server/notifications");
+  const { renderEmail } = await import("@/lib/server/email-template");
+  await queueNotification({
+    event: "admin.test",
+    recipients: [admin.email],
+    subject: "Email de prueba de la plataforma NPD",
+    html: renderEmail({
+      title: "Email de prueba",
+      intro: `Si estás leyendo esto, el envío de emails de la plataforma funciona. Lo has pedido desde Backoffice → Notificaciones (${new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid" })}).`,
+      ctaPath: "/admin/notificaciones",
+      ctaLabel: "Ver notificaciones",
+    }),
+  });
+  revalidatePath("/admin/notificaciones");
+}
+
 export async function retryJobAction(fd: FormData) {
   const admin = await requireAdminAction();
   const id = Number(fd.get("id"));
