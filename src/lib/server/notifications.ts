@@ -6,6 +6,7 @@ import {
   brands,
   clients,
   comments,
+  departmentMembers,
   departments,
   gateDeciders,
   infoRequests,
@@ -144,10 +145,22 @@ async function deciderEmails(gate: GateKey, type: "PL" | "MP" | "MDD") {
   return rows.map((r) => r.email);
 }
 
+/**
+ * Destinatarios de un departamento: sus emails de aviso (Backoffice → Departamentos) y,
+ * si no tiene ninguno, sus miembros activos (como en Reposiciones).
+ */
 async function departmentEmails(where: { ids?: number[]; keys?: string[] }) {
-  const cond = where.ids ? inArray(departments.id, where.ids.length ? where.ids : [-1]) : inArray(departments.key, where.keys ?? []);
-  const rows = await db.select({ emails: departments.notifyEmails }).from(departments).where(cond);
-  return rows.flatMap((r) => r.emails);
+  const cond = where.ids ? inArray(departments.id, where.ids.length ? where.ids : [-1]) : inArray(departments.key, where.keys?.length ? where.keys : ["-"]);
+  const rows = await db.select({ id: departments.id, emails: departments.notifyEmails }).from(departments).where(cond);
+  const withoutInbox = rows.filter((r) => !r.emails.length).map((r) => r.id);
+  const members = withoutInbox.length
+    ? await db
+        .select({ email: users.email })
+        .from(departmentMembers)
+        .innerJoin(users, eq(users.id, departmentMembers.userId))
+        .where(and(inArray(departmentMembers.departmentId, withoutInbox), eq(users.status, "active")))
+    : [];
+  return [...rows.flatMap((r) => r.emails), ...members.map((m) => m.email)];
 }
 
 function subjectFor(s: ProjectSummary, text: string) {
