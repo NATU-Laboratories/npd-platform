@@ -33,7 +33,7 @@ y solo consulta (no hace cambios).
 ## 2. Configurar el bot
 
 1. En el recurso, **Configuración**:
-   - **Punto de conexión de mensajería**: `https://npd-platform-seven.vercel.app/api/teams/messages`
+   - **Punto de conexión de mensajería**: `https://npd.natulaboratories.es/api/teams/messages`
      (o el dominio definitivo de la plataforma).
    - Copia el **Id. de aplicación de Microsoft** y el **Id. de inquilino de la aplicación**.
    - **Aplicar**.
@@ -61,7 +61,7 @@ Guarda y haz **Redeploy**. Comprueba en `https://<dominio>/api/health` que apare
 Con el Id. de aplicación, genera el paquete (manifiesto + iconos de NATU):
 
 ```bash
-pnpm teams:package <TEAMS_APP_ID> https://npd-platform-seven.vercel.app
+pnpm teams:package <TEAMS_APP_ID> https://npd.natulaboratories.es
 ```
 
 Se crea `teams-app/build/alexia-teams.zip`.
