@@ -1,5 +1,5 @@
 "use client";
-import { Loader2, Pencil } from "lucide-react";
+import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { ChipGroup } from "@/components/ui/chips";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
-import { applicable, SECTION_BY_KEY, type ScalarField, type SheetCtx, type SheetData } from "@/lib/sheet/sections";
+import { applicable, forCtx, SECTION_BY_KEY, type RowColumn, type ScalarField, type SheetCtx, type SheetData } from "@/lib/sheet/sections";
 import { cn } from "@/lib/utils";
 
 /** Control de edición de un campo de la ficha (también se usa en el diálogo de cambio de subestado). */
@@ -69,9 +69,85 @@ export function ScalarInput({ f, value, onChange, id }: { f: ScalarField; value:
       );
     case "multi":
       return <ChipGroup options={f.options} value={(value as string[]) ?? []} onChange={onChange} ariaLabel={f.label} />;
+    case "rows":
+      return <RowsInput id={id} label={f.label} columns={f.columns} addLabel={f.addLabel} max={f.max ?? 10} value={value} onChange={onChange} />;
     default:
       return <Input id={id} value={(value as string) ?? ""} placeholder={f.placeholder} onChange={(e) => onChange(e.target.value)} />;
   }
+}
+
+/** Varias filas del mismo tipo (p. ej. más de una persona responsable). */
+function RowsInput({
+  id,
+  label,
+  columns,
+  addLabel,
+  max,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  columns: RowColumn[];
+  addLabel: string;
+  max: number;
+  value: unknown;
+  onChange: (v: unknown) => void;
+}) {
+  const rows: Record<string, string>[] = Array.isArray(value) && value.length ? (value as Record<string, string>[]) : [{}];
+  const setCell = (i: number, k: string, v: string) => onChange(rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
+  return (
+    <div className="flex flex-col gap-2" id={id}>
+      {rows.map((r, i) => (
+        <div key={i} className="rounded-lg border border-slate-200 p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-semibold text-slate-500">
+              {label} {rows.length > 1 ? i + 1 : ""}
+            </p>
+            {rows.length > 1 && (
+              <button
+                type="button"
+                onClick={() => onChange(rows.filter((_, j) => j !== i))}
+                className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                aria-label={`Quitar ${label.toLowerCase()} ${i + 1}`}
+              >
+                <Trash2 className="size-4" />
+              </button>
+            )}
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {columns.map((c) => {
+              const cid = `${id}-${i}-${c.key}`;
+              return (
+                <div key={c.key} className="flex flex-col gap-1">
+                  <label htmlFor={cid} className="text-xs text-slate-600">
+                    {c.label}
+                  </label>
+                  {c.options ? (
+                    <Select id={cid} value={r[c.key] ?? ""} onChange={(e) => setCell(i, c.key, e.target.value)}>
+                      <option value="">Selecciona…</option>
+                      {c.options.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </Select>
+                  ) : (
+                    <Input id={cid} value={r[c.key] ?? ""} placeholder={c.placeholder} onChange={(e) => setCell(i, c.key, e.target.value)} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+      {rows.length < max && (
+        <Button type="button" variant="secondary" size="sm" className="self-start" onClick={() => onChange([...rows, {}])}>
+          <Plus aria-hidden /> {addLabel}
+        </Button>
+      )}
+    </div>
+  );
 }
 
 /** Editor de un apartado de la ficha técnica (miembros del departamento y gestor de proyectos). */
@@ -134,7 +210,7 @@ export function SectionEditor({
       <DialogContent title={title} description={section.description} wide>
         <div className="flex flex-col gap-6">
           {section.groups.map((g, gi) => {
-            const fields = applicable(g.fields, ctx);
+            const fields = applicable(g.fields, ctx).map((f) => forCtx(f, ctx));
             if (!fields.length) return null;
             return (
               <fieldset key={gi} className="flex flex-col gap-4">
@@ -166,7 +242,7 @@ export function SectionEditor({
                         htmlFor={id}
                         required={required.includes(f.key)}
                         highlight={required.includes(f.key)}
-                        className={cn((f.type === "textarea" || f.type === "multi") && "sm:col-span-2")}
+                        className={cn((f.type === "textarea" || f.type === "multi" || f.type === "rows") && "sm:col-span-2")}
                       >
                         <ScalarInput f={f} id={id} value={data[f.key]} onChange={(v) => set(f.key, v)} />
                       </Field>

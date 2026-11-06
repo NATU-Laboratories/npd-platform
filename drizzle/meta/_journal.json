@@ -127,6 +127,13 @@
       "when": 1793886018094,
       "tag": "0017_rep_lab",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793953021410,
+      "tag": "0018_regulatorio_por_categoria",
+      "breakpoints": true
     }
   ]
 }

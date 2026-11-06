@@ -5,7 +5,7 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { PHASES } from "@/lib/labels";
 import type { RefInfo } from "@/lib/server/references";
 import type { DeptCard, DeptState, SheetEntry } from "@/lib/server/sheet";
-import { applicable, checkField, fieldLabelInSection, formatValue, resolveFieldRef, sanitizeData, type SheetCtx, type SheetData, type SheetField } from "@/lib/sheet/sections";
+import { applicable, checkField, fieldApplies, fieldLabelInSection, formatValue, resolveFieldRef, sanitizeData, type SheetCtx, type SheetData, type SheetField } from "@/lib/sheet/sections";
 import { cn, formatBytes, formatDate } from "@/lib/utils";
 import { DeptTransition, type LabMode } from "./dept-transition";
 import { LabNotes, LabSamples } from "./lab-box";
@@ -136,7 +136,7 @@ function FieldView({ f, data, files }: { f: SheetField; data: SheetData; files: 
     );
   }
   return (
-    <div className={cn("min-w-0", (f.type === "textarea" || f.type === "multi") && "sm:col-span-2")}>
+    <div className={cn("min-w-0", (f.type === "textarea" || f.type === "multi" || f.type === "rows") && "sm:col-span-2")}>
       <dt className="text-xs text-slate-500">{f.label}</dt>
       <dd className={cn("whitespace-pre-line break-words text-sm", v ? "text-slate-900" : "text-slate-300")}>{v ?? "—"}</dd>
     </div>
@@ -147,13 +147,14 @@ function FieldView({ f, data, files }: { f: SheetField; data: SheetData; files: 
 const entriesFor = (entries: SheetEntry[], refId: number) => entries.filter((e) => e.refId === 0 || e.refId === refId);
 
 /** Campos exigidos por un subestado que aún no tienen valor válido (sin contar los que se piden en el propio diálogo). */
-function missingRefs(refs: string[], prompt: string[], entries: SheetEntry[]) {
+function missingRefs(refs: string[], prompt: string[], entries: SheetEntry[], ctx: SheetCtx) {
   return refs
     .filter((ref) => !prompt.includes(ref))
     .map((ref) => {
       const r = resolveFieldRef(ref);
       const e = r && entries.find((x) => x.section.key === r.section.key);
-      if (!r || !e) return null;
+      // Los campos que no aplican a este proyecto (p. ej. INCI en ambientación) no bloquean
+      if (!r || !e || !fieldApplies(r.field, ctx)) return null;
       const res = checkField(r.field, sanitizeData(r.section, e.data));
       return res.ok ? null : { label: fieldLabelInSection(r.section, r.field.key), entry: e, field: r.field.key };
     })
@@ -268,7 +269,7 @@ function StateRow({ c, s, canEdit, refInfo, pc }: { c: DeptCard; s: DeptState; c
       }),
     );
   // Lo que falta para el siguiente estado se ve antes de pulsar, con acceso directo a rellenarlo
-  const missing = canEdit && !c.auto && s.next ? missingRefs(s.next.requiredFields, s.next.promptFields, scope) : [];
+  const missing = canEdit && !c.auto && s.next ? missingRefs(s.next.requiredFields, s.next.promptFields, scope, pc.ctx) : [];
   const firstMissing = missing[0]?.entry;
   return (
     <div className="flex flex-col gap-2">

@@ -19,9 +19,15 @@ type Base = {
   invalidLabel?: string;
   hint?: string;
   when?: (c: SheetCtx) => boolean;
+  /** Ayuda y ejemplo según el proyecto (p. ej. por categoría: perfumería, cosmética, ambientación). */
+  hintFor?: (c: SheetCtx) => string | undefined;
+  placeholderFor?: (c: SheetCtx) => string | undefined;
 };
+/** Columna de un campo de filas (p. ej. cada persona responsable). */
+export type RowColumn = { key: string; label: string; placeholder?: string; options?: Opt[] };
 export type ScalarField =
   | (Base & { type: "text" | "textarea" | "url"; placeholder?: string })
+  | (Base & { type: "rows"; columns: RowColumn[]; addLabel: string; max?: number })
   | (Base & { type: "money" | "number"; unit?: string })
   | (Base & { type: "date" })
   | (Base & { type: "bool" })
@@ -57,6 +63,8 @@ export type SheetCtx = {
     rrp?: number | null;
     unitsFirstOrder?: number | null;
     capacityMl?: number | null;
+    /** Categoría del brief: perfume · cosmetic · ambient. */
+    category?: string | null;
     references?: number | null;
     finalName?: string | null;
     languages?: string[];
@@ -150,6 +158,25 @@ export const OTHER_ICONS = opts([
   ["libro", "Mano con libro (ver información adjunta)"],
   ["otros", "Otros"],
 ]);
+
+const isAmbient = (c: SheetCtx) => c.brief.category === "ambient";
+const notAmbient = (c: SheetCtx) => !isAmbient(c);
+const categoryOf = (c: SheetCtx): "perfume" | "cosmetic" | "ambient" => (c.brief.category === "cosmetic" ? "cosmetic" : c.brief.category === "ambient" ? "ambient" : "perfume");
+
+/** Ejemplos (en gris dentro del cuadro) de las precauciones de uso según el tipo de producto. */
+const WARNINGS_EXAMPLE = {
+  perfume:
+    "Ej.: INFLAMABLE (y/o símbolo de la llama). Mantener alejado de fuentes de calor y llamas. Mantener fuera del alcance de los niños. Evitar el contacto con los ojos. No aplicar sobre piel irritada.",
+  cosmetic:
+    "Ej.: Uso externo. Evitar el contacto con los ojos; en caso de contacto, aclarar con abundante agua. Mantener fuera del alcance de los niños. Si aparece irritación, suspender su uso.",
+  ambient:
+    "Ej.: No ingerir. Mantener fuera del alcance de los niños. Evitar el contacto con los ojos y la piel. No colocar sobre superficies delicadas. En caso de ingestión, llamar al Servicio de Información Toxicológica (91 562 04 20).",
+};
+const USAGE_EXAMPLE = {
+  perfume: "Ej.: Pulverizar sobre la piel a unos 15 cm de distancia.",
+  cosmetic: "Ej.: Aplicar sobre la piel limpia con un suave masaje hasta su completa absorción.",
+  ambient: "Ej.: Retirar el tapón, introducir las varillas en el frasco y darles la vuelta de vez en cuando para intensificar el aroma.",
+};
 
 const digits = (n: number) => (v: unknown) => typeof v === "string" && new RegExp(`^\\d{${n}}$`).test(v.replace(/\s/g, ""));
 
@@ -334,75 +361,178 @@ export const SHEET_SECTIONS: SheetSection[] = [
   {
     key: "regulatorio",
     title: "Calidad y regulatorio · requisitos de etiqueta",
-    description: "Todo lo legal que debe llevar la etiqueta: denominación, contenido, idiomas, iconos, INCI, modo de uso, precauciones, responsable, UFI y lote.",
+    description:
+      "Lo que Calidad / Regulatory valida para la etiqueta, según el tipo de producto (perfumería, cosmética o ambientación): denominación, cantidad, idiomas, precauciones, responsable, símbolos y códigos.",
     dept: "calidad",
     phase: 3,
     groups: [
       {
-        title: "Denominación y contenido",
+        title: "Denominación y cantidad",
         fields: [
-          { key: "denomination", label: "Denominación del producto", type: "select", options: DENOMINATIONS },
+          {
+            key: "denomination",
+            label: "Denominación del producto",
+            type: "select",
+            options: DENOMINATIONS,
+            hintFor: (c) =>
+              isAmbient(c) ? "Denominación y cantidad, obligatorias en el mismo campo visual." : "Eau de toilette, eau de parfum… en todos los idiomas que lleve el estuche.",
+          },
           { key: "denominationOther", label: "Otra denominación", type: "text" },
-          { key: "nominalMl", label: "Cantidad", type: "number", unit: "ml" },
+          {
+            key: "nominalMl",
+            label: "Cantidad",
+            type: "number",
+            unit: "ml",
+            hintFor: (c) => (isAmbient(c) ? "Tamaño de letra según la cantidad (mín. 4 mm)." : "En ml y fl. oz."),
+          },
           { key: "nominalFlOz", label: "Cantidad en fl oz", type: "number", unit: "fl oz", hint: "Precalculado desde los ml (1 fl oz = 29,57 ml)." },
-          { key: "estimated", label: "Lleva el símbolo ℮ (cantidad estimada)", type: "bool" },
+          { key: "estimated", label: "Lleva el símbolo ℮ (contenido efectivo)", type: "bool", hint: "Tiene que ir junto al volumen.", when: notAmbient },
+          { key: "sameVisualField", label: "Denominación y cantidad en el mismo campo visual", type: "bool", when: isAmbient },
+          { key: "labelSize", label: "Tamaño de la etiqueta", type: "text", placeholder: "p. ej. 52 × 74 mm", when: isAmbient },
         ],
       },
       {
         title: "Idiomas",
         fields: [
-          { key: "languages", label: "Idiomas de la etiqueta", type: "multi", options: LANGUAGES, hint: "Precargados según los mercados del brief." },
+          {
+            key: "languages",
+            label: "Idiomas de la etiqueta",
+            type: "multi",
+            options: LANGUAGES,
+            hint: "Las precauciones de uso y la denominación deben ir en los idiomas oficiales de los países de venta. Precargados según los mercados del brief.",
+          },
           { key: "languagesOther", label: "Otros idiomas", type: "text" },
-        ],
-      },
-      {
-        title: "Iconos",
-        fields: [
-          { key: "recyclingIcons", label: "Iconos de reciclaje", type: "multi", options: RECYCLING_ICONS },
-          { key: "recyclingOther", label: "Otros iconos de reciclaje", type: "text" },
-          { key: "hazardIcons", label: "Iconos de peligro", type: "multi", options: HAZARD_ICONS },
-          { key: "hazardOther", label: "Otros iconos de peligro", type: "text" },
-          { key: "otherIcons", label: "Otros iconos / símbolos", type: "multi", options: OTHER_ICONS },
-          { key: "otherIconsText", label: "Otros símbolos", type: "text" },
-          { key: "pao", label: "PAO / duración", type: "text", placeholder: "p. ej. 24M" },
         ],
       },
       {
         title: "Composición y textos",
         fields: [
-          { key: "inci", label: "INCI / ingredientes", type: "textarea", placeholder: "ALCOHOL DENAT., PARFUM (FRAGRANCE), AQUA (WATER)…" },
-          { key: "allergens", label: "Alérgenos a declarar", type: "textarea" },
-          { key: "usage", label: "Modo de uso", type: "textarea" },
-          { key: "warnings", label: "Precauciones", type: "textarea", placeholder: "Advertencias y frases H/P que deben figurar" },
+          {
+            key: "inci",
+            label: "Ingredientes (INCI)",
+            type: "textarea",
+            when: notAmbient,
+            placeholderFor: (c) => (c.brief.category === "cosmetic" ? "AQUA (WATER), GLYCERIN, CETEARYL ALCOHOL, PARFUM (FRAGRANCE)…" : "ALCOHOL DENAT., PARFUM (FRAGRANCE), AQUA (WATER)…"),
+          },
+          { key: "usage", label: "Modo de empleo", type: "textarea", placeholderFor: (c) => USAGE_EXAMPLE[categoryOf(c)] },
+          {
+            key: "warnings",
+            label: "Precauciones de uso",
+            type: "textarea",
+            placeholderFor: (c) => WARNINGS_EXAMPLE[categoryOf(c)],
+            hintFor: (c) => (c.brief.category === "perfume" ? "«Inflamable» y/o el símbolo de la llama son obligatorios; el resto puede elegirse." : undefined),
+          },
+          { key: "pao", label: "Fecha de caducidad o PAO", type: "text", placeholder: "p. ej. 24M o fecha de caducidad", when: notAmbient },
         ],
       },
       {
-        title: "Responsable",
+        title: "Peligrosidad (CLP)",
         fields: [
           {
-            key: "responsibleRole",
-            label: "Figura",
+            key: "signalWord",
+            label: "Palabra de advertencia",
             type: "select",
+            when: isAmbient,
             options: opts([
-              ["fabricante", "Fabricante"],
-              ["distribuidor", "Distribuidor"],
-              ["importador", "Importador"],
-              ["responsable", "Responsable del producto"],
+              ["peligro", "PELIGRO / DANGER / PERICOL"],
+              ["atencion", "ATENCIÓN / WARNING"],
+              ["ninguna", "No lleva"],
             ]),
           },
-          { key: "responsibleName", label: "Nombre", type: "text" },
-          { key: "responsibleAddress", label: "Dirección", type: "text" },
-          { key: "responsibleCountry", label: "País", type: "text" },
-          { key: "responsibleContact", label: "Web o teléfono", type: "text" },
+          { key: "hPhrases", label: "Frases H", type: "textarea", when: isAmbient, placeholder: "H317 Puede provocar una reacción alérgica en la piel. H412 Nocivo para los organismos acuáticos…" },
+          { key: "pPhrases", label: "Frases P", type: "textarea", when: isAmbient, placeholder: "P101 Si se necesita consejo médico, tener a mano el envase o la etiqueta. P102 Mantener fuera del alcance de los niños…" },
+          { key: "euh", label: "EUH (contiene)", type: "textarea", when: isAmbient, placeholder: "EUH208 Contiene LINALOOL. Puede provocar una reacción alérgica." },
+          {
+            key: "basicPhrases",
+            label: "Lleva «No ingerir», «Mantener fuera del alcance de los niños» y el nº de Toxicología",
+            type: "bool",
+            when: isAmbient,
+            hint: "Servicio de Información Toxicológica: 91 562 04 20.",
+          },
+          {
+            key: "tactileTriangle",
+            label: "Triángulo de advertencia detectable al tacto",
+            type: "select",
+            when: isAmbient,
+            hint: "Comprobar si lo lleva.",
+            options: opts([
+              ["si", "Sí lo lleva"],
+              ["no", "No lo lleva"],
+              ["na", "No aplica"],
+            ]),
+          },
         ],
       },
       {
-        title: "Códigos",
+        title: "Símbolos",
+        fields: [
+          {
+            key: "hazardIcons",
+            label: "Pictogramas de peligro",
+            type: "multi",
+            options: HAZARD_ICONS,
+            hintFor: (c) => (isAmbient(c) ? "Lado mínimo de 1 cm²." : undefined),
+          },
+          { key: "hazardOther", label: "Otros pictogramas", type: "text" },
+          {
+            key: "flame",
+            label: "Símbolo de la llama / «INFLAMABLE»",
+            type: "bool",
+            when: (c) => c.brief.category === "perfume",
+            hint: "En los estuches de perfume: «INFLAMABLE» en cada idioma y/o la llama (sin idioma).",
+          },
+          {
+            key: "recyclingIcons",
+            label: "Símbolos de reciclado según países",
+            type: "multi",
+            options: RECYCLING_ICONS,
+            hintFor: (c) => (isAmbient(c) ? "Gestión de residuos." : undefined),
+          },
+          { key: "recyclingOther", label: "Otros símbolos de reciclado", type: "text" },
+          { key: "ecoembes", label: "Lleva el símbolo de Ecoembes", type: "bool", hint: "No ponerlo a partir de 2027." },
+          { key: "otherIcons", label: "Otros iconos / símbolos", type: "multi", options: OTHER_ICONS, when: notAmbient },
+          { key: "otherIconsText", label: "Otros símbolos", type: "text" },
+        ],
+      },
+      {
+        title: "Persona responsable",
+        fields: [
+          {
+            key: "responsibles",
+            label: "Persona responsable",
+            type: "rows",
+            addLabel: "Añadir responsable",
+            max: 5,
+            hintFor: (c) =>
+              isAmbient(c) ? "Dirección completa y teléfono. Si hay que declarar más de uno, añádelos." : "Pon la web. Si hay que declarar más de uno, añádelos.",
+            columns: [
+              {
+                key: "role",
+                label: "Figura",
+                options: opts([
+                  ["fabricante", "Fabricante"],
+                  ["distribuidor", "Distribuidor"],
+                  ["importador", "Importador"],
+                  ["responsable", "Persona responsable"],
+                ]),
+              },
+              { key: "name", label: "Nombre / razón social" },
+              { key: "address", label: "Dirección completa" },
+              { key: "country", label: "País" },
+              { key: "web", label: "Web", placeholder: "www.…" },
+              { key: "phone", label: "Teléfono", placeholder: "+34…" },
+            ],
+          },
+        ],
+      },
+      {
+        title: "Códigos y marcaje",
         fields: [
           {
             key: "ufiStatus",
             label: "UFI",
             type: "select",
+            hintFor: (c) => (isAmbient(c) ? "Obligatorio en ambientación." : undefined),
             options: opts([
               ["na", "No aplica"],
               ["pendiente", "Pendiente"],
@@ -410,8 +540,14 @@ export const SHEET_SECTIONS: SheetSection[] = [
             ]),
           },
           { key: "ufi", label: "Código UFI", type: "text" },
-          { key: "lot", label: "Lote (formato y ubicación del marcaje)", type: "text", placeholder: "p. ej. «L» + 6 dígitos, en la base" },
-          { key: "cpnp", label: "Nº de notificación CPNP", type: "text" },
+          { key: "lot", label: "Lote (formato y ubicación del marcaje)", type: "text", placeholder: "p. ej. «L» + 6 dígitos, en la base", hint: "Opcional." },
+          {
+            key: "barcodeOnLabel",
+            label: "Código de barras en la etiqueta",
+            type: "bool",
+            hintFor: (c) => (notAmbient(c) ? "Si lleva estuche, no hace falta en la etiqueta." : undefined),
+          },
+          { key: "madeInSpain", label: "Lleva «MADE IN SPAIN»", type: "bool", hint: "Obligatorio si se comercializa fuera de la UE." },
         ],
       },
       { fields: [{ key: "regFiles", label: "Documentación (IFRA, FDS, CPSR, certificados)", type: "files", tag: "regulatorio" }] },
@@ -590,6 +726,18 @@ export function quoteSpecGroups() {
     .filter((g) => g.fields.length);
 }
 
+/** Campo con la ayuda y el ejemplo que corresponden a este proyecto. */
+export function forCtx<T extends SheetField>(f: T, c: SheetCtx): T {
+  const hint = f.hintFor?.(c);
+  const placeholder = f.placeholderFor?.(c);
+  return { ...f, ...(hint ? { hint } : {}), ...(placeholder ? { placeholder } : {}) };
+}
+
+/** ¿El campo aplica a este proyecto? (los que no aplican no se piden ni bloquean) */
+export function fieldApplies(f: { when?: (c: SheetCtx) => boolean }, c: SheetCtx) {
+  return !f.when || f.when(c);
+}
+
 export function applicable<T extends { when?: (c: SheetCtx) => boolean }>(fields: T[], c: SheetCtx) {
   return fields.filter((f) => !f.when || f.when(c));
 }
@@ -616,6 +764,8 @@ export function isScalarFilled(f: ScalarField, v: unknown): boolean {
       return typeof v === "number" && Number.isFinite(v);
     case "multi":
       return Array.isArray(v) && v.length > 0;
+    case "rows":
+      return Array.isArray(v) && v.some((r) => r && typeof r === "object" && Object.values(r).some((x) => typeof x === "string" && x.trim()));
     default:
       return typeof v === "string" && v.trim() !== "";
   }
@@ -661,6 +811,22 @@ export function sanitizeData(s: SheetSection, raw: unknown): SheetData {
         return typeof v === "string" && f.options.some((o) => o.value === v) ? v : undefined;
       case "multi":
         return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && f.options.some((o) => o.value === x)) : undefined;
+      case "rows": {
+        if (!Array.isArray(v)) return undefined;
+        const rows = v
+          .slice(0, f.max ?? 10)
+          .map((r) => {
+            const src = (r && typeof r === "object" ? r : {}) as Record<string, unknown>;
+            const row: Record<string, string> = {};
+            for (const col of f.columns) {
+              const x = typeof src[col.key] === "string" ? (src[col.key] as string).trim().slice(0, 300) : "";
+              if (x && (!col.options || col.options.some((o) => o.value === x))) row[col.key] = x;
+            }
+            return row;
+          })
+          .filter((r) => Object.keys(r).length);
+        return rows.length ? rows : undefined;
+      }
       case "url": {
         // Solo enlaces https (se muestran como enlace: nada de javascript: ni similares)
         const t = typeof v === "string" ? v.trim() : "";
@@ -694,6 +860,16 @@ export function formatValue(f: ScalarField, v: unknown): string | null {
       return f.options.find((o) => o.value === v)?.label ?? String(v);
     case "multi":
       return (v as string[]).map((x) => f.options.find((o) => o.value === x)?.label ?? x).join(", ");
+    case "rows":
+      return (v as Record<string, string>[])
+        .map((r) =>
+          f.columns
+            .map((c) => (r[c.key] ? (c.options?.find((o) => o.value === r[c.key])?.label ?? r[c.key]) : null))
+            .filter(Boolean)
+            .join(" · "),
+        )
+        .filter(Boolean)
+        .join("\n");
     default:
       return String(v);
   }
