@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-const [appId, url = "https://npd-platform-seven.vercel.app"] = process.argv.slice(2);
+const [appId, url = "https://npd.natulaboratories.es"] = process.argv.slice(2);
 if (!/^[0-9a-f-]{36}$/i.test(appId ?? "")) {
   console.error("Indica el ID de aplicación (cliente) del bot: pnpm teams:package <TEAMS_APP_ID> [URL]");
   process.exit(1);

@@ -12,7 +12,7 @@ Next.js 16 (App Router, Server Actions) · TypeScript · Tailwind v4 · Drizzle 
 
 | Área | Implementación |
 |---|---|
-| SSO | Entra ID. Usuario nuevo → *pendiente de activación* + aviso al admin. Sin roles no ve nada. Sesión de 8 h y estado releído de BD en cada petición (desactivar en el backoffice es inmediato; un usuario deshabilitado en Entra ID no puede volver a entrar). |
+| SSO | Entra ID. Solo entran los usuarios autorizados antes por el admin en Backoffice → Usuarios (email, roles y departamentos); los intentos de cuentas no autorizadas se registran y se ven allí. Sin roles no ve nada. Sesión de 8 h y estado releído de BD en cada petición (desactivar en el backoffice es inmediato; un usuario deshabilitado en Entra ID no puede volver a entrar). |
 | Asistente de solicitud | 5 pasos (datos básicos → PL/MP → producto condicional por categoría con bloque olfativo → adjuntos y notas → resumen). Autoguardado como borrador, barra de completitud, aviso no bloqueante bajo el umbral, validación Zod compartida cliente/servidor. Usable en móvil (pantalla completa). |
 | Código | `AAAA-PL-NNNN` / `AAAA-MP-NNNN`, secuencial por año y tipo (contador transaccional). |
 | SharePoint | Carpeta `AAAA-XX-NNNN · Cliente/Marca · Nombre` con subcarpetas de fase. Los adjuntos del borrador se suben a `_Borradores/<id>` y se mueven a `00 Solicitud` al enviar. En BD se guardan `drive_item_id`, no rutas. |
@@ -57,7 +57,7 @@ Con `AUTH_DEV_LOGIN=true` y `AUTH_DEV_PASSWORD=<clave>` la pantalla de login mue
 2. Variables de entorno de `.env.example` en Vercel (nunca en el repo). `ADMIN_EMAILS` con el email de quien administra: entra como Admin en su primer login.
 3. Región: `vercel.json` fija las funciones en `fra1` (Frankfurt), la misma región que Neon (`aws-eu-central-1`). Si la base de datos cambia de región, cambiar también esta: cada consulta cruzando el Atlántico añade ~90 ms y una página hace 10–20.
 4. Cron: `vercel.json` programa `/api/cron/jobs` una vez al día (06:00 UTC), compatible con el plan Hobby. En plan Pro conviene cambiarlo a `*/10 * * * *` para reintentar emails fallidos cada 10 minutos. Definir `CRON_SECRET`.
-5. IT (tenant Microsoft 365), según §9.2 del SPEC: app single-tenant en Entra ID con redirect `https://<dominio>/api/auth/callback/microsoft-entra-id`; permisos delegados `openid profile email User.Read`; permisos de aplicación `Sites.Selected` (write solo en "Proyectos NPD") y `Mail.Send` restringido por Application Access Policy al buzón `proyectos@…`. Facilitar Tenant ID, Client ID, secreto, Site ID y buzón.
+5. IT (tenant Microsoft 365), según §9.2 del SPEC: app single-tenant en Entra ID con redirect `https://npd.natulaboratories.es/api/auth/callback/microsoft-entra-id`; permisos delegados `openid profile email User.Read`; permisos de aplicación `Sites.Selected` (write solo en "Proyectos NPD") y `Mail.Send` restringido por Application Access Policy al buzón `proyectos@…`. Facilitar Tenant ID, Client ID, secreto, Site ID y buzón.
 
 ## Estructura
 
