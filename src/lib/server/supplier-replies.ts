@@ -207,7 +207,7 @@ export async function handleSupplierReply(item: InboundItem): Promise<string> {
     action: "replenishment.supplier_reply",
     entity: "replenishment",
     entityId: rep.r.id,
-    diff: { supplier: supplier.name, from, subject, body: body.slice(0, 4000), attachments: atts.map((a) => a.name), saved, registered, summary: extracted?.summary ?? null },
+    diff: { supplier: supplier.name, from, subject, body: body.slice(0, 20000), attachments: atts.map((a) => a.name), saved, registered, summary: extracted?.summary ?? null },
   });
 
   // Reenvío de la respuesta completa (texto y adjuntos) a Compras, a quien abrió la reposición y a
