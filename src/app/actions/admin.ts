@@ -40,7 +40,6 @@ export async function updateUserAction(fd: FormData) {
   const admin = await requireAdminAction();
   const userId = z.string().uuid().parse(fd.get("userId"));
   const status = z.enum(["pending", "active", "disabled"]).parse(fd.get("status"));
-  const notifPref = z.enum(["immediate", "daily"]).parse(fd.get("notifPref") ?? "immediate");
   // Solo se editan a mano los roles de EDITABLE_ROLES; «Aprobador» y «Miembro de departamento» se deducen
   const roleKeys = fd.getAll("roles").map(String).filter((r) => (EDITABLE_ROLES as readonly string[]).includes(r));
   const deptIds = fd.getAll("departments").map(Number).filter(Number.isFinite);
@@ -58,7 +57,7 @@ export async function updateUserAction(fd: FormData) {
   await db.transaction(async (tx) => {
     await tx
       .update(users)
-      .set({ status, isActive: status === "active", notifPref, ...(newEmail ? { email: newEmail } : {}) })
+      .set({ status, isActive: status === "active", ...(newEmail ? { email: newEmail } : {}) })
       .where(eq(users.id, userId));
     const roleRows = await tx.select().from(roles);
     const editable = roleRows.filter((r) => (EDITABLE_ROLES as readonly string[]).includes(r.key)).map((r) => r.id);
@@ -84,12 +83,11 @@ export async function createUserAction(fd: FormData) {
   const email = rawEmail ? z.string().email("Email no válido").parse(rawEmail) : `pruebas-${crypto.randomUUID().slice(0, 8)}@${TEST_EMAIL_DOMAIN}`;
   const roleKeys = fd.getAll("roles").map(String).filter((r) => (EDITABLE_ROLES as readonly string[]).includes(r));
   const deptIds = fd.getAll("departments").map(Number).filter(Number.isFinite);
-  const notifPref = z.enum(["immediate", "daily"]).parse(fd.get("notifPref") ?? "immediate");
   const [dup] = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
   if (dup) throw new Error("Ya hay un usuario con ese email: edítalo en la lista");
   const status = rawEmail && (roleKeys.length || deptIds.length) ? "active" : "pending";
   const id = await db.transaction(async (tx) => {
-    const [u] = await tx.insert(users).values({ email, name, status, isActive: status === "active", notifPref }).returning({ id: users.id });
+    const [u] = await tx.insert(users).values({ email, name, status, isActive: status === "active" }).returning({ id: users.id });
     const roleRows = await tx.select().from(roles);
     const ids = roleRows.filter((r) => roleKeys.includes(r.key)).map((r) => r.id);
     if (ids.length) await tx.insert(userRoles).values(ids.map((roleId) => ({ userId: u!.id, roleId })));
