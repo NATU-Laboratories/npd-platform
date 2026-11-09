@@ -77,12 +77,12 @@ let transport: import("nodemailer").Transporter | null = null;
 /** SMTP (Gmail: smtp.gmail.com, puerto 465, usuario = la cuenta, contraseña de aplicación). */
 async function sendSmtp(msg: MailMessage) {
   const nodemailer = await import("nodemailer");
-  const port = Number(process.env.SMTP_PORT ?? 465);
+  const port = Number((process.env.SMTP_PORT ?? "465").trim());
   transport ??= nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
+    host: process.env.SMTP_HOST?.trim(),
     port,
     secure: port === 465,
-    auth: { user: process.env.SMTP_USER, pass: (process.env.SMTP_PASSWORD ?? "").replace(/\s+/g, "") },
+    auth: { user: process.env.SMTP_USER?.trim(), pass: (process.env.SMTP_PASSWORD ?? "").replace(/\s+/g, "").replace(/^["']|["']$/g, "") },
   });
   const fromAddress = process.env.MAIL_FROM || process.env.SMTP_USER!;
   await transport.sendMail({
@@ -94,21 +94,40 @@ async function sendSmtp(msg: MailMessage) {
   });
 }
 
+/** Pistas sobre el formato de las variables SMTP (sin mostrar sus valores). */
+function smtpHints() {
+  const host = process.env.SMTP_HOST ?? "";
+  const user = process.env.SMTP_USER ?? "";
+  const pass = process.env.SMTP_PASSWORD ?? "";
+  const hints: string[] = [];
+  if (host !== host.trim() || user !== user.trim()) hints.push("SMTP_HOST o SMTP_USER tienen espacios al principio o al final");
+  if (/^["']|["']$/.test(pass.trim()) || /^["']|["']$/.test(user.trim())) hints.push("SMTP_USER o SMTP_PASSWORD están entre comillas: quítalas");
+  if (/brevo|sendinblue/i.test(host)) {
+    if (!/@smtp-brevo\.com$/i.test(user.trim())) hints.push("Con Brevo, SMTP_USER es el «Iniciar sesión» de SMTP y API → SMTP (termina en @smtp-brevo.com), no tu email");
+    if (/^xkeysib-/i.test(pass.trim())) hints.push("SMTP_PASSWORD es una clave de API (xkeysib-…): hace falta una clave SMTP (xsmtpsib-…)");
+    else if (!/^xsmtpsib-/i.test(pass.trim())) hints.push("SMTP_PASSWORD no parece una clave SMTP de Brevo (deberían empezar por xsmtpsib-)");
+  }
+  if (/gmail/i.test(host) && pass.replace(/\s+/g, "").length !== 16) hints.push("Con Gmail, SMTP_PASSWORD es la contraseña de aplicación de 16 letras");
+  if (!pass) hints.push("Falta SMTP_PASSWORD");
+  return hints;
+}
+
 /** Comprueba la conexión y el usuario/contraseña SMTP sin enviar nada. */
-export async function verifySmtp(): Promise<{ ok: boolean; error?: string }> {
+export async function verifySmtp(): Promise<{ ok: boolean; error?: string; hints?: string[] }> {
   if (mailDriver() !== "smtp") return { ok: false, error: "MAIL_DRIVER no es smtp" };
+  const hints = smtpHints();
   try {
     const nodemailer = await import("nodemailer");
-    const port = Number(process.env.SMTP_PORT ?? 465);
+    const port = Number((process.env.SMTP_PORT ?? "465").trim());
     const t = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
+      host: process.env.SMTP_HOST?.trim(),
       port,
       secure: port === 465,
-      auth: { user: process.env.SMTP_USER, pass: (process.env.SMTP_PASSWORD ?? "").replace(/\s+/g, "") },
+      auth: { user: process.env.SMTP_USER?.trim(), pass: (process.env.SMTP_PASSWORD ?? "").replace(/\s+/g, "").replace(/^["']|["']$/g, "") },
     });
     await t.verify();
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: (err instanceof Error ? err.message : String(err)).slice(0, 200) };
+    return { ok: false, error: (err instanceof Error ? err.message : String(err)).slice(0, 200), hints };
   }
 }
