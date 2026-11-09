@@ -13,7 +13,8 @@ export async function GET(req: Request) {
   }
   try {
     // Avisos proactivos de Alexia primero: sus emails entran en la cola que se procesa a continuación
-    const alerts = await runWatchdog();
+    // ?resumen=1 fuerza el resumen semanal (para probarlo un día que no sea lunes)
+    const alerts = await runWatchdog({ forceWeekly: new URL(req.url).searchParams.get("resumen") === "1" });
     const result = await runJobs({ limit: 50 });
     return NextResponse.json({ ...result, alerts });
   } catch (err) {

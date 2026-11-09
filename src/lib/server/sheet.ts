@@ -515,6 +515,37 @@ export async function saveSection(u: CurrentUser, projectId: string, sectionKey:
 }
 
 /**
+ * Cambia un único campo de la ficha (lo usa Alexia): mismos permisos que «Editar», y el resto
+ * del apartado se conserva. Devuelve el valor anterior y la referencia (si el apartado va por referencia).
+ */
+export async function setSheetField(u: CurrentUser, projectId: string, sectionKey: string, fieldKey: string, value: unknown, referenceId?: number) {
+  const section = SHEET_SECTIONS.find((s) => s.key === sectionKey);
+  if (!section) throw new SheetError("Apartado desconocido");
+  const p = await loadProjectRow(projectId);
+  if (!p) throw new SheetError("Proyecto no encontrado");
+  const deptKey = (await sectionDeptKeys())[section.key]!;
+  const deptPhase = (await deptStartPhases())[deptKey] ?? section.phase;
+  if (!deptActive(deptPhase, p)) throw new SheetError(LOCKED_MSG);
+  if (!canEditSection(u, deptKey, deptPhase, p)) throw new SheetError(`Solo los miembros del departamento responsable pueden cambiar «${section.title}»`);
+  const { ref } = await resolveRef(p, (multi) => isPerReferenceSection(section.key, multi, p.packagingMode), referenceId);
+  const refId = ref?.id ?? 0;
+  const ctx = ctxForRef(await sheetContext(p), ref);
+  const prev = await savedData(p.id, section.key, refId);
+  const base = refId ? (prev ?? {}) : effectiveData(section, ctx, prev);
+  const before = (refId ? { ...((await savedData(p.id, section.key, 0)) ?? {}), ...base } : base)[fieldKey];
+  await writeSection(u, p, section, { ...base, [fieldKey]: value }, ctx, db, refId, ref ? refTitle(ref) : undefined);
+  return { before, refLabel: ref ? refTitle(ref) : null };
+}
+
+/** Referencias del proyecto y si el apartado va por referencia (para que Alexia sepa si debe preguntar cuál). */
+export async function sheetRefsFor(projectId: string, sectionKey: string) {
+  const p = await loadProjectRow(projectId);
+  if (!p) return null;
+  const refs = await listReferences(p.id);
+  return { refs, perRef: isPerReferenceSection(sectionKey, isMulti(refs), p.packagingMode) };
+}
+
+/**
  * Avanza o retrocede el subestado de un departamento en un proyecto (o en una
  * referencia, si el departamento trabaja por referencia).
  * - Avanzar: solo al siguiente subestado; exige los campos obligatorios del
