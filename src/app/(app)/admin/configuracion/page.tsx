@@ -26,6 +26,13 @@ export default async function SettingsPage() {
           <Field label="Proveedor sin responder (días)" hint="Si un proveedor no responde a una recotización en este plazo, Alexia avisa a Compras y a los gestores de proyectos (hasta 3 recordatorios).">
             <Input name="quote_followup_days" type="number" min={1} max={30} defaultValue={s.quote_followup_days} />
           </Field>
+          <Field
+            label="Reciben también las respuestas de proveedores"
+            hint="Emails separados por comas. Además de Compras y de quien abrió la reposición, reciben el reenvío de Alexia con el texto y los adjuntos del proveedor."
+            className="sm:col-span-2"
+          >
+            <Input name="supplier_reply_cc" defaultValue={(s.supplier_reply_cc ?? []).join(", ")} placeholder="direccion@natuaromatic.com, …" autoComplete="off" spellCheck={false} />
+          </Field>
           <Field label="Tamaño máximo por archivo (MB)">
             <Input name="max_file_mb" type="number" min={1} max={250} defaultValue={s.max_file_mb} />
           </Field>

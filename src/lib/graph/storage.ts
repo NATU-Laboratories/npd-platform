@@ -470,3 +470,17 @@ export async function putFile(parentId: string, name: string, data: Buffer, mime
   const item = (await r.json()) as { id: string };
   return storage.getItem(item.id);
 }
+
+/** Contenido de un archivo guardado (para adjuntarlo a un email). */
+export async function readFile(id: string): Promise<{ data: Buffer; name: string; mime: string | null }> {
+  const store = chunkStore();
+  if (store) {
+    const { data, item } = await store.read(id);
+    return { data, name: item.name, mime: item.mime ?? null };
+  }
+  const storage = getStorage();
+  const [item, url] = await Promise.all([storage.getItem(id), storage.downloadUrl(id)]);
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`No se pudo leer ${item.name} (${r.status})`);
+  return { data: Buffer.from(await r.arrayBuffer()), name: item.name, mime: item.mime ?? null };
+}

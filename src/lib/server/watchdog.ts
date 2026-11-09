@@ -65,7 +65,7 @@ export async function claim(kind: string, entityId: string, stage: string) {
 /** Aviso de Alexia por su chat, Teams (si la persona ya habló con el bot) y email. */
 export async function alert(
   to: Recipients,
-  a: { event: string; title: string; body: string; link: string; urgent?: boolean; rows?: [string, string][]; projectId?: string | null; replenishmentId?: string | null },
+  a: { event: string; title: string; body: string; link: string; urgent?: boolean; rows?: [string, string][]; projectId?: string | null; replenishmentId?: string | null; noEmail?: boolean },
 ) {
   if (to.userIds.length) {
     const inserted = await db
@@ -78,7 +78,7 @@ export async function alert(
       if (sent) await db.update(userNotices).set({ readAt: new Date() }).where(eq(userNotices.id, r.id));
     }
   }
-  if (to.emails.length)
+  if (to.emails.length && !a.noEmail)
     await queueNotification({
       event: a.event,
       projectId: a.projectId ?? null,

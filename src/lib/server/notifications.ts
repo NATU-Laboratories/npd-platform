@@ -21,6 +21,7 @@ import { FIELD_BY_KEY } from "@/lib/brief/fields";
 import { CATEGORY_LABEL, PRIORITY_LABEL, statusLabel, TEST_EMAIL_DOMAIN, TYPE_LABEL } from "@/lib/labels";
 
 import { sendMail } from "@/lib/graph/mail";
+import { readFile } from "@/lib/graph/storage";
 import { renderEmail, type ProjectSummary } from "./email-template";
 import { enqueueJob, kickJobs } from "./jobs";
 import { getSettings } from "./settings";
@@ -51,6 +52,8 @@ export async function queueNotification(n: {
   replyTo?: (string | null | undefined)[];
   subject: string;
   html: string;
+  /** Archivos ya guardados que se adjuntan al enviar */
+  attachments?: { storageItemId: string; name: string; mime?: string | null }[];
 }) {
   const recipients = uniqEmails(n.recipients);
   if (!recipients.length) return null;
@@ -65,6 +68,7 @@ export async function queueNotification(n: {
       replyTo: replyTo.length ? replyTo : null,
       subject: n.subject,
       html: n.html,
+      attachments: n.attachments?.length ? n.attachments : null,
     })
     .returning({ id: notificationLog.id });
   const jobId = await enqueueJob("email.send", { notificationId: row!.id });
@@ -78,7 +82,8 @@ export async function deliverNotification(id: number) {
   if (!n || n.status === "sent") return;
   const { sender_mailbox } = await getSettings();
   try {
-    await sendMail({ to: n.recipients, subject: n.subject, html: n.html, replyTo: n.replyTo }, sender_mailbox || undefined);
+    const attachments = n.attachments?.length ? await Promise.all(n.attachments.map(async (a) => ({ ...(await readFile(a.storageItemId)), name: a.name }))) : undefined;
+    await sendMail({ to: n.recipients, subject: n.subject, html: n.html, replyTo: n.replyTo, attachments }, sender_mailbox || undefined);
     await db
       .update(notificationLog)
       .set({ status: "sent", sentAt: new Date(), error: null, attempts: sql`${notificationLog.attempts} + 1` })

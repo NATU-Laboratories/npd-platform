@@ -3,7 +3,8 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { graphConfigured, graphFetch } from "./client";
 
-export type MailMessage = { to: string[]; subject: string; html: string; replyTo?: string[] | null };
+export type MailAttachment = { name: string; data: Buffer; mime?: string | null };
+export type MailMessage = { to: string[]; subject: string; html: string; replyTo?: string[] | null; attachments?: MailAttachment[] };
 
 /**
  * Envío de email.
@@ -42,7 +43,7 @@ function redirected(msg: MailMessage): MailMessage {
 <strong>Modo pruebas</strong>: este email no se ha enviado a sus destinatarios reales.<br>
 Iba dirigido a: ${esc(msg.to.join(", "))}${msg.replyTo?.length ? `<br>Responder a: ${esc(msg.replyTo.join(", "))}` : ""}</div>`;
   const html = /<body[^>]*>/i.test(msg.html) ? msg.html.replace(/<body[^>]*>/i, (m) => `${m}${banner}`) : banner + msg.html;
-  return { to, subject: `[PRUEBA] ${msg.subject}`, html, replyTo: msg.replyTo };
+  return { to, subject: `[PRUEBA] ${msg.subject}`, html, replyTo: msg.replyTo, attachments: msg.attachments };
 }
 
 export async function sendMail(original: MailMessage, sender?: string) {
@@ -55,7 +56,10 @@ export async function sendMail(original: MailMessage, sender?: string) {
     const dir = path.resolve(/* turbopackIgnore: true */ process.cwd(), process.env.LOCAL_STORAGE_DIR ?? ".storage", "mails");
     await fs.mkdir(dir, { recursive: true });
     const file = path.join(dir, `${Date.now()}-${msg.subject.replace(/[^\w-]+/g, "_").slice(0, 60)}.html`);
-    await fs.writeFile(file, `<!-- To: ${msg.to.join(", ")} -->\n${msg.replyTo?.length ? `<!-- Reply-To: ${msg.replyTo.join(", ")} -->\n` : ""}<!-- Subject: ${msg.subject} -->\n${msg.html}`);
+    await fs.writeFile(
+      file,
+      `<!-- To: ${msg.to.join(", ")} -->\n${msg.replyTo?.length ? `<!-- Reply-To: ${msg.replyTo.join(", ")} -->\n` : ""}${msg.attachments?.length ? `<!-- Adjuntos: ${msg.attachments.map((a) => `${a.name} (${a.data.length} B)`).join(", ")} -->\n` : ""}<!-- Subject: ${msg.subject} -->\n${msg.html}`,
+    );
     return;
   }
   if (driver === "smtp") return sendSmtp(msg);
@@ -69,6 +73,9 @@ export async function sendMail(original: MailMessage, sender?: string) {
         body: { contentType: "HTML", content: msg.html },
         toRecipients: msg.to.map((address) => ({ emailAddress: { address } })),
         ...(msg.replyTo?.length ? { replyTo: msg.replyTo.map((address) => ({ emailAddress: { address } })) } : {}),
+        ...(msg.attachments?.length
+          ? { attachments: msg.attachments.map((a) => ({ "@odata.type": "#microsoft.graph.fileAttachment", name: a.name, contentType: a.mime || "application/octet-stream", contentBytes: a.data.toString("base64") })) }
+          : {}),
       },
       saveToSentItems: true,
     },
@@ -94,6 +101,7 @@ async function sendSmtp(msg: MailMessage) {
     subject: msg.subject,
     html: msg.html,
     ...(msg.replyTo?.length ? { replyTo: msg.replyTo } : {}),
+    ...(msg.attachments?.length ? { attachments: msg.attachments.map((a) => ({ filename: a.name, content: a.data, contentType: a.mime || undefined })) } : {}),
   });
 }
 
@@ -156,6 +164,7 @@ async function sendBrevo(msg: MailMessage) {
       htmlContent: msg.html,
       // Brevo admite un único «responder a»
       ...(msg.replyTo?.length ? { replyTo: { email: msg.replyTo[0] } } : {}),
+      ...(msg.attachments?.length ? { attachment: msg.attachments.map((a) => ({ name: a.name, content: a.data.toString("base64") })) } : {}),
     }),
     signal: AbortSignal.timeout(15000),
   });

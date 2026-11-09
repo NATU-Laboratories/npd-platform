@@ -11,6 +11,9 @@ import { assistantEnabled, MODEL } from "./assistant";
 import { logError } from "./errors";
 import { findReplyTarget } from "./reply-address";
 import { repFolder } from "./replenishments";
+import { renderEmail } from "./email-template";
+import { queueNotification } from "./notifications";
+import { getSettings } from "./settings";
 import { alert, claim, department, merge } from "./watchdog";
 
 /**
@@ -153,6 +156,7 @@ export async function handleSupplierReply(item: InboundItem): Promise<string> {
   // Adjuntos (PDF e imágenes): se guardan en la reposición como «Cotización del proveedor»; los PDF los lee Alexia
   const pdfs: { name: string; data: Buffer }[] = [];
   const saved: string[] = [];
+  const files: { storageItemId: string; name: string; mime: string | null }[] = [];
   for (const a of atts.filter((x) => /pdf|image\//i.test(x.type) || /\.(pdf|png|jpe?g)$/i.test(x.name)).slice(0, 5)) {
     const data = await download(a).catch(() => null);
     if (!data) continue;
@@ -164,6 +168,7 @@ export async function handleSupplierReply(item: InboundItem): Promise<string> {
       const stored = await putFile(folderId, name, data, a.type || (isPdf ? "application/pdf" : "application/octet-stream"));
       await db.insert(replenishmentFiles).values({ replenishmentId: rep.r.id, storageItemId: stored.id, name: stored.name, mime: stored.mime, size: stored.size, tag: "cotizacion", round: rep.r.round, uploadedBy: rep.requesterId });
       saved.push(a.name);
+      files.push({ storageItemId: stored.id, name: a.name, mime: stored.mime ?? null });
     } catch (err) {
       await logError("alexia:supplier-reply:file", err, { rep: rep.r.code, file: a.name });
     }
@@ -205,25 +210,38 @@ export async function handleSupplierReply(item: InboundItem): Promise<string> {
     diff: { supplier: supplier.name, from, subject, body: body.slice(0, 4000), attachments: atts.map((a) => a.name), saved, registered, summary: extracted?.summary ?? null },
   });
 
-  // Aviso a Compras y a quien abrió la reposición
-  const to = merge(await department("compras"), { userIds: [rep.requesterId], emails: [rep.requesterEmail] });
+  // Reenvío de la respuesta completa (texto y adjuntos) a Compras, a quien abrió la reposición y a
+  // quien se haya indicado en Backoffice → Configuración. Pueden contestar directamente al proveedor.
+  const compras = await department("compras");
+  const { supplier_reply_cc } = await getSettings();
+  const to = merge(compras, { userIds: [rep.requesterId], emails: [rep.requesterEmail, ...(supplier_reply_cc ?? [])] });
   const what = registered.length
     ? `Lo he anotado en la reposición: ${registered.join("; ")}${extracted?.leadTime ? `. Plazo: ${extracted.leadTime}` : ""}. Revísalo por si hay que corregir algo.`
     : extracted && !extracted.isQuote
       ? `No trae precio: ${extracted.summary}`
       : "No he podido sacar el precio con seguridad: revisa su respuesta y regístralo en la reposición.";
-  await alert(to, {
+  const title = `${supplier.name} ha respondido a la recotización de ${rep.r.code}`;
+  await queueNotification({
     event: "alexia.supplier_reply",
     replenishmentId: rep.r.id,
-    link: `/reposiciones/${rep.r.id}`,
-    title: `${supplier.name} ha respondido a la recotización de ${rep.r.code}`,
-    body: what,
-    rows: [
-      ["Reposición", `${rep.r.code} · ${rep.r.title}`],
-      ["Proveedor", `${supplier.name}${from ? ` (${from})` : ""}`],
-      ...(atts.length ? ([["Adjuntos", `${atts.map((a) => a.name).join(", ")}${saved.length ? " (guardados en la reposición, «Arte final y archivos»)" : ""}`]] as [string, string][]) : []),
-      ["Su respuesta", body.slice(0, 3000) || "(sin texto)"],
-    ],
+    recipients: to.emails,
+    // «Responder» contesta directamente al proveedor
+    replyTo: from ? [from] : [],
+    subject: `${subject && /^(re|rv|fw|fwd):/i.test(subject) ? subject : `RE: ${subject || "Solicitud de recotización"}`} · ${supplier.name} · ${rep.r.code}`,
+    html: renderEmail({
+      title,
+      intro: `Reenvío de Alexia: esta es la respuesta del proveedor. ${what}`,
+      message: { label: `Respuesta de ${supplier.name}${from ? ` (${from})` : ""}`, body: body.slice(0, 20000) || "(sin texto)" },
+      extraRows: [
+        ["Reposición", `${rep.r.code} · ${rep.r.title}`],
+        ...(atts.length ? ([["Adjuntos", `${atts.map((x) => x.name).join(", ")}${files.length < atts.length ? " (algunos no se han podido adjuntar: revísalos en el correo del proveedor)" : ""}`]] as [string, string][]) : []),
+      ],
+      ctaPath: `/reposiciones/${rep.r.id}`,
+      ctaLabel: "Abrir la reposición",
+    }),
+    attachments: files,
   });
+  // Y el aviso en el chat de Alexia / Teams (sin repetir el email)
+  await alert(to, { event: "alexia.supplier_reply", replenishmentId: rep.r.id, link: `/reposiciones/${rep.r.id}`, title, body: what, noEmail: true });
   return registered.length ? `presupuesto anotado (${registered.length})` : "respuesta registrada sin precio";
 }
