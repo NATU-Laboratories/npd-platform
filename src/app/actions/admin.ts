@@ -229,6 +229,8 @@ export async function saveSettingsAction(fd: FormData) {
   const next: Omit<AppSettings, "sheet_departments"> = {
     completeness_threshold: z.coerce.number().int().min(0).max(100).parse(fd.get("completeness_threshold")),
     risk_days: z.coerce.number().int().min(1).max(365).parse(fd.get("risk_days")),
+    risk_warning_days: z.coerce.number().int().min(1).max(90).parse(fd.get("risk_warning_days")),
+    quote_followup_days: z.coerce.number().int().min(1).max(30).parse(fd.get("quote_followup_days")),
     max_file_mb: z.coerce.number().int().min(1).max(250).parse(fd.get("max_file_mb")),
     sender_mailbox: z.union([z.literal(""), z.string().trim().email()]).parse(String(fd.get("sender_mailbox") ?? "").trim()),
     requesters_see_all: fd.get("requesters_see_all") === "on",

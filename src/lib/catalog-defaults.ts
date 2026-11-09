@@ -147,6 +147,10 @@ export const DEPARTMENT_DEFAULTS: { key: string; name: string; color: string }[]
 export const SETTINGS_DEFAULTS = {
   completeness_threshold: 60,
   risk_days: 30,
+  /** Alexia avisa a los gestores de proyectos estos días antes de que un proyecto entre en riesgo. */
+  risk_warning_days: 7,
+  /** Días sin respuesta del proveedor a una recotización antes de que Alexia avise (y entre recordatorios). */
+  quote_followup_days: 3,
   max_file_mb: 50,
   sender_mailbox: "",
   requesters_see_all: false,
@@ -157,6 +161,8 @@ export const SETTINGS_DEFAULTS = {
 export type AppSettings = {
   completeness_threshold: number;
   risk_days: number;
+  risk_warning_days: number;
+  quote_followup_days: number;
   max_file_mb: number;
   sender_mailbox: string;
   requesters_see_all: boolean;
