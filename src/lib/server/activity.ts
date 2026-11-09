@@ -21,6 +21,11 @@ export async function logActivity(input: ActivityInput, tx: DbOrTx = db) {
     entityId: input.entityId != null ? String(input.entityId) : null,
     diff: input.diff ?? null,
   });
+  // La ficha (Word) y el historial del proyecto en SharePoint se regeneran con cada movimiento
+  if (input.projectId) {
+    const { scheduleProjectDocs } = await import("./project-docs-queue");
+    await scheduleProjectDocs(input.projectId);
+  }
 }
 
 export { jsonDiff } from "@/lib/diff";

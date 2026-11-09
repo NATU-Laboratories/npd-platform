@@ -77,9 +77,27 @@ function toStored(i: DriveItem): StoredItem {
   };
 }
 
+/**
+ * Carpeta base indicada por su URL (SHAREPOINT_FOLDER_URL, la que contiene las carpetas por año):
+ * Graph la resuelve a su biblioteca (drive) y su id. Así no hace falta saber ids de sitio ni de biblioteca.
+ */
+let baseCache: { driveId: string; id: string; name: string; webUrl: string | null } | null = null;
+export async function sharepointBase() {
+  const url = process.env.SHAREPOINT_FOLDER_URL?.trim();
+  if (!url) return null;
+  if (baseCache) return baseCache;
+  const encoded = "u!" + Buffer.from(url).toString("base64").replace(/=+$/, "").replace(/\//g, "_").replace(/\+/g, "-");
+  const item = await graphFetch<DriveItem & { parentReference?: { driveId?: string } }>(`/shares/${encoded}/driveItem?$select=id,name,webUrl,folder,parentReference`);
+  if (!item.folder) throw new Error("SHAREPOINT_FOLDER_URL no es una carpeta");
+  baseCache = { driveId: item.parentReference!.driveId!, id: item.id, name: item.name, webUrl: item.webUrl ?? null };
+  return baseCache;
+}
+
 let driveIdCache: string | null = null;
 async function driveId() {
   if (process.env.SHAREPOINT_DRIVE_ID) return process.env.SHAREPOINT_DRIVE_ID;
+  const base = await sharepointBase();
+  if (base) return base.driveId;
   if (driveIdCache) return driveIdCache;
   const site = process.env.SHAREPOINT_SITE_ID;
   if (!site) throw new Error("SHAREPOINT_SITE_ID no está definido");
@@ -94,6 +112,9 @@ async function driveId() {
 const sharepoint: Storage = {
   kind: "sharepoint",
   async rootId() {
+    // Con SHAREPOINT_FOLDER_URL, la «raíz» de la plataforma es esa carpeta
+    const base = await sharepointBase();
+    if (base) return base.id;
     const d = await driveId();
     const root = await graphFetch<DriveItem>(`/drives/${d}/root?$select=id`);
     return root.id;
@@ -428,7 +449,7 @@ export type StorageDriver = "sharepoint" | "local" | "db";
 export function storageDriver(): StorageDriver {
   const d = process.env.STORAGE_DRIVER;
   if (d === "sharepoint" || d === "local" || d === "db") return d;
-  if (graphConfigured() && process.env.SHAREPOINT_SITE_ID) return "sharepoint";
+  if (graphConfigured() && (process.env.SHAREPOINT_SITE_ID || process.env.SHAREPOINT_FOLDER_URL)) return "sharepoint";
   return process.env.VERCEL ? "db" : "local";
 }
 
@@ -484,3 +505,36 @@ export async function readFile(id: string): Promise<{ data: Buffer; name: string
   if (!r.ok) throw new Error(`No se pudo leer ${item.name} (${r.status})`);
   return { data: Buffer.from(await r.arrayBuffer()), name: item.name, mime: item.mime ?? null };
 }
+
+/**
+ * Escribe (o reemplaza) un archivo con ese nombre en la carpeta: la ficha del proyecto y su
+ * historial se regeneran enteros y sustituyen a la versión anterior (SharePoint guarda las versiones).
+ */
+export async function replaceFile(parentId: string, name: string, data: Buffer, mime: string): Promise<StoredItem> {
+  const safe = sanitizeName(name);
+  if (storageDriver() === "sharepoint") {
+    const d = await driveId();
+    const item = await graphFetch<DriveItem>(`/drives/${d}/items/${parentId}:/${encodeURIComponent(safe)}:/content`, {
+      method: "PUT",
+      headers: { "Content-Type": mime },
+      body: new Uint8Array(data),
+    });
+    return toStored(item);
+  }
+  // Almacén provisional: se sube la versión nueva y después se borran las anteriores (también
+  // las «nombre 1.ext» que deja una subida simultánea), en serie por carpeta.
+  const run = (writeLocks.get(parentId) ?? Promise.resolve()).then(async () => {
+    const storage = getStorage();
+    const fresh = await putFile(parentId, safe, data, mime);
+    const dot = safe.lastIndexOf(".");
+    const [stem, ext] = dot > 0 ? [safe.slice(0, dot), safe.slice(dot)] : [safe, ""];
+    const same = (n: string) => n === safe || (n.startsWith(`${stem} `) && n.endsWith(ext) && /^\d+$/.test(n.slice(stem.length + 1, n.length - ext.length)));
+    for (const c of await storage.listChildren(parentId)) if (!c.isFolder && c.id !== fresh.id && same(c.name)) await storage.deleteItem(c.id);
+    if (fresh.name !== safe) await storage.renameItem(fresh.id, safe);
+    return { ...fresh, name: safe };
+  });
+  writeLocks.set(parentId, run.catch(() => undefined));
+  return run;
+}
+
+const writeLocks = new Map<string, Promise<unknown>>();
