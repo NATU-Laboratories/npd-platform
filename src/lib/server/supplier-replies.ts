@@ -133,8 +133,17 @@ const fmtPrice = (n: number) => `${n.toLocaleString("es-ES", { maximumFractionDi
 export async function handleSupplierReply(item: InboundItem): Promise<string> {
   const id = str(pick(item, "MessageId", "messageId", "Uuid", "uuid")) || JSON.stringify(pick(item, "Uuid")) || "";
   const recipients = JSON.stringify([pick(item, "To", "to"), pick(item, "Recipients", "recipients"), pick(item, "Cc", "cc"), pick(item, "Headers", "headers")]);
-  const target = findReplyTarget(recipients);
-  if (!target) return "ignorado: no va a una dirección de respuesta de presupuesto válida";
+  // Primero en los destinatarios; si Brevo usa otros nombres de campo, en todo el email
+  const target = findReplyTarget(recipients) ?? findReplyTarget(JSON.stringify(item));
+  if (!target) {
+    await logError("inbound:ignored", new Error("Email recibido sin una dirección de respuesta de presupuesto válida"), {
+      keys: Object.keys(item).slice(0, 40),
+      to: recipients.slice(0, 600),
+      from: addressOf(pick(item, "From", "from")),
+      subject: str(pick(item, "Subject", "subject")).slice(0, 200),
+    });
+    return "ignorado: no va a una dirección de respuesta de presupuesto válida";
+  }
   if (id && !(await claim("inbound_email", id.slice(0, 200), "processed"))) return "ignorado: ya procesado";
 
   const [rep] = await db
@@ -143,7 +152,10 @@ export async function handleSupplierReply(item: InboundItem): Promise<string> {
     .innerJoin(users, eq(users.id, replenishments.requesterId))
     .where(eq(replenishments.id, target.repId));
   const [supplier] = await db.select().from(suppliers).where(eq(suppliers.id, target.supplierId));
-  if (!rep || !supplier) return "ignorado: reposición o proveedor inexistente";
+  if (!rep || !supplier) {
+    await logError("inbound:ignored", new Error("Respuesta de presupuesto de una reposición o proveedor que ya no existe"), target);
+    return "ignorado: reposición o proveedor inexistente";
+  }
   const items = await db
     .select()
     .from(replenishmentItems)
