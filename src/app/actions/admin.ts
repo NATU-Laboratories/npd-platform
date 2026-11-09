@@ -1,4 +1,5 @@
 "use server";
+import { inboundUrlToken } from "@/lib/server/reply-address";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -377,7 +378,7 @@ export async function connectInboundAction() {
       body: JSON.stringify({
         type: "inbound",
         events: ["inboundEmailProcessed"],
-        url: `${app}/api/inbound/brevo?token=${encodeURIComponent(secret!)}`,
+        url: `${app}/api/inbound/brevo/${inboundUrlToken()}`,
         domain,
         description: "Plataforma NPD: respuestas de proveedores",
       }),
