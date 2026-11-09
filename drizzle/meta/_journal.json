@@ -134,6 +134,13 @@
       "when": 1793953021410,
       "tag": "0018_regulatorio_por_categoria",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794221243037,
+      "tag": "0019_proactive_alerts",
+      "breakpoints": true
     }
   ]
 }

@@ -916,3 +916,17 @@ export const deptNotes = pgTable(
   },
   (t) => [index("dept_notes_project_idx").on(t.projectId, t.departmentKey)],
 );
+
+/** Avisos proactivos de Alexia ya enviados (para no repetirlos): riesgo de proyectos, proveedores sin respuesta… */
+export const proactiveAlerts = pgTable(
+  "proactive_alerts",
+  {
+    kind: text("kind").notNull(),
+    /** Proyecto, elemento de reposición… */
+    entityId: text("entity_id").notNull(),
+    /** Fase del aviso (p. ej. «pre_risk:2026-12-01», «quote:<fecha de petición>:1») */
+    stage: text("stage").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.kind, t.entityId, t.stage] })],
+);

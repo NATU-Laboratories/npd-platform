@@ -20,6 +20,12 @@ export default async function SettingsPage() {
           <Field label="Días para «en riesgo»" hint="Proyectos abiertos cuya fecha de entrega requerida cae dentro de este plazo.">
             <Input name="risk_days" type="number" min={1} max={365} defaultValue={s.risk_days} />
           </Field>
+          <Field label="Aviso antes de entrar en riesgo (días)" hint="Alexia avisa a los gestores de proyectos con esta antelación, y otra vez el día que el proyecto entra en riesgo.">
+            <Input name="risk_warning_days" type="number" min={1} max={90} defaultValue={s.risk_warning_days} />
+          </Field>
+          <Field label="Proveedor sin responder (días)" hint="Si un proveedor no responde a una recotización en este plazo, Alexia avisa a Compras y a los gestores de proyectos (hasta 3 recordatorios).">
+            <Input name="quote_followup_days" type="number" min={1} max={30} defaultValue={s.quote_followup_days} />
+          </Field>
           <Field label="Tamaño máximo por archivo (MB)">
             <Input name="max_file_mb" type="number" min={1} max={250} defaultValue={s.max_file_mb} />
           </Field>
