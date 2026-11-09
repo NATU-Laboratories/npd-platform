@@ -6,14 +6,11 @@ import { Card } from "@/components/ui/card";
 import { graphConfigured } from "@/lib/graph/client";
 import { mailDriver, mailRedirect } from "@/lib/graph/mail";
 import { sharepointBase, storageDriver } from "@/lib/graph/storage";
-import { Button } from "@/components/ui/button";
-import { migrateStorageAction } from "@/app/actions/admin";
-import { migrationPending } from "@/lib/server/storage-migration";
+
 
 export const metadata = { title: "Backoffice" };
 
-export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
-  const { sharepoint: spMsg } = await searchParams;
+export default async function AdminHome() {
   const sp = storageDriver() === "sharepoint" ? await sharepointStatus() : null;
   const { rows } = await db.execute<Record<string, number>>(sql`
     select
@@ -65,7 +62,7 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
                       ) : (
                         <strong>{sp.base.name}</strong>
                       )}
-                      {" (los proyectos van a la carpeta de su año: 2026, 2027…)"}
+                      {" (los proyectos nuevos van a la carpeta de su año: 2026, 2027…; los anteriores siguen en el almacenamiento provisional)"}
                     </>
                   )}
                 </>
@@ -80,30 +77,17 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
             {mailRedirect().length > 0 && mailDriver() !== "log" && <span className="text-amber-700"> · modo pruebas: todo va a {mailRedirect().join(", ")}</span>}
           </li>
         </ul>
-        {sp && !sp.error && sp.pending && sp.pending.files + sp.pending.repFiles + sp.pending.projects > 0 && (
-          <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-            <p className="text-amber-900">
-              Quedan en el almacenamiento provisional {sp.pending.files + sp.pending.repFiles} archivos y {sp.pending.projects} proyectos sin carpeta en SharePoint.
-            </p>
-            <form action={migrateStorageAction}>
-              <Button type="submit" size="sm">
-                Pasar a SharePoint
-              </Button>
-            </form>
-          </div>
-        )}
-        {typeof spMsg === "string" && <p className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-slate-700">{spMsg}</p>}
       </Card>
     </>
   );
 }
 
-/** Carpeta base de SharePoint y lo que queda por pasar del almacenamiento provisional. */
+/** Carpeta base de SharePoint (comprueba que se llega a ella). */
 async function sharepointStatus() {
   try {
-    const [base, pending] = await Promise.all([sharepointBase(), migrationPending()]);
-    return { base, pending, error: null as string | null };
+    const base = await sharepointBase();
+    return { base, error: null as string | null };
   } catch (err) {
-    return { base: null, pending: null, error: err instanceof Error ? err.message.slice(0, 200) : "no se pudo conectar" };
+    return { base: null, error: err instanceof Error ? err.message.slice(0, 200) : "no se pudo conectar" };
   }
 }

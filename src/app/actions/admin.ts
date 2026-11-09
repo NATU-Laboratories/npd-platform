@@ -425,21 +425,6 @@ export async function cleanInboundAction() {
   redirect(`/admin/notificaciones?entrada=${encodeURIComponent(removed ? `Borrados ${removed} webhooks antiguos` : "No había webhooks antiguos")}`);
 }
 
-/** Pasa a SharePoint los archivos que aún están en el almacenamiento provisional (por tandas). */
-export async function migrateStorageAction() {
-  await requireAdminAction();
-  const { migrateStep } = await import("@/lib/server/storage-migration");
-  let msg: string;
-  try {
-    const { done, pending } = await migrateStep();
-    const left = pending.projects + pending.files + pending.repFiles;
-    msg = `Pasados ${done.files + done.repFiles} archivos y ${done.projects} carpetas de proyecto${done.errors ? ` (${done.errors} con error: mira Errores)` : ""}. ${left ? `Quedan ${pending.files + pending.repFiles} archivos y ${pending.projects} carpetas: vuelve a pulsar.` : "Todo está ya en SharePoint."}`;
-  } catch (err) {
-    msg = err instanceof Error ? err.message : "No se ha podido completar";
-  }
-  redirect(`/admin?sharepoint=${encodeURIComponent(msg)}`);
-}
-
 export async function retryJobAction(fd: FormData) {
   const admin = await requireAdminAction();
   const id = Number(fd.get("id"));

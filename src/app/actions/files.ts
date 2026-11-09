@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { files, projects } from "@/db/schema";
 import { FILE_TAGS } from "@/lib/labels";
-import { getStorage } from "@/lib/graph/storage";
+import { storageFor } from "@/lib/graph/storage";
 import { logActivity } from "@/lib/server/activity";
 import { canEditBrief, canViewProject, isAdmin, requireActionUser } from "@/lib/server/authz";
 import { logError } from "@/lib/server/errors";
@@ -33,7 +33,7 @@ export async function createUploadAction(projectId: string, fileName: string, si
     const { max_file_mb } = await getSettings();
     if (size > max_file_mb * 1024 * 1024) return { ok: false, error: `El archivo supera el límite de ${max_file_mb} MB` };
     const folder = await uploadTargetFolder(projectId, p.status === "draft" ? 0 : phase);
-    const session = await getStorage().createUploadSession(folder, fileName);
+    const session = await storageFor(folder).createUploadSession(folder, fileName);
     return { ok: true, data: session };
   } catch (err) {
     await logError("action:createUpload", err, { projectId, fileName });
@@ -53,8 +53,7 @@ export async function registerFileAction(
     const p = await loadProject(projectId);
     const allowed = p.status === "draft" ? p.requesterId === u.id : await canViewProject(u, projectId);
     if (!allowed) return { ok: false, error: "Sin permiso" };
-    const storage = getStorage();
-    const item = await storage.getItem(itemId);
+    const item = await storageFor(itemId).getItem(itemId);
     const folder = await uploadTargetFolder(projectId, p.status === "draft" ? 0 : phase);
     if (item.parentId !== folder) return { ok: false, error: "El archivo no pertenece a este proyecto" };
     const safeTag = tag && tag in FILE_TAGS ? tag : "otro";
@@ -101,7 +100,7 @@ export async function deleteFileAction(fileId: number): Promise<ActionResult> {
     // Cada persona puede borrar lo que ha subido mientras el proyecto siga abierto (brief y ficha técnica)
     const open = !["rejected", "cancelled"].includes(f.p.status);
     if (!(own && open) && !isAdmin(u)) return { ok: false, error: "Sin permiso" };
-    await getStorage().deleteItem(f.f.sharepointItemId).catch(() => undefined);
+    await storageFor(f.f.sharepointItemId).deleteItem(f.f.sharepointItemId).catch(() => undefined);
     await db.delete(files).where(and(eq(files.id, fileId)));
     if (f.p.status !== "draft") {
       await logActivity({ projectId: f.p.id, actorId: u.id, action: "file.deleted", entity: "file", entityId: fileId, diff: { name: f.f.name } });
