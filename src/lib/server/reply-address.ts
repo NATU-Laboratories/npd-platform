@@ -30,3 +30,20 @@ export function findReplyTarget(text: string): { repId: string; supplierId: numb
   }
   return null;
 }
+
+/**
+ * Clave del webhook de entrada en la URL: derivada de INBOUND_SECRET, solo letras y números
+ * (Brevo no acepta cualquier carácter en la URL del webhook).
+ */
+export function inboundUrlToken() {
+  const s = process.env.INBOUND_SECRET ?? "";
+  return s ? createHmac("sha256", s).update("brevo-inbound-webhook").digest("hex").slice(0, 40) : "";
+}
+
+export function inboundTokenOk(given: string | null | undefined) {
+  const expected = inboundUrlToken();
+  if (!expected || !given) return false;
+  const a = Buffer.from(given);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
