@@ -52,7 +52,7 @@ export default async function AdminHome() {
           </li>
           <li>
             Email:{" "}
-            {mailDriver() === "graph" ? "Microsoft 365 (Graph)" : mailDriver() === "smtp" ? "SMTP (provisional)" : <span className="text-amber-700">no se envían emails reales; puedes verlos en Notificaciones</span>}
+            {mailDriver() === "graph" ? "Microsoft 365 (Graph)" : mailDriver() === "brevo" ? "Brevo (provisional)" : mailDriver() === "smtp" ? "SMTP (provisional)" : <span className="text-amber-700">no se envían emails reales; puedes verlos en Notificaciones</span>}
             {mailRedirect().length > 0 && mailDriver() !== "log" && <span className="text-amber-700"> · modo pruebas: todo va a {mailRedirect().join(", ")}</span>}
           </li>
         </ul>

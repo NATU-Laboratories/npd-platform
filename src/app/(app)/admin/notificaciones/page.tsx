@@ -31,7 +31,7 @@ export default async function NotificationsPage({ searchParams }: PageProps<"/ad
         <p className="text-slate-700">
           Envío:{" "}
           <strong className="font-semibold">
-            {mailDriver() === "graph" ? "Microsoft 365 (Graph)" : mailDriver() === "smtp" ? `SMTP · ${process.env.MAIL_FROM || process.env.SMTP_USER}` : mailDriver() === "fail" ? "fallo simulado" : "desactivado (solo se registran)"}
+            {mailDriver() === "graph" ? "Microsoft 365 (Graph)" : mailDriver() === "brevo" ? `Brevo · ${process.env.MAIL_FROM}` : mailDriver() === "smtp" ? `SMTP · ${process.env.MAIL_FROM || process.env.SMTP_USER}` : mailDriver() === "fail" ? "fallo simulado" : "desactivado (solo se registran)"}
           </strong>
           {mailRedirect().length > 0 && mailDriver() !== "log" && (
             <span className="mt-0.5 block text-xs text-amber-800">Modo pruebas: todos los emails se desvían a {mailRedirect().join(", ")}, indicando a quién iban.</span>
