@@ -96,6 +96,7 @@ export const REP_ACTION_LABEL: Record<string, string> = {
   "replenishment.quote_received": "registró la recotización",
   "replenishment.edited": "editó la solicitud",
   "replenishment.comment": "comentó",
+  "replenishment.supplier_reply": "recibió por email la respuesta",
   "replenishment.file_uploaded": "subió un archivo",
   "replenishment.art_link": "añadió el enlace al arte final",
   "replenishment.file_deleted": "eliminó un archivo",

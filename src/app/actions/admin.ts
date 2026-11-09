@@ -347,6 +347,38 @@ export async function sendTestEmailAction() {
   revalidatePath("/admin/notificaciones");
 }
 
+/**
+ * Conecta en Brevo la recepción de respuestas de proveedores: los emails a INBOUND_DOMAIN se
+ * envían a /api/inbound/brevo (webhook de entrada). Requiere BREVO_API_KEY, INBOUND_DOMAIN,
+ * INBOUND_SECRET y APP_URL, y el registro MX del subdominio apuntando a Brevo.
+ */
+export async function connectInboundAction() {
+  await requireAdminAction();
+  const key = process.env.BREVO_API_KEY?.trim();
+  const domain = process.env.INBOUND_DOMAIN?.trim().toLowerCase();
+  const secret = process.env.INBOUND_SECRET;
+  const app = process.env.APP_URL?.replace(/\/$/, "");
+  const missing = [!key && "BREVO_API_KEY", !domain && "INBOUND_DOMAIN", !secret && "INBOUND_SECRET", !app && "APP_URL"].filter(Boolean);
+  let result: string;
+  if (missing.length) result = `Faltan variables en Vercel: ${missing.join(", ")}`;
+  else {
+    const r = await fetch("https://api.brevo.com/v3/webhooks", {
+      method: "POST",
+      headers: { "api-key": key!, "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({
+        type: "inbound",
+        events: ["inboundEmailProcessed"],
+        url: `${app}/api/inbound/brevo?token=${encodeURIComponent(secret!)}`,
+        domain,
+        description: "Plataforma NPD: respuestas de proveedores",
+      }),
+    }).catch((err: unknown) => ({ ok: false, status: 0, json: async () => ({ message: String(err) }) }) as unknown as Response);
+    const body = (await r.json().catch(() => null)) as { message?: string; id?: number } | null;
+    result = r.ok ? "ok" : `Brevo ${r.status}: ${body?.message ?? "error"}`;
+  }
+  redirect(`/admin/notificaciones?entrada=${encodeURIComponent(result)}`);
+}
+
 export async function retryJobAction(fd: FormData) {
   const admin = await requireAdminAction();
   const id = Number(fd.get("id"));

@@ -22,7 +22,7 @@ const WATCHED_STATUSES = ["submitted", "info_requested", "in_progress"] as const
 /** Recordatorios por la misma petición de presupuesto. */
 const MAX_QUOTE_REMINDERS = 3;
 
-type Recipients = { userIds: string[]; emails: string[] };
+export type Recipients = { userIds: string[]; emails: string[] };
 
 async function withRole(key: "admin" | "global_decider"): Promise<Recipients> {
   const rows = await db
@@ -43,7 +43,7 @@ async function projectManagers(): Promise<Recipients> {
 const hasAnyone = (r: Recipients) => r.userIds.length > 0 || r.emails.length > 0;
 
 /** Miembros activos de un departamento; el email va a su buzón de aviso si lo tiene. */
-async function department(key: string): Promise<Recipients> {
+export async function department(key: string): Promise<Recipients> {
   const [d] = await db.select({ id: departments.id, emails: departments.notifyEmails }).from(departments).where(eq(departments.key, key));
   if (!d) return { userIds: [], emails: [] };
   const members = await db
@@ -54,16 +54,16 @@ async function department(key: string): Promise<Recipients> {
   return { userIds: members.map((m) => m.id), emails: d.emails.length ? d.emails : members.map((m) => m.email) };
 }
 
-const merge = (...rs: Recipients[]): Recipients => ({ userIds: [...new Set(rs.flatMap((r) => r.userIds))], emails: uniqEmails(rs.flatMap((r) => r.emails)) });
+export const merge = (...rs: Recipients[]): Recipients => ({ userIds: [...new Set(rs.flatMap((r) => r.userIds))], emails: uniqEmails(rs.flatMap((r) => r.emails)) });
 
 /** Reserva el aviso; false si ya se había enviado. */
-async function claim(kind: string, entityId: string, stage: string) {
+export async function claim(kind: string, entityId: string, stage: string) {
   const rows = await db.insert(proactiveAlerts).values({ kind, entityId, stage }).onConflictDoNothing().returning({ kind: proactiveAlerts.kind });
   return rows.length > 0;
 }
 
 /** Aviso de Alexia por su chat, Teams (si la persona ya habló con el bot) y email. */
-async function alert(
+export async function alert(
   to: Recipients,
   a: { event: string; title: string; body: string; link: string; urgent?: boolean; rows?: [string, string][]; projectId?: string | null; replenishmentId?: string | null },
 ) {

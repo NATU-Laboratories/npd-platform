@@ -35,7 +35,7 @@ import { getSettings } from "./settings";
 import { getFormulaTargetCost, loadSheet, pendingUpTo } from "./sheet";
 
 /** Modelo del asistente (OpenAI). Se puede cambiar con OPENAI_MODEL sin tocar código. */
-const MODEL = process.env.OPENAI_MODEL || "gpt-6.1-terra";
+export const MODEL = process.env.OPENAI_MODEL || "gpt-6.1-terra";
 
 /**
  * Guía de la plataforma (estable: va en el prefijo cacheado). Describe el
@@ -63,6 +63,7 @@ Cómo responder:
   · anotar_en_ficha: un dato concreto de la ficha técnica (proveedor del tapón, precio final, UFI, idiomas, troquel…). Si la herramienta dice que hay varios campos posibles o que el proyecto tiene varias referencias, pregunta cuál.
   · anotar_en_bitacora: una nota o una espera (con su motivo) en la bitácora de Laboratorio / I+D de un proyecto o de una reposición en reformulación.
   · registrar_presupuesto: el presupuesto que ha dado un proveedor en una reposición (precio unitario y condiciones), solo Compras.
+  · Si el proveedor responde al email de recotización, lo anotas tú automáticamente (y avisas a Compras); registrar_presupuesto es para cuando el presupuesto llega por otra vía (teléfono, WhatsApp…) o hay que corregirlo.
   · Lo que no sea un dato de la ficha (una conversación, un acuerdo, un recordatorio) apúntalo como comentario con preparar_comentario.
 - Pedir recotización a proveedores (preparar_recotizacion, solo Compras) envía un email a una empresa externa: esa SÍ queda pendiente de confirmación; di en una frase qué has preparado y pide que la confirme según el canal (lo indica el mensaje de contexto). No digas que está hecha hasta que la confirme.
 - Redacta los mensajes en primera persona de quien los envía, claros y breves; no inventes datos.

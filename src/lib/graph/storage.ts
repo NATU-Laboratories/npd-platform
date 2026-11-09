@@ -452,3 +452,21 @@ export function chunkStore(): (ChunkReceiver & Storage) | null {
   }
   return null;
 }
+
+/** Sube un archivo pequeño desde el servidor (p. ej. un PDF recibido por email) de una sola vez. */
+export async function putFile(parentId: string, name: string, data: Buffer, mime: string): Promise<StoredItem> {
+  const storage = getStorage();
+  const { uploadUrl } = await storage.createUploadSession(parentId, name);
+  const range = `bytes 0-${data.length - 1}/${data.length}`;
+  const store = chunkStore();
+  if (store) {
+    const res = await store.receiveChunk(uploadUrl.split("/").pop()!, range, data, mime);
+    if (!("id" in res)) throw new Error("Subida incompleta");
+    return res;
+  }
+  // SharePoint: una sola petición a la sesión de subida (hasta 60 MB)
+  const r = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Range": range, "Content-Length": String(data.length) }, body: new Uint8Array(data) });
+  if (!r.ok) throw new Error(`No se pudo subir ${name} (${r.status})`);
+  const item = (await r.json()) as { id: string };
+  return storage.getItem(item.id);
+}

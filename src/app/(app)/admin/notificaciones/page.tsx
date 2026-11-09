@@ -4,7 +4,8 @@ import { jobs, notificationLog, projects } from "@/db/schema";
 import { PageTitle, Table, Td, Th } from "@/components/admin";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { resendNotificationAction, retryJobAction, sendTestEmailAction } from "@/app/actions/admin";
+import { connectInboundAction, resendNotificationAction, retryJobAction, sendTestEmailAction } from "@/app/actions/admin";
+import { inboundDomain, inboundEnabled } from "@/lib/server/reply-address";
 import { mailDriver, mailRedirect } from "@/lib/graph/mail";
 import { formatDate } from "@/lib/utils";
 
@@ -13,7 +14,7 @@ export const metadata = { title: "Notificaciones" };
 const TONE = { sent: "bg-[#eef0e6] text-[#56613f] ring-natu-sage", pending: "bg-slate-100 text-slate-700 ring-slate-200", failed: "bg-rose-50 text-rose-800 ring-rose-200" } as const;
 
 export default async function NotificationsPage({ searchParams }: PageProps<"/admin/notificaciones">) {
-  const { estado } = await searchParams;
+  const { estado, entrada } = await searchParams;
   const [rows, queue] = await Promise.all([
     db
       .select({ n: notificationLog, code: projects.code })
@@ -37,6 +38,27 @@ export default async function NotificationsPage({ searchParams }: PageProps<"/ad
             <span className="mt-0.5 block text-xs text-amber-800">Modo pruebas: todos los emails se desvían a {mailRedirect().join(", ")}, indicando a quién iban.</span>
           )}
         </p>
+        <div className="w-full border-t border-slate-100 pt-3">
+          <p className="text-slate-700">
+            Respuestas de proveedores:{" "}
+            <strong className="font-semibold">{inboundEnabled() ? `Alexia las recibe en ${inboundDomain()}` : "sin configurar (llegan solo al correo de Compras)"}</strong>
+          </p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Las peticiones de presupuesto llevan una dirección de respuesta de Alexia: lee la respuesta (y sus PDF), anota el presupuesto en la reposición y avisa a Compras.
+          </p>
+          {typeof entrada === "string" && (
+            <p className={`mt-2 rounded-md px-3 py-2 text-xs ${entrada === "ok" ? "bg-[#eef0e6] text-[#56613f]" : "bg-rose-50 text-rose-800"}`}>
+              {entrada === "ok" ? "Conectado en Brevo: las respuestas de proveedores llegarán a la plataforma." : entrada}
+            </p>
+          )}
+          {inboundEnabled() && (
+            <form action={connectInboundAction} className="mt-2">
+              <Button type="submit" variant="secondary" size="sm">
+                Conectar con Brevo
+              </Button>
+            </form>
+          )}
+        </div>
         <form action={sendTestEmailAction}>
           <Button type="submit" variant="secondary" size="sm">
             Enviarme un email de prueba
