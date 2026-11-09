@@ -4,7 +4,7 @@ import { jobs, notificationLog, projects } from "@/db/schema";
 import { PageTitle, Table, Td, Th } from "@/components/admin";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { connectInboundAction, resendNotificationAction, retryJobAction, sendTestEmailAction } from "@/app/actions/admin";
+import { cleanInboundAction, connectInboundAction, inboundStatus, resendNotificationAction, retryJobAction, sendTestEmailAction } from "@/app/actions/admin";
 import { inboundDomain, inboundEnabled } from "@/lib/server/reply-address";
 import { mailDriver, mailRedirect } from "@/lib/graph/mail";
 import { formatDate } from "@/lib/utils";
@@ -15,6 +15,7 @@ const TONE = { sent: "bg-[#eef0e6] text-[#56613f] ring-natu-sage", pending: "bg-
 
 export default async function NotificationsPage({ searchParams }: PageProps<"/admin/notificaciones">) {
   const { estado, entrada } = await searchParams;
+  const hooks = inboundEnabled() ? await inboundStatus() : null;
   const [rows, queue] = await Promise.all([
     db
       .select({ n: notificationLog, code: projects.code })
@@ -51,12 +52,39 @@ export default async function NotificationsPage({ searchParams }: PageProps<"/ad
               {entrada === "ok" ? "Conectado en Brevo: las respuestas de proveedores llegarán a la plataforma." : entrada}
             </p>
           )}
+          {hooks && (
+            <div className="mt-2 text-xs text-slate-600">
+              {!hooks.ok ? (
+                <p className="text-rose-700">No se pudo consultar Brevo: {hooks.error}</p>
+              ) : hooks.hooks.length ? (
+                <ul className="flex flex-col gap-0.5">
+                  {hooks.hooks.map((h) => (
+                    <li key={h.id}>
+                      Webhook en Brevo #{h.id} · {h.domain ?? "—"} · <span className="font-mono">{h.url}</span>{" "}
+                      {h.current ? <span className="font-medium text-[#56613f]">✓ dirección actual</span> : <span className="font-medium text-rose-700">✗ dirección antigua (no llega)</span>}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-amber-800">Brevo no tiene ningún webhook de entrada registrado: pulsa «Conectar con Brevo».</p>
+              )}
+            </div>
+          )}
           {inboundEnabled() && (
-            <form action={connectInboundAction} className="mt-2">
-              <Button type="submit" variant="secondary" size="sm">
-                Conectar con Brevo
-              </Button>
-            </form>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <form action={connectInboundAction}>
+                <Button type="submit" variant="secondary" size="sm">
+                  Conectar con Brevo
+                </Button>
+              </form>
+              {hooks?.hooks.some((h) => !h.current) && (
+                <form action={cleanInboundAction}>
+                  <Button type="submit" variant="ghost" size="sm">
+                    Borrar webhooks antiguos
+                  </Button>
+                </form>
+              )}
+            </div>
           )}
         </div>
         <form action={sendTestEmailAction}>
