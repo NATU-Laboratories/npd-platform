@@ -12,7 +12,25 @@ import { getActiveUsers, getBrands, getCatalogLabels } from "./catalogs";
 import { listProjects } from "./dashboard";
 import { labelInfoMissing, refTitle } from "./references";
 import { canAccessReplenishments, listReplenishments, loadReplenishment, myTurn, REP_FLOW } from "./replenishments";
-import { commentInput, confirmAction, markNoticesRead, notifyInput, prepareComment, prepareNotify, prepareQuote, quoteInput, recentNotices, type ActionChannel, type PreparedAction } from "./assistant-actions";
+import {
+  commentInput,
+  confirmAction,
+  labNoteInput,
+  markNoticesRead,
+  notifyInput,
+  prepareComment,
+  prepareLabNote,
+  prepareNotify,
+  prepareQuote,
+  prepareQuoteReply,
+  prepareSheetField,
+  quoteInput,
+  quoteReplyInput,
+  recentNotices,
+  sheetFieldInput,
+  type ActionChannel,
+  type PreparedAction,
+} from "./assistant-actions";
 import { getSettings } from "./settings";
 import { getFormulaTargetCost, loadSheet, pendingUpTo } from "./sheet";
 
@@ -41,9 +59,14 @@ Cómo responder:
 - Solo puedes ver los proyectos que esta persona tiene permiso para ver: las herramientas ya lo filtran. Si un proyecto no aparece, indica que no existe o que no tiene acceso.
 - Cuando menciones un proyecto, enlázalo así: [2026-PL-0007 · Nombre](/proyectos/<id>).
 - Acciones que puedes hacer por la persona: enviar un aviso a un departamento o persona (preparar_aviso) y dejar un comentario en un proyecto o reposición (preparar_comentario): se hacen AL MOMENTO, sin confirmación, así que antes de llamarlas asegúrate de que está claro a quién va, sobre qué proyecto o reposición y qué dice; si hay cualquier duda (varias personas con ese nombre, proyecto ambiguo, mensaje poco claro), pregunta primero y no llames a la herramienta. Cuando la herramienta diga que está hecho, confírmalo en una frase (sin repetir todo el mensaje).
+- Anotar en los proyectos (también AL MOMENTO, con los permisos de la persona; si no tiene permiso, la herramienta lo dice y puedes ofrecer un comentario o un aviso):
+  · anotar_en_ficha: un dato concreto de la ficha técnica (proveedor del tapón, precio final, UFI, idiomas, troquel…). Si la herramienta dice que hay varios campos posibles o que el proyecto tiene varias referencias, pregunta cuál.
+  · anotar_en_bitacora: una nota o una espera (con su motivo) en la bitácora de Laboratorio / I+D de un proyecto o de una reposición en reformulación.
+  · registrar_presupuesto: el presupuesto que ha dado un proveedor en una reposición (precio unitario y condiciones), solo Compras.
+  · Lo que no sea un dato de la ficha (una conversación, un acuerdo, un recordatorio) apúntalo como comentario con preparar_comentario.
 - Pedir recotización a proveedores (preparar_recotizacion, solo Compras) envía un email a una empresa externa: esa SÍ queda pendiente de confirmación; di en una frase qué has preparado y pide que la confirme según el canal (lo indica el mensaje de contexto). No digas que está hecha hasta que la confirme.
 - Redacta los mensajes en primera persona de quien los envía, claros y breves; no inventes datos.
-- No puedes aprobar P1/P2, avanzar fases ni estados, validar arte final, cancelar ni editar datos: explica dónde y cómo hacerlo en la plataforma.
+- No puedes aprobar P1/P2, avanzar fases ni estados, validar arte final ni cancelar: explica dónde y cómo hacerlo en la plataforma.
 - Si la persona pregunta si tiene avisos o mensajes, usa ver_mis_avisos.
 - El coste objetivo de la fórmula es confidencial: solo lo menciones si la herramienta te lo devuelve.
 
@@ -361,6 +384,24 @@ function toolsFor(u: CurrentUser, ctx: ActionChannel & { prepared: PreparedActio
     inputSchema: commentInput,
     run: async (i) => prepared(await prepareComment(u, ctx, i), true),
   });
+  const sheetFieldTool = defineTool({
+    name: "anotar_en_ficha",
+    description: "Anota al momento un dato en la ficha técnica de un proyecto NPD (un campo concreto), con los permisos de la persona. Úsala cuando la persona pida apuntar, anotar, poner o cambiar un dato de la ficha.",
+    inputSchema: sheetFieldInput,
+    run: async (i) => prepared(await prepareSheetField(u, ctx, i), true),
+  });
+  const labNoteTool = defineTool({
+    name: "anotar_en_bitacora",
+    description: "Apunta al momento una nota o una espera (con su motivo) en la bitácora de Laboratorio / I+D de un proyecto o de una reposición en reformulación.",
+    inputSchema: labNoteInput,
+    run: async (i) => prepared(await prepareLabNote(u, ctx, i), true),
+  });
+  const quoteReplyTool = defineTool({
+    name: "registrar_presupuesto",
+    description: "Registra al momento el presupuesto que ha dado un proveedor en una reposición (precio unitario y/o condiciones). Solo Compras.",
+    inputSchema: quoteReplyInput,
+    run: async (i) => prepared(await prepareQuoteReply(u, ctx, i), true),
+  });
   const quoteTool = defineTool({
     name: "preparar_recotizacion",
     description: "Prepara la petición de recotización por email a los proveedores de una reposición (solo Compras). No la envía: la persona debe confirmarla.",
@@ -379,7 +420,7 @@ function toolsFor(u: CurrentUser, ctx: ActionChannel & { prepared: PreparedActio
     },
   });
 
-  return [searchProjects, getProject, searchReps, getRep, notifyTool, commentTool, quoteTool, noticesTool];
+  return [searchProjects, getProject, searchReps, getRep, notifyTool, commentTool, sheetFieldTool, labNoteTool, quoteReplyTool, quoteTool, noticesTool];
 }
 
 export type ChatTurn = { role: "user" | "assistant"; content: string };

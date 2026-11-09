@@ -194,21 +194,116 @@ async function checkSupplierQuotes(followupDays: number) {
   return sent;
 }
 
+// ─── Resumen semanal para los gestores de proyectos (lunes) ─────────────────
+
+const madridToday = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Madrid" }); // AAAA-MM-DD
+const isMondayInMadrid = () => new Date().toLocaleDateString("en-GB", { timeZone: "Europe/Madrid", weekday: "long" }) === "Monday";
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** Semana ISO (AAAA-Www) de una fecha AAAA-MM-DD: identifica el resumen para no repetirlo. */
+function isoWeek(day: string) {
+  const d = new Date(`${day}T12:00:00Z`);
+  const dow = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - dow + 3);
+  const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
+  const week = 1 + Math.round(((d.getTime() - firstThursday.getTime()) / 86_400_000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
+  return `${d.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+
+/**
+ * Un único mensaje los lunes con lo que conviene vigilar esa semana: proyectos en riesgo y que
+ * entran en riesgo, departamentos parados, esperas de Laboratorio, solicitudes sin decidir,
+ * proveedores sin responder y reposiciones cerca de su fecha.
+ */
+export async function weeklySummary(opts: { force?: boolean } = {}) {
+  const s = await getSettings();
+  if (!opts.force && !isMondayInMadrid()) return 0;
+  const managers = await projectManagers();
+  if (!hasAnyone(managers)) return 0;
+  const today = madridToday();
+  if (!opts.force && !(await claim("weekly_summary", "managers", isoWeek(today)))) return 0;
+
+  const open = await db
+    .select({ id: projects.id, code: projects.code, name: projects.name, neededBy: projects.neededBy, status: projects.status, requestedAt: projects.requestedAt })
+    .from(projects)
+    .where(inArray(projects.status, [...WATCHED_STATUSES]));
+  const label = (p: { code: string | null; name: string }) => `${p.code ?? "—"} · ${p.name}`;
+  const dated = open.filter((p) => p.neededBy).map((p) => ({ ...p, left: daysUntil(p.neededBy!) }));
+  const inRisk = dated.filter((p) => p.left <= s.risk_days).sort((a, b) => a.left - b.left);
+  const soon = dated.filter((p) => p.left > s.risk_days && p.left <= s.risk_days + 7).sort((a, b) => a.left - b.left);
+  const undecided = open.filter((p) => p.status === "submitted" && p.requestedAt && Date.now() - p.requestedAt.getTime() > 3 * 86_400_000);
+
+  // Departamentos parados: más de 14 días en el mismo estado (sin completar) en proyectos en curso
+  const stuck = (
+    await db.execute<{ code: string | null; name: string; dept: string; state: string; days: number }>(sql`
+      select p.code, p.name, d.name as dept, s.name as state, (current_date - pr.entered_at::date) as days
+      from project_dept_progress pr
+      join projects p on p.id = pr.project_id
+      join departments d on d.id = pr.department_id
+      join dept_substates s on s.id = pr.substate_id
+      where p.status = 'in_progress' and pr.completed_at is null and pr.entered_at < now() - interval '14 days'
+      order by pr.entered_at asc limit 10`)
+  ).rows;
+  // Esperas de Laboratorio vigentes: la última nota de la bitácora es una espera
+  const waits = (
+    await db.execute<{ code: string | null; name: string; body: string }>(sql`
+      select distinct on (n.project_id) p.code, p.name, n.body, n.is_wait
+      from dept_notes n join projects p on p.id = n.project_id
+      where p.status = 'in_progress'
+      order by n.project_id, n.created_at desc`)
+  ).rows.filter((r) => (r as unknown as { is_wait: boolean }).is_wait);
+  const quotes = (
+    await db.execute<{ code: string; supplier: string; days: number }>(sql`
+      select r.code, s.name as supplier, max(current_date - i.quote_requested_at::date) as days
+      from replenishment_items i join replenishments r on r.id = i.replenishment_id join suppliers s on s.id = i.supplier_id
+      where i.quote_status = 'requested' and r.status not in ('closed', 'cancelled')
+      group by r.code, s.name order by days desc limit 10`)
+  ).rows;
+  const repsDue = (
+    await db.execute<{ code: string; title: string; left: number }>(sql`
+      select code, title, (needed_by - current_date) as left from replenishments
+      where needed_by is not null and needed_by <= current_date + 7 and status not in ('sent_to_print', 'closed', 'cancelled')
+      order by needed_by limit 10`)
+  ).rows;
+
+  const sections: [string, string[]][] = [
+    [`En riesgo (${inRisk.length})`, inRisk.map((p) => `${label(p)} — ${p.left < 0 ? `vencido hace ${-p.left} d` : `entrega en ${p.left} d`}`)],
+    [`Entran en riesgo esta semana (${soon.length})`, soon.map((p) => `${label(p)} — en ${p.left - s.risk_days} d`)],
+    [`Solicitudes sin decidir en P1 (${undecided.length})`, undecided.map((p) => `${label(p)} — enviada el ${formatDate(p.requestedAt!)}`)],
+    [`Departamentos parados más de 14 días (${stuck.length})`, stuck.map((r) => `${label(r)} — ${r.dept} en «${r.state}» (${r.days} d)`)],
+    [`Esperas de Laboratorio (${waits.length})`, waits.map((r) => `${label(r)} — ${r.body.slice(0, 120)}`)],
+    [`Proveedores sin responder (${quotes.length})`, quotes.map((q) => `${q.code} — ${q.supplier} (${q.days} d)`)],
+    [`Reposiciones con fecha esta semana (${repsDue.length})`, repsDue.map((r) => `${r.code} · ${r.title} — ${r.left < 0 ? "fecha vencida" : `en ${r.left} d`}`)],
+  ];
+  const withItems = sections.filter(([, lines]) => lines.length);
+  const body = withItems.length
+    ? withItems.map(([title, lines]) => `**${title}**\n${lines.slice(0, 8).map((l) => `- ${l}`).join("\n")}${lines.length > 8 ? `\n- …y ${lines.length - 8} más` : ""}`).join("\n\n")
+    : "Esta semana no hay nada que vigilar: ningún proyecto en riesgo ni bloqueos. ✨";
+  const total = inRisk.length + soon.length + undecided.length + stuck.length + waits.length + quotes.length + repsDue.length;
+  await alert(managers, {
+    event: "alexia.weekly_summary",
+    link: "/?risk=1",
+    title: total ? `Resumen semanal: ${plural(total, "punto a vigilar", "puntos a vigilar")}` : "Resumen semanal: todo en orden",
+    body,
+    rows: withItems.map(([title, lines]) => [title, lines.join("\n")]),
+  });
+  return 1;
+}
+
 /** Revisión diaria (la lanza el cron). Un fallo en una comprobación no impide las demás. */
-export async function runWatchdog() {
+export async function runWatchdog(opts: { forceWeekly?: boolean } = {}) {
   const s = await getSettings();
   const out: Record<string, number | string> = {};
-  try {
-    out.projectRisk = await checkProjectRisk(s.risk_days, s.risk_warning_days);
-  } catch (err) {
-    await logError("alexia:watchdog:risk", err);
-    out.projectRisk = "error";
-  }
-  try {
-    out.supplierQuotes = await checkSupplierQuotes(s.quote_followup_days);
-  } catch (err) {
-    await logError("alexia:watchdog:quotes", err);
-    out.supplierQuotes = "error";
-  }
+  const step = async (key: string, fn: () => Promise<number>) => {
+    try {
+      out[key] = await fn();
+    } catch (err) {
+      await logError(`alexia:watchdog:${key}`, err);
+      out[key] = "error";
+    }
+  };
+  await step("projectRisk", () => checkProjectRisk(s.risk_days, s.risk_warning_days));
+  await step("supplierQuotes", () => checkSupplierQuotes(s.quote_followup_days));
+  await step("weeklySummary", () => weeklySummary({ force: opts.forceWeekly }));
   return out;
 }

@@ -2,7 +2,10 @@ import "server-only";
 import { and, desc, eq, gt, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { assistantActions, comments, departmentMembers, departments, projects, replenishments, suppliers, userNotices, users } from "@/db/schema";
+import { assistantActions, comments, departmentMembers, departments, deptNotes, projects, replenishmentItems, replenishments, suppliers, userNotices, users } from "@/db/schema";
+import { ELEMENT_LABEL } from "@/lib/replenishment/config";
+import { findSheetField, parseFieldValue } from "@/lib/sheet/field-input";
+import { applicable, formatValue, SHEET_SECTIONS, type ScalarField } from "@/lib/sheet/sections";
 import { sendProactive } from "@/lib/teams/connector";
 import { logActivity } from "./activity";
 import { canViewProject, isActive, loadUser, type CurrentUser } from "./authz";
@@ -10,7 +13,10 @@ import { renderEmail } from "./email-template";
 import { logError } from "./errors";
 import { queueNotification, uniqEmails } from "./notifications";
 import { listProjects } from "./dashboard";
-import { addComment, canAccessReplenishments, canActAs, departmentRecipients, listReplenishments, sendQuoteRequests } from "./replenishments";
+import { addComment, canAccessReplenishments, canActAs, departmentRecipients, listReplenishments, registerQuote, repLabNote, sendQuoteRequests } from "./replenishments";
+import { normalizeText, searchTokens } from "./fuzzy";
+import { refTitle } from "./references";
+import { canEditSection, deptStartPhases, loadProjectRow, sectionDeptKeys, sheetContext, sheetRefsFor, setSheetField } from "./sheet";
 
 /**
  * Acciones que Alexia puede hacer por una persona. Nunca se ejecutan al momento:
@@ -183,6 +189,130 @@ export async function prepareQuote(u: CurrentUser, ch: ActionChannel, i: z.infer
   });
 }
 
+// ─── Anotar en la ficha del proyecto ──────────────────────────────────────
+
+export const sheetFieldInput = z.object({
+  sobre: z.string().min(1).max(120).describe("Código o nombre aproximado del proyecto NPD"),
+  campo: z.string().min(1).max(120).describe("Campo de la ficha tal como lo diga la persona (p. ej. «proveedor del tapón», «precio unitario final», «UFI», «troquel»)"),
+  apartado: z.string().max(80).optional().describe("Apartado de la ficha si se sabe (p. ej. «Envase y packaging», «Calidad y regulatorio»)"),
+  valor: z.string().min(1).max(4000).describe("Valor que hay que anotar, tal como lo dice la persona"),
+  referencia: z.string().max(60).optional().describe("Referencia del proyecto (A, B… o su nombre) si el proyecto tiene varias"),
+});
+
+export async function prepareSheetField(u: CurrentUser, ch: ActionChannel, i: z.infer<typeof sheetFieldInput>): Promise<PreparedAction | string> {
+  const subject = await resolveSubject(u, i.sobre);
+  if (!subject) return "Indica en qué proyecto hay que anotarlo.";
+  if (!isSubject(subject)) return subjectProblem(subject, i.sobre);
+  if (subject.kind !== "project") return "Las reposiciones no tienen ficha: para dejar constancia usa un comentario (o registra el presupuesto del proveedor).";
+  const p = await loadProjectRow(subject.id);
+  if (!p) return "No encuentro el proyecto.";
+  const ctx = await sheetContext(p);
+  const found = findSheetField(i.campo, i.apartado).filter((c) => applicable([c.field], ctx).length);
+  if (!found.length) return `No encuentro en la ficha un campo «${i.campo}». Pregunta a la persona a qué campo se refiere (o anótalo como comentario).`;
+  if (found.length > 1)
+    return `«${i.campo}» puede ser varios campos: ${found
+      .slice(0, 8)
+      .map((c) => `«${c.field.label}${c.group ? ` · ${c.group}` : ""}» (${c.section.title})`)
+      .join(", ")}. Pregunta cuál.`;
+  const { section, field, group } = found[0]!;
+  const parsed = parseFieldValue(field, i.valor);
+  if (!parsed.ok) return parsed.error;
+  // ¿Puede editarlo? (mismos permisos que «Editar» en la ficha)
+  const deptKey = (await sectionDeptKeys())[section.key]!;
+  const phase = (await deptStartPhases())[deptKey] ?? section.phase;
+  if (!canEditSection(u, deptKey, phase, p)) return `«${field.label}» es de ${section.title} y solo puede cambiarlo su departamento (o el gestor de proyectos). Puedo avisarles o dejarlo como comentario.`;
+  const refs = await sheetRefsFor(p.id, section.key);
+  let referenceId: number | undefined;
+  let refLabel: string | null = null;
+  if (refs?.perRef) {
+    const q = normalizeText(i.referencia ?? "");
+    const r = q ? refs.refs.find((x) => normalizeText(x.label) === q || normalizeText(x.name).includes(q) || normalizeText(refTitle(x)).includes(q)) : undefined;
+    if (!r) return `El proyecto tiene varias referencias (${refs.refs.map(refTitle).join(", ")}) y «${section.title}» va por referencia: pregunta en cuál.`;
+    referenceId = r.id;
+    refLabel = refTitle(r);
+  }
+  const shown = formatValue(field, parsed.value) ?? i.valor;
+  return store(u, ch, "sheet_field", { subject, section: section.key, field: field.key, value: parsed.value, referenceId: referenceId ?? null }, {
+    title: `Anotar en la ficha de ${subject.code}`,
+    lines: [
+      ["Proyecto", `${subject.code} · ${subject.name}${refLabel ? ` · ${refLabel}` : ""}`],
+      ["Campo", `${field.label}${group ? ` · ${group}` : ""} (${section.title})`],
+      ["Valor", shown],
+    ],
+  });
+}
+
+// ─── Bitácora de Laboratorio ───────────────────────────────────────────────
+
+export const labNoteInput = z.object({
+  sobre: z.string().min(1).max(120).describe("Código o nombre aproximado del proyecto NPD o de la reposición en reformulación"),
+  nota: z.string().min(1).max(4000).describe("Lo que hay que apuntar en la bitácora"),
+  espera: z.boolean().optional().describe("true si es una espera (el trabajo está parado) y la nota explica el motivo"),
+});
+
+export async function prepareLabNote(u: CurrentUser, ch: ActionChannel, i: z.infer<typeof labNoteInput>): Promise<PreparedAction | string> {
+  const subject = await resolveSubject(u, i.sobre);
+  if (!subject) return "Indica en qué proyecto o reposición.";
+  if (!isSubject(subject)) return subjectProblem(subject, i.sobre);
+  if (subject.kind === "project") {
+    const p = await loadProjectRow(subject.id);
+    const phase = (await deptStartPhases()).idi;
+    if (!p || phase == null || !canEditSection(u, "idi", phase, p)) return "Solo Laboratorio / I+D (o el gestor de proyectos) puede escribir en su bitácora. Puedo dejarlo como comentario.";
+  }
+  return store(u, ch, "lab_note", { subject, body: i.nota.trim(), isWait: !!i.espera }, {
+    title: `${i.espera ? "Espera" : "Nota"} en la bitácora de Laboratorio`,
+    lines: [
+      ["En", `${subject.code} · ${subject.name}`],
+      [i.espera ? "Motivo de la espera" : "Nota", i.nota.trim()],
+    ],
+  });
+}
+
+// ─── Presupuesto de un proveedor (reposiciones) ───────────────────────────
+
+export const quoteReplyInput = z.object({
+  reposicion: z.string().min(1).max(60).describe("Código (REP-2026-0001) o nombre aproximado de la reposición"),
+  proveedor: z.string().min(1).max(100).describe("Proveedor que ha respondido"),
+  elemento: z.string().max(60).optional().describe("Elemento (etiqueta, estuche, caja master…) si el proveedor tiene varios en la reposición"),
+  precio: z.string().max(20).optional().describe("Precio unitario en euros, solo el número (p. ej. «0,045»)"),
+  notas: z.string().max(1000).optional().describe("Condiciones: plazo de entrega, mínimos, portes, validez…"),
+});
+
+export async function prepareQuoteReply(u: CurrentUser, ch: ActionChannel, i: z.infer<typeof quoteReplyInput>): Promise<PreparedAction | string> {
+  const subject = await resolveSubject(u, i.reposicion);
+  if (!subject) return "Indica la reposición.";
+  if (!isSubject(subject)) return subjectProblem(subject, i.reposicion);
+  if (subject.kind !== "replenishment") return `${subject.code} no es una reposición.`;
+  const [rep] = await db.select({ requesterId: replenishments.requesterId }).from(replenishments).where(eq(replenishments.id, subject.id));
+  if (!rep || !canActAs(u, rep, "compras")) return "Solo Compras (o quien abrió la reposición) registra los presupuestos.";
+  const items = await db
+    .select({ id: replenishmentItems.id, element: replenishmentItems.element, description: replenishmentItems.description, supplier: suppliers.name })
+    .from(replenishmentItems)
+    .innerJoin(suppliers, eq(suppliers.id, replenishmentItems.supplierId))
+    .where(eq(replenishmentItems.replenishmentId, subject.id));
+  const sq = searchTokens(i.proveedor);
+  let mine = items.filter((it) => sq.every((t) => normalizeText(it.supplier).includes(t)));
+  if (!mine.length) return `En ${subject.code} no hay elementos de «${i.proveedor}». Proveedores: ${[...new Set(items.map((x) => x.supplier))].join(", ") || "ninguno"}.`;
+  if (i.elemento?.trim()) {
+    const e = normalizeText(i.elemento);
+    mine = mine.filter((it) => normalizeText(`${ELEMENT_LABEL[it.element] ?? it.element} ${it.description ?? ""}`).includes(e));
+    if (!mine.length) return `«${i.proveedor}» no tiene «${i.elemento}» en ${subject.code}.`;
+  }
+  if (mine.length > 1 && i.precio) return `${mine[0]!.supplier} tiene varios elementos en ${subject.code} (${mine.map((x) => ELEMENT_LABEL[x.element] ?? x.element).join(", ")}): pregunta de cuál es el precio.`;
+  const price = i.precio?.replace(/[^\d,.]/g, "") ?? "";
+  if (price && !/^\d+([.,]\d{1,4})?$/.test(price)) return "El precio no es válido: indica solo el número (p. ej. 0,045).";
+  if (!price && !i.notas?.trim()) return "Indica el precio o las condiciones del presupuesto.";
+  return store(u, ch, "quote_reply", { subject, itemIds: mine.map((x) => x.id), price, notes: i.notas?.trim() ?? "" }, {
+    title: `Presupuesto de ${mine[0]!.supplier}`,
+    lines: [
+      ["Reposición", `${subject.code} · ${subject.name}`],
+      ["Elemento", mine.map((x) => ELEMENT_LABEL[x.element] ?? x.element).join(", ")],
+      ...(price ? ([["Precio", `${price} €/ud`]] as [string, string][]) : []),
+      ...(i.notas?.trim() ? ([["Condiciones", i.notas.trim()]] as [string, string][]) : []),
+    ],
+  });
+}
+
 // ─── Confirmar / cancelar ─────────────────────────────────────────────────
 
 type Row = typeof assistantActions.$inferSelect;
@@ -271,6 +401,33 @@ async function execute(u: CurrentUser, a: Row): Promise<string> {
     const res = await sendQuoteRequests(u, subject!.id, (p.supplierId as number | null) ?? null, String(p.message));
     if (!res.sent.length) throw new Error(res.withoutEmail.length ? `Ningún proveedor tiene email (${res.withoutEmail.join(", ")}). Añádelo en Backoffice → Proveedores.` : "No hay proveedores a los que enviar.");
     return `Hecho: recotización pedida a ${res.sent.join(", ")}${res.withoutEmail.length ? ` (sin email: ${res.withoutEmail.join(", ")})` : ""}.`;
+  }
+
+  if (a.kind === "sheet_field") {
+    const r = await setSheetField(u, subject!.id, String(p.section), String(p.field), p.value, (p.referenceId as number | null) ?? undefined);
+    const section = SHEET_SECTIONS.find((x) => x.key === p.section)!;
+    const field = section.groups.flatMap((g) => g.fields).find((f) => f.key === p.field) as ScalarField;
+    const before = formatValue(field, r.before);
+    return `Anotado en la ficha de ${subject!.code}${r.refLabel ? ` (${r.refLabel})` : ""}: ${field.label} = ${formatValue(field, p.value) ?? "—"}${before ? ` (antes: ${before})` : ""}.`;
+  }
+
+  if (a.kind === "lab_note") {
+    const body = String(p.body);
+    const isWait = !!p.isWait;
+    if (subject!.kind === "replenishment") await repLabNote(u, subject!.id, body, isWait);
+    else {
+      const proj = await loadProjectRow(subject!.id);
+      const phase = (await deptStartPhases()).idi;
+      if (!proj || phase == null || !canEditSection(u, "idi", phase, proj)) throw new Error("Solo Laboratorio / I+D puede escribir en su bitácora.");
+      await db.insert(deptNotes).values({ projectId: subject!.id, departmentKey: "idi", body, isWait, authorId: u.id });
+      await logActivity({ projectId: subject!.id, actorId: u.id, action: "dept.note", entity: "project", entityId: subject!.id, diff: { department: "idi", wait: isWait, via: "Alexia" } });
+    }
+    return `Apuntado en la bitácora de Laboratorio de ${subject!.code}.`;
+  }
+
+  if (a.kind === "quote_reply") {
+    for (const itemId of p.itemIds as number[]) await registerQuote(u, { itemId, price: String(p.price ?? ""), notes: String(p.notes ?? "") || null });
+    return `Presupuesto registrado en ${subject!.code}${p.price ? `: ${p.price} €/ud` : ""}.`;
   }
 
   if (a.kind === "notify") {
