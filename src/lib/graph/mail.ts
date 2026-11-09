@@ -9,6 +9,7 @@ export type MailMessage = { to: string[]; subject: string; html: string; replyTo
  * Envío de email.
  * MAIL_DRIVER:
  * - "graph": Graph `sendMail` desde el buzón compartido (§6); por defecto si hay credenciales.
+ * - "brevo": API de Brevo (BREVO_API_KEY, clave xkeysib-…); por defecto si hay BREVO_API_KEY.
  * - "smtp": servidor SMTP (p. ej. Gmail con contraseña de aplicación); por defecto si hay SMTP_HOST.
  * - "log": no envía; el HTML queda en notification_log y, en local, en .storage/mails.
  * - "fail": simula una caída del envío.
@@ -16,8 +17,9 @@ export type MailMessage = { to: string[]; subject: string; html: string; replyTo
  */
 export function mailDriver() {
   const d = process.env.MAIL_DRIVER;
-  if (d === "graph" || d === "smtp" || d === "log" || d === "fail") return d;
+  if (d === "graph" || d === "brevo" || d === "smtp" || d === "log" || d === "fail") return d;
   if (graphConfigured() && process.env.MAIL_SENDER) return "graph";
+  if (process.env.BREVO_API_KEY) return "brevo";
   if (process.env.SMTP_HOST && process.env.SMTP_USER) return "smtp";
   return "log";
 }
@@ -57,6 +59,7 @@ export async function sendMail(original: MailMessage, sender?: string) {
     return;
   }
   if (driver === "smtp") return sendSmtp(msg);
+  if (driver === "brevo") return sendBrevo(msg);
   const from = sender || process.env.MAIL_SENDER!;
   await graphFetch(`/users/${encodeURIComponent(from)}/sendMail`, {
     method: "POST",
@@ -127,6 +130,50 @@ export async function verifySmtp(): Promise<{ ok: boolean; error?: string; hints
     });
     await t.verify();
     return { ok: true };
+  } catch (err) {
+    return { ok: false, error: (err instanceof Error ? err.message : String(err)).slice(0, 200), hints };
+  }
+}
+
+// ─── Brevo (API HTTP) ─────────────────────────────────────────────────────
+
+const brevoKey = () => (process.env.BREVO_API_KEY ?? "").trim().replace(/^["']|["']$/g, "");
+
+/** Error legible de la API de Brevo (su `message` explica la causa: clave, cuenta, remitente…). */
+async function brevoError(r: Response) {
+  const body = (await r.json().catch(() => null)) as { code?: string; message?: string } | null;
+  return `Brevo ${r.status}${body?.code ? ` (${body.code})` : ""}: ${body?.message ?? r.statusText}`.slice(0, 300);
+}
+
+async function sendBrevo(msg: MailMessage) {
+  const r = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: { "api-key": brevoKey(), "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify({
+      sender: { name: process.env.MAIL_FROM_NAME || "NATU · Proyectos NPD", email: process.env.MAIL_FROM },
+      to: msg.to.map((email) => ({ email })),
+      subject: msg.subject,
+      htmlContent: msg.html,
+      // Brevo admite un único «responder a»
+      ...(msg.replyTo?.length ? { replyTo: { email: msg.replyTo[0] } } : {}),
+    }),
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!r.ok) throw new Error(await brevoError(r));
+}
+
+/** Comprueba la clave de la API de Brevo (sin enviar nada). */
+export async function verifyBrevo(): Promise<{ ok: boolean; error?: string; hints?: string[] }> {
+  const key = brevoKey();
+  const hints: string[] = [];
+  if (!key) hints.push("Falta BREVO_API_KEY");
+  else if (/^xsmtpsib-/i.test(key)) hints.push("BREVO_API_KEY es una clave SMTP (xsmtpsib-…): hace falta una clave de API (xkeysib-…), en SMTP y API → Claves API");
+  else if (!/^xkeysib-/i.test(key)) hints.push("BREVO_API_KEY no parece una clave de API de Brevo (empiezan por xkeysib-)");
+  if (!process.env.MAIL_FROM) hints.push("Falta MAIL_FROM (remitente verificado en Brevo o de un dominio autenticado)");
+  try {
+    const r = await fetch("https://api.brevo.com/v3/account", { headers: { "api-key": key, accept: "application/json" }, signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return { ok: false, error: await brevoError(r), hints };
+    return hints.length ? { ok: false, hints } : { ok: true };
   } catch (err) {
     return { ok: false, error: (err instanceof Error ? err.message : String(err)).slice(0, 200), hints };
   }
