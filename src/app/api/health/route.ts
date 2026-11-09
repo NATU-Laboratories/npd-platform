@@ -4,6 +4,7 @@ import { devLoginEnabled, devLoginRequiresPassword } from "@/auth";
 import { db } from "@/db";
 import { graphConfigured } from "@/lib/graph/client";
 import { mailDriver, mailRedirect, verifyBrevo, verifySmtp } from "@/lib/graph/mail";
+import { inboundDomain, inboundEnabled } from "@/lib/server/reply-address";
 import { storageDriver } from "@/lib/graph/storage";
 import { assistantEnabled } from "@/lib/server/assistant";
 import { teamsConfigured } from "@/lib/teams/bot";
@@ -42,6 +43,7 @@ export async function GET() {
       testMode: mailRedirect().length > 0,
       ...(mailDriver() === "smtp" ? { smtp: await verifySmtp() } : {}),
       ...(mailDriver() === "brevo" ? { brevo: await verifyBrevo() } : {}),
+      inbound: { enabled: inboundEnabled(), domain: inboundDomain() || null },
     },
     cron: env("CRON_SECRET"),
     assistant: assistantEnabled(),

@@ -217,16 +217,29 @@ export default async function ReplenishmentPage({ params }: PageProps<"/reposici
               {d.activity.map(({ a, who }) => {
                 const diff = (a.diff ?? {}) as Record<string, unknown>;
                 const isComment = a.action === "replenishment.comment";
+                const isReply = a.action === "replenishment.supplier_reply";
+                const byAlexia = !a.actorId && (isReply || typeof diff.via === "string");
                 return (
                   <li key={a.id} className="text-sm">
                     <p className="text-slate-700">
-                      <strong className="font-medium text-slate-900">{who ?? "Sistema"}</strong> {REP_ACTION_LABEL[a.action] ?? a.action}
+                      <strong className="font-medium text-slate-900">{who ?? (byAlexia ? "Alexia" : "Sistema")}</strong> {REP_ACTION_LABEL[a.action] ?? a.action}
+                      {isReply && typeof diff.supplier === "string" && ` de ${diff.supplier}`}
                       {a.action === "replenishment.lab_state" && typeof diff.to === "string" && ` a «${diff.to}»`}
                       {Array.isArray(diff.samples) && ` · muestras: ${(diff.samples as string[]).join(", ")}`}
                       {Array.isArray(diff.approved) && ` · aprobadas: ${(diff.approved as string[]).join(", ")}`}
                       <span className="ml-1 text-xs text-slate-400">{formatDate(a.createdAt, true)}</span>
                     </p>
                     {isComment && <p className="mt-0.5 whitespace-pre-line rounded-md bg-slate-50 px-3 py-2 text-slate-800">{String(diff.body ?? "")}</p>}
+                    {isReply && (
+                      <div className="mt-1 flex flex-col gap-1 rounded-md bg-slate-50 px-3 py-2 text-slate-800">
+                        {Array.isArray(diff.registered) && diff.registered.length > 0 && (
+                          <p className="text-xs font-medium text-[#56613f]">Anotado: {(diff.registered as string[]).join(" · ")}</p>
+                        )}
+                        {typeof diff.summary === "string" && !(Array.isArray(diff.registered) && diff.registered.length) && <p className="text-xs text-amber-800">{diff.summary}</p>}
+                        <p className="max-h-48 overflow-y-auto whitespace-pre-line text-sm">{String(diff.body ?? "") || "(sin texto)"}</p>
+                        {Array.isArray(diff.attachments) && diff.attachments.length > 0 && <p className="text-xs text-slate-500">Adjuntos: {(diff.attachments as string[]).join(", ")}</p>}
+                      </div>
+                    )}
                     {Array.isArray(diff.corrections) ? (
                       <ol className="mt-1 flex flex-col gap-2 rounded-md bg-amber-50 px-3 py-2">
                         {(diff.corrections as { text: string; fileIds: number[] }[]).map((c, n) => (
