@@ -103,7 +103,6 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/usua
             <Th>Estado</Th>
             <Th>Roles</Th>
             <Th>Departamentos</Th>
-            <Th>Notificaciones</Th>
             <Th>Último acceso</Th>
             <Th />
           </tr>
@@ -171,12 +170,6 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/usua
                     ))}
                   </div>
                 </Td>
-                <Td>
-                  <Select name="notifPref" form={formId} defaultValue={u.notifPref} className="h-8 w-auto text-xs">
-                    <option value="immediate">Inmediato</option>
-                    <option value="daily">Resumen diario</option>
-                  </Select>
-                </Td>
                 <Td className="whitespace-nowrap text-xs text-slate-500">{formatDate(u.lastLoginAt, true)}</Td>
                 <Td>
                   <Button size="sm" variant="secondary" type="submit" form={formId}>
@@ -207,10 +200,6 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/usua
             autoComplete="off"
             spellCheck={false}
           />
-          <Select name="notifPref" defaultValue="immediate" className="w-auto" aria-label="Notificaciones">
-            <option value="immediate">Avisos inmediatos</option>
-            <option value="daily">Resumen diario</option>
-          </Select>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <fieldset>
