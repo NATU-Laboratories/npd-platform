@@ -151,6 +151,8 @@ export const SETTINGS_DEFAULTS = {
   risk_warning_days: 7,
   /** Días sin respuesta del proveedor a una recotización antes de que Alexia avise (y entre recordatorios). */
   quote_followup_days: 3,
+  /** Además de Compras y de quien abrió la reposición, reciben las respuestas de los proveedores. */
+  supplier_reply_cc: [] as string[],
   max_file_mb: 50,
   sender_mailbox: "",
   requesters_see_all: false,
@@ -163,6 +165,7 @@ export type AppSettings = {
   risk_days: number;
   risk_warning_days: number;
   quote_followup_days: number;
+  supplier_reply_cc: string[];
   max_file_mb: number;
   sender_mailbox: string;
   requesters_see_all: boolean;

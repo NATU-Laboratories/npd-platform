@@ -456,6 +456,8 @@ export const notificationLog = pgTable(
     replyTo: text("reply_to").array(),
     subject: text("subject").notNull(),
     html: text("html").notNull(),
+    /** Adjuntos (archivos ya guardados en el almacenamiento): se leen al enviar */
+    attachments: jsonb("attachments").$type<{ storageItemId: string; name: string; mime?: string | null }[]>(),
     status: notificationStatus("status").notNull().default("pending"),
     error: text("error"),
     attempts: integer("attempts").notNull().default(0),
