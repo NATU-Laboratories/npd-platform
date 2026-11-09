@@ -1,9 +1,9 @@
 import "server-only";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { brands, clients, projects } from "@/db/schema";
+import { brands, clients, files, projects } from "@/db/schema";
 import { PHASE_FOLDERS } from "@/lib/labels";
-import { getStorage } from "@/lib/graph/storage";
+import { getStorage, putFile, readFile, storageFor } from "@/lib/graph/storage";
 import { logActivity } from "./activity";
 import { scheduleProjectDocs } from "./project-docs-queue";
 
@@ -32,8 +32,9 @@ export async function yearFolder(year: string) {
   return storage.ensureFolder(await storage.rootId(), year);
 }
 
+/** «nº proyecto. cliente. nombre proyecto» (en marca propia, la marca en lugar del cliente). */
 export function projectFolderName(p: { code: string | null; name: string; clientName?: string | null; brandName?: string | null }) {
-  return [p.code, p.clientName ?? p.brandName, p.name].filter(Boolean).join(" · ");
+  return [p.code, p.clientName ?? p.brandName, p.name].filter(Boolean).join(". ");
 }
 
 /**
@@ -52,7 +53,8 @@ export async function provisionProjectFolder(projectId: string) {
   const { p } = row;
   if (!p.code) throw new Error("El proyecto no tiene código todavía");
 
-  const storage = getStorage();
+  // Proyectos anteriores a SharePoint siguen en el almacenamiento provisional (no se les crea carpeta nueva)
+  const storage = storageFor(p.sharepointFolderId);
   const alreadyProvisioned = !!p.sharepointFolderId;
   const folder = p.sharepointFolderId
     ? await storage.getItem(p.sharepointFolderId)
@@ -69,11 +71,20 @@ export async function provisionProjectFolder(projectId: string) {
     .set({ sharepointFolderId: folder.id, sharepointFolderUrl: folder.webUrl ?? null, sharepointSubfolders: subfolders })
     .where(eq(projects.id, projectId));
 
-  // Mover adjuntos del borrador (conservan su drive_item_id)
+  // Adjuntos del borrador → «00 Solicitud». En el mismo almacén se mueven (conservan su id); si el
+  // borrador se empezó antes de conectar SharePoint, se copian y se actualiza el registro del archivo.
   if (p.stagingFolderId) {
-    const staged = await storage.listChildren(p.stagingFolderId);
-    for (const item of staged) await storage.moveItem(item.id, subfolders["00"]!);
-    await storage.deleteItem(p.stagingFolderId).catch(() => undefined);
+    const staging = storageFor(p.stagingFolderId);
+    const staged = await staging.listChildren(p.stagingFolderId);
+    for (const item of staged) {
+      if (staging === storage) await storage.moveItem(item.id, subfolders["00"]!);
+      else {
+        const { data, mime } = await readFile(item.id);
+        const copy = await putFile(subfolders["00"]!, item.name, data, mime ?? "application/octet-stream");
+        await db.update(files).set({ sharepointItemId: copy.id }).where(eq(files.sharepointItemId, item.id));
+      }
+    }
+    await staging.deleteItem(p.stagingFolderId).catch(() => undefined);
     await db.update(projects).set({ stagingFolderId: null }).where(eq(projects.id, projectId));
   }
 

@@ -489,8 +489,8 @@ export async function deleteDraft(u: CurrentUser, projectId: string) {
   if (!p || p.status !== "draft" || p.requesterId !== u.id) throw new ActionError("No se puede eliminar");
   await db.delete(projects).where(eq(projects.id, projectId));
   if (p.stagingFolderId) {
-    const { getStorage } = await import("@/lib/graph/storage");
-    await getStorage()
+    const { storageFor } = await import("@/lib/graph/storage");
+    await storageFor(p.stagingFolderId)
       .deleteItem(p.stagingFolderId)
       .catch(() => undefined);
   }

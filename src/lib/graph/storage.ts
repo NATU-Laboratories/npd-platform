@@ -458,10 +458,23 @@ export function getStorage(): Storage {
   return d === "sharepoint" ? sharepoint : d === "db" ? dbStore : local;
 }
 
+/**
+ * Ids del almacenamiento provisional (base de datos): UUID. Los proyectos y reposiciones creados
+ * antes de conectar SharePoint siguen guardando y leyendo ahí; los nuevos van a SharePoint.
+ */
+const PROVISIONAL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const isProvisionalId = (id: string | null | undefined) => !!id && PROVISIONAL_ID.test(id);
+
+/** Almacén donde vive ese elemento (o la carpeta): SharePoint o, si es anterior, el provisional. */
+export function storageFor(id: string | null | undefined): Storage {
+  return storageDriver() === "sharepoint" && isProvisionalId(id) ? dbStore : getStorage();
+}
+
 /** Almacén no-SharePoint que recibe subidas por la API propia. */
 export function chunkStore(): (ChunkReceiver & Storage) | null {
   const d = storageDriver();
-  if (d === "db") return dbStore;
+  // Con SharePoint conectado, el provisional sigue sirviendo los archivos anteriores
+  if (d === "db" || d === "sharepoint") return dbStore;
   if (d === "local") {
     return {
       ...local,
@@ -476,12 +489,11 @@ export function chunkStore(): (ChunkReceiver & Storage) | null {
 
 /** Sube un archivo pequeño desde el servidor (p. ej. un PDF recibido por email) de una sola vez. */
 export async function putFile(parentId: string, name: string, data: Buffer, mime: string): Promise<StoredItem> {
-  const storage = getStorage();
+  const storage = storageFor(parentId);
   const { uploadUrl } = await storage.createUploadSession(parentId, name);
   const range = `bytes 0-${data.length - 1}/${data.length}`;
-  const store = chunkStore();
-  if (store) {
-    const res = await store.receiveChunk(uploadUrl.split("/").pop()!, range, data, mime);
+  if ("receiveChunk" in storage) {
+    const res = await (storage as unknown as ChunkReceiver).receiveChunk(uploadUrl.split("/").pop()!, range, data, mime);
     if (!("id" in res)) throw new Error("Subida incompleta");
     return res;
   }
@@ -494,7 +506,7 @@ export async function putFile(parentId: string, name: string, data: Buffer, mime
 
 /** Contenido de un archivo guardado (para adjuntarlo a un email). */
 export async function readFile(id: string): Promise<{ data: Buffer; name: string; mime: string | null }> {
-  const store = chunkStore();
+  const store = storageDriver() === "sharepoint" ? (isProvisionalId(id) ? dbStore : null) : chunkStore();
   if (store) {
     const { data, item } = await store.read(id);
     return { data, name: item.name, mime: item.mime ?? null };
@@ -512,7 +524,7 @@ export async function readFile(id: string): Promise<{ data: Buffer; name: string
  */
 export async function replaceFile(parentId: string, name: string, data: Buffer, mime: string): Promise<StoredItem> {
   const safe = sanitizeName(name);
-  if (storageDriver() === "sharepoint") {
+  if (storageDriver() === "sharepoint" && !isProvisionalId(parentId)) {
     const d = await driveId();
     const item = await graphFetch<DriveItem>(`/drives/${d}/items/${parentId}:/${encodeURIComponent(safe)}:/content`, {
       method: "PUT",
@@ -524,7 +536,7 @@ export async function replaceFile(parentId: string, name: string, data: Buffer, 
   // Almacén provisional: se sube la versión nueva y después se borran las anteriores (también
   // las «nombre 1.ext» que deja una subida simultánea), en serie por carpeta.
   const run = (writeLocks.get(parentId) ?? Promise.resolve()).then(async () => {
-    const storage = getStorage();
+    const storage = storageFor(parentId);
     const fresh = await putFile(parentId, safe, data, mime);
     const dot = safe.lastIndexOf(".");
     const [stem, ext] = dot > 0 ? [safe.slice(0, dot), safe.slice(dot)] : [safe, ""];

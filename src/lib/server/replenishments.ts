@@ -678,7 +678,7 @@ export async function repFolder(id: string) {
   if (r.storageFolderId) return { r, folderId: r.storageFolderId };
   const storage = getStorage();
   const root = await storage.ensureFolder(await storage.rootId(), "Reposiciones");
-  const folder = await storage.ensureFolder(root.id, [r.code, r.productName || r.title].filter(Boolean).join(" · ").slice(0, 120));
+  const folder = await storage.ensureFolder(root.id, [r.code, r.productName || r.title].filter(Boolean).join(". ").slice(0, 120));
   await db.update(replenishments).set({ storageFolderId: folder.id }).where(eq(replenishments.id, id));
   return { r, folderId: folder.id };
 }

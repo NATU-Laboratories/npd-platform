@@ -4,7 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { replenishmentFiles, replenishments, suppliers } from "@/db/schema";
-import { getStorage } from "@/lib/graph/storage";
+import { storageFor } from "@/lib/graph/storage";
 import { REP_FILE_TAGS } from "@/lib/replenishment/config";
 import { logActivity } from "@/lib/server/activity";
 import { AuthzError, isAdmin, requireActionUser } from "@/lib/server/authz";
@@ -191,14 +191,14 @@ export async function createRepUploadAction(id: string, fileName: string, size: 
     const { folderId } = await repForFiles(id);
     const { max_file_mb } = await getSettings();
     if (size > max_file_mb * 1024 * 1024) throw new Error(`El archivo supera el límite de ${max_file_mb} MB`);
-    return getStorage().createUploadSession(folderId, fileName);
+    return storageFor(folderId).createUploadSession(folderId, fileName);
   });
 }
 
 export async function registerRepFileAction(id: string, itemId: string, tag: string): Promise<ActionResult<{ id: number; name: string; size: number; mime: string | null }>> {
   return run("rep:registerFile", async () => {
     const { u, r, folderId } = await repForFiles(id);
-    const item = await getStorage().getItem(itemId);
+    const item = await storageFor(itemId).getItem(itemId);
     if (item.parentId !== folderId) throw new Error("El archivo no pertenece a esta reposición");
     const safeTag = tag in REP_FILE_TAGS ? tag : "otro";
     const [row] = await db
@@ -239,7 +239,7 @@ export async function deleteRepFileAction(fileId: number): Promise<ActionResult>
     const [f] = await db.select({ f: replenishmentFiles, status: replenishments.status }).from(replenishmentFiles).innerJoin(replenishments, eq(replenishments.id, replenishmentFiles.replenishmentId)).where(eq(replenishmentFiles.id, fileId));
     if (!f) throw new Error("Archivo no encontrado");
     if (!(f.f.uploadedBy === u.id && !["closed", "cancelled"].includes(f.status)) && !isAdmin(u)) throw new AuthzError("Solo quien lo subió puede borrarlo");
-    if (f.f.storageItemId) await getStorage().deleteItem(f.f.storageItemId).catch(() => undefined);
+    if (f.f.storageItemId) await storageFor(f.f.storageItemId).deleteItem(f.f.storageItemId).catch(() => undefined);
     await db.delete(replenishmentFiles).where(and(eq(replenishmentFiles.id, fileId)));
     await logActivity({ actorId: u.id, action: "replenishment.file_deleted", entity: "replenishment", entityId: f.f.replenishmentId, diff: { name: f.f.name } });
     touch(f.f.replenishmentId);

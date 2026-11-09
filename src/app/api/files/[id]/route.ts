@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { files, projects } from "@/db/schema";
-import { getStorage } from "@/lib/graph/storage";
+import { storageFor } from "@/lib/graph/storage";
 import { canViewProject, getCurrentUser, isActive } from "@/lib/server/authz";
 import { logError } from "@/lib/server/errors";
 
@@ -20,7 +20,7 @@ export async function GET(req: Request, ctx: RouteContext<"/api/files/[id]">) {
   const allowed = row.status === "draft" ? row.requesterId === u.id : await canViewProject(u, row.projectId);
   if (!allowed) return new NextResponse("Forbidden", { status: 403 });
   try {
-    const url = await getStorage().downloadUrl(row.itemId);
+    const url = await storageFor(row.itemId).downloadUrl(row.itemId);
     return NextResponse.redirect(new URL(url, req.url), 302);
   } catch (err) {
     await logError("files:download", err, { fileId: id });
