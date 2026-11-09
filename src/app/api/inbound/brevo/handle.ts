@@ -7,6 +7,7 @@ export async function receive(req: Request) {
   const body = (await req.json().catch(() => null)) as { items?: unknown[] } | Record<string, unknown> | null;
   if (!body) return new Response("Bad request", { status: 400 });
   const items = (Array.isArray((body as { items?: unknown[] }).items) ? (body as { items: unknown[] }).items : [body]) as Record<string, unknown>[];
+  console.info(`[inbound] recibido: ${items.length} email(s); campos: ${Object.keys(items[0] ?? {}).join(", ")}`);
   after(async () => {
     for (const item of items.slice(0, 20)) {
       try {
