@@ -5,6 +5,7 @@ import { brands, clients, projects } from "@/db/schema";
 import { PHASE_FOLDERS } from "@/lib/labels";
 import { getStorage } from "@/lib/graph/storage";
 import { logActivity } from "./activity";
+import { scheduleProjectDocs } from "./project-docs-queue";
 
 const STAGING_ROOT = "_Borradores";
 
@@ -17,6 +18,18 @@ export async function ensureStagingFolder(projectId: string) {
   const folder = await storage.ensureFolder(stagingRoot.id, projectId);
   await db.update(projects).set({ stagingFolderId: folder.id }).where(eq(projects.id, projectId));
   return folder.id;
+}
+
+/** Año de la carpeta del proyecto: el de su código (2026-PL-0009 → 2026) o el de la solicitud. */
+export function projectYear(p: { code: string | null; requestedAt?: Date | null; createdAt?: Date | null }) {
+  const m = p.code?.match(/^(\d{4})-/);
+  return m ? m[1]! : String((p.requestedAt ?? p.createdAt ?? new Date()).getFullYear());
+}
+
+/** Carpeta del año dentro de la carpeta base (se crea si no existe: 2027, 2028…). */
+export async function yearFolder(year: string) {
+  const storage = getStorage();
+  return storage.ensureFolder(await storage.rootId(), year);
 }
 
 export function projectFolderName(p: { code: string | null; name: string; clientName?: string | null; brandName?: string | null }) {
@@ -43,7 +56,7 @@ export async function provisionProjectFolder(projectId: string) {
   const alreadyProvisioned = !!p.sharepointFolderId;
   const folder = p.sharepointFolderId
     ? await storage.getItem(p.sharepointFolderId)
-    : await storage.ensureFolder(await storage.rootId(), projectFolderName({ ...p, clientName: row.clientName, brandName: row.brandName }));
+    : await storage.ensureFolder((await yearFolder(projectYear(p))).id, projectFolderName({ ...p, clientName: row.clientName, brandName: row.brandName }));
 
   const subfolders: Record<string, string> = { ...(p.sharepointSubfolders ?? {}) };
   for (const name of PHASE_FOLDERS) {
@@ -63,6 +76,9 @@ export async function provisionProjectFolder(projectId: string) {
     await storage.deleteItem(p.stagingFolderId).catch(() => undefined);
     await db.update(projects).set({ stagingFolderId: null }).where(eq(projects.id, projectId));
   }
+
+  // Ficha (Word) e historial del proyecto en su carpeta
+  await scheduleProjectDocs(projectId);
 
   if (!alreadyProvisioned) {
     await logActivity({ projectId, action: "sharepoint.provisioned", entity: "project", entityId: projectId, diff: { folder: folder.name } });

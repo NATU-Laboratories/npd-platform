@@ -5,7 +5,7 @@ import { db } from "@/db";
 import { graphConfigured } from "@/lib/graph/client";
 import { mailDriver, mailRedirect, verifyBrevo, verifySmtp } from "@/lib/graph/mail";
 import { inboundDomain, inboundEnabled } from "@/lib/server/reply-address";
-import { storageDriver } from "@/lib/graph/storage";
+import { sharepointBase, storageDriver } from "@/lib/graph/storage";
 import { assistantEnabled } from "@/lib/server/assistant";
 import { teamsConfigured } from "@/lib/teams/bot";
 
@@ -36,7 +36,7 @@ export async function GET() {
       provisionalLoginPassword: devLoginRequiresPassword,
     },
     graph: graphConfigured(),
-    storage: storageDriver(),
+    storage: storageDriver() === "sharepoint" ? { driver: "sharepoint", ...(await sharepointCheck()) } : storageDriver(),
     mail: {
       driver: mailDriver(),
       from: mailDriver() === "smtp" ? process.env.MAIL_FROM || process.env.SMTP_USER || null : mailDriver() === "brevo" ? process.env.MAIL_FROM ?? null : mailDriver() === "graph" ? process.env.MAIL_SENDER ?? null : null,
@@ -93,4 +93,14 @@ async function entraDiagnostics() {
   const appUrl = process.env.APP_URL ?? "";
   if (appUrl && !/^https:\/\/[^/\s]+\/?$/.test(appUrl)) problems.push("APP_URL debe ser la dirección pública completa, p. ej. https://npd.natulaboratories.es");
   return { ok: problems.length === 0, discovery, problems, redirectUri: `${(process.env.APP_URL ?? "").replace(/\/$/, "")}/api/auth/callback/microsoft-entra-id` };
+}
+
+/** Comprueba que se llega a la carpeta base de SharePoint (sin revelar ids). */
+async function sharepointCheck() {
+  try {
+    const base = await sharepointBase();
+    return base ? { ok: true, folder: base.name } : { ok: true, folder: "(raíz de la biblioteca)" };
+  } catch (err) {
+    return { ok: false, error: (err instanceof Error ? err.message : String(err)).slice(0, 200) };
+  }
 }
