@@ -881,7 +881,7 @@ export async function notifyPhaseSections(projectId: string, phase: number) {
         : `El proyecto entra en «${PHASES[phase]?.name}». Actualiza el estado de ${card.dept.name} en la ficha del proyecto conforme avances; al llegar a «${finalName}» tu parte queda completada.`,
       extraRows: [
         ...(card.dept.key === "idi" && formulaCost != null
-          ? ([["Coste objetivo de la fórmula (confidencial)", `${formulaCost.toLocaleString("es-ES", { maximumFractionDigits: 4 })} €/ud`]] as [string, string][])
+          ? ([["Coste objetivo de la fórmula (confidencial)", `${formulaCost.toLocaleString("es-ES", { maximumFractionDigits: 4 })} €/litro`]] as [string, string][])
           : []),
         ...refRows,
         ...briefRows,
