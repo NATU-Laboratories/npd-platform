@@ -5,6 +5,7 @@ import { ActivityTimeline, type ActivityItem } from "@/components/project/activi
 import { describeActivity, fieldLabel } from "@/lib/activity-describe";
 import { CommentComposer } from "@/components/project/comment-composer";
 import { GateDialog } from "@/components/project/gate-dialog";
+import { QuoteDocButton } from "@/components/project/quote-doc-button";
 import { ProjectAction } from "@/components/project/project-actions";
 import { LabelInfoDialog } from "@/components/project/label-info-dialog";
 import { AdvanceDialog, BudgetDialog, PrepaymentReceivedDialog, QuoteDialog } from "@/components/project/phase-dialogs";
@@ -689,6 +690,12 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
                 );
               })}
               {!d.files.length && <p className="text-sm text-slate-400">Sin archivos.</p>}
+              {p.quotedAt && p.sharepointSubfolders && canSendQuote(u, p) && (
+                <div>
+                  <QuoteDocButton projectId={p.id} />
+                  <p className="mt-1 text-xs text-slate-500">Word con toda la información de la última cotización, en «{PHASE_FOLDERS[1]}». Se genera solo al enviar cada cotización.</p>
+                </div>
+              )}
               {!["rejected", "cancelled"].includes(p.status) && (
                 <div className="border-t border-slate-100 pt-3">
                   <p className="mb-2 text-xs text-slate-500">Subir a «{phaseFolderName(p.phase)}»</p>

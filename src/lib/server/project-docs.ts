@@ -1,8 +1,8 @@
 import "server-only";
 import { AlignmentType, BorderStyle, Document, HeadingLevel, Packer, Paragraph, ShadingType, Table, TableCell, TableRow, TextRun, WidthType } from "docx";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { labSamples } from "@/db/schema";
+import { labSamples, projectSheet } from "@/db/schema";
 import { describeActivity } from "@/lib/activity-describe";
 import { briefSections, type Lookups } from "@/lib/brief/display";
 import { replaceFile, storageDriver } from "@/lib/graph/storage";
@@ -77,6 +77,33 @@ async function context(projectId: string) {
 
 type Ctx = NonNullable<Awaited<ReturnType<typeof context>>>;
 
+type SheetData = Awaited<ReturnType<typeof loadSheet>>;
+const ctxOf = (d: NonNullable<Awaited<ReturnType<typeof loadProjectDetail>>>, sheet: SheetData) => ({ d, sheet });
+
+/** Tabla de un apartado de la ficha técnica (una columna por referencia si va por referencia). */
+function sectionBlock(s: (typeof SHEET_SECTIONS)[number], { d, sheet }: ReturnType<typeof ctxOf>) {
+  const list = sheet.entries.filter((e) => e.section.key === s.key);
+  const perRef = list.filter((e) => e.refId > 0);
+  const cols = perRef.length
+    ? sheet.refs.map((r) => ({ title: refTitle(r), entry: perRef.find((e) => e.refId === r.id) })).filter((c) => c.entry)
+    : list.filter((e) => e.refId === 0).map((entry) => ({ title: "", entry }));
+  if (!cols.length) return null;
+  const rows: string[][] = [];
+  for (const g of s.groups) {
+    const fields = applicable(g.fields, sheet.ctx).filter((f): f is ScalarField => f.type !== "files");
+    for (const f of fields) {
+      const values = cols.map((c) => formatValue(f, c.entry!.data[f.key]) ?? "");
+      if (values.every((v) => !v)) continue;
+      rows.push([`${g.title && g.title !== f.label ? `${g.title} · ` : ""}${f.label}`, ...values]);
+    }
+  }
+  const fileTags = s.groups.flatMap((g) => g.fields).filter((f) => f.type === "files").map((f) => (f as { tag: string }).tag);
+  const sectionFiles = d.files.filter(({ f }) => fileTags.includes(f.tag ?? ""));
+  if (sectionFiles.length) rows.push(["Archivos", ...cols.map((_, i) => (i === 0 ? sectionFiles.map(({ f }) => f.name).join("\n") : ""))]);
+  if (!rows.length) return null;
+  return { dept: cols[0]!.entry!.dept.name, table: table(rows, cols.length > 1 ? ["Campo", ...cols.map((c) => c.title)] : undefined) };
+}
+
 function buildDocx({ d, lookups, sheet, samples }: Ctx) {
   const p = d.p;
   const children: (Paragraph | Table)[] = [];
@@ -133,29 +160,10 @@ function buildDocx({ d, lookups, sheet, samples }: Ctx) {
   children.push(h1("Ficha técnica"));
   let any = false;
   for (const s of SHEET_SECTIONS) {
-    const list = sheet.entries.filter((e) => e.section.key === s.key);
-    const perRef = list.filter((e) => e.refId > 0);
-    const cols = perRef.length
-      ? sheet.refs.map((r) => ({ title: refTitle(r), entry: perRef.find((e) => e.refId === r.id) })).filter((c) => c.entry)
-      : list.filter((e) => e.refId === 0).map((entry) => ({ title: "", entry }));
-    if (!cols.length) continue;
-    const rows: string[][] = [];
-    for (const g of s.groups) {
-      const fields = applicable(g.fields, sheet.ctx).filter((f): f is ScalarField => f.type !== "files");
-      for (const f of fields) {
-        const values = cols.map((c) => formatValue(f, c.entry!.data[f.key]) ?? "");
-        if (values.every((v) => !v)) continue;
-        rows.push([`${g.title && g.title !== f.label ? `${g.title} · ` : ""}${f.label}`, ...values]);
-      }
-    }
-    const fileTags = s.groups.flatMap((g) => g.fields).filter((f) => f.type === "files").map((f) => (f as { tag: string }).tag);
-    const sectionFiles = d.files.filter(({ f }) => fileTags.includes(f.tag ?? ""));
-    if (sectionFiles.length) rows.push(["Archivos", ...cols.map((_, i) => (i === 0 ? sectionFiles.map(({ f }) => f.name).join("\n") : ""))]);
-    if (!rows.length) continue;
+    const block = sectionBlock(s, ctxOf(d, sheet));
+    if (!block) continue;
     any = true;
-    const dept = cols[0]!.entry!.dept;
-    children.push(h2(`${s.title} · ${dept.name}`));
-    children.push(table(rows, cols.length > 1 ? ["Campo", ...cols.map((c) => c.title)] : undefined));
+    children.push(h2(`${s.title} · ${block.dept}`), block.table);
   }
   if (!any) children.push(para("Los departamentos todavía no han añadido datos.", { color: "6B7280" }));
 
@@ -227,42 +235,91 @@ export async function writeProjectDocs(projectId: string) {
 
 /**
  * Documento de la cotización (cada envío al comercial es una versión: «Cotización 1», «2»…) en la
- * carpeta «01 Cotización y valoración». Lleva lo mismo que el email al comercial (sin coste de fórmula).
+ * carpeta «01 Cotización y valoración». Recoge todo lo cotizado tal como queda guardado en la
+ * plataforma: condiciones económicas, envase y packaging (por referencia si procede), mensaje y las
+ * especificaciones del producto del brief. Sin información confidencial (coste de fórmula).
+ * Sin `number`, regenera el de la última cotización enviada.
  */
-export async function writeQuoteDoc(projectId: string, number: number, rows: [string, string][], comment: string | null, by: string) {
-  const d = await loadProjectDetail(projectId);
-  if (!d || !d.p.sharepointSubfolders) return;
+export async function writeQuoteDoc(projectId: string, number?: number) {
+  const ctx = await context(projectId);
+  if (!ctx) return;
+  const { d, lookups, sheet } = ctx;
   const p = d.p;
   const { phaseFolderId } = await import("./provisioning");
   const folder = phaseFolderId(p.sharepointSubfolders ?? {}, 1);
   if (!folder) return;
   if (storageDriver() === "sharepoint" && /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(folder)) return;
-  const n = Math.max(1, number || 1);
+
+  const sends = d.activity.filter(({ a }) => a.action === "quote.sent"); // más reciente primero
+  if (!sends.length) return;
+  const n = Math.min(Math.max(1, number || sends.length), sends.length);
+  const sent = sends[sends.length - n]!;
+  const comment = (sent.a.diff as { comment?: string | null } | null)?.comment ?? null;
+  const amount = Number((sent.a.diff as { amount?: number } | null)?.amount ?? p.quoteAmount);
+  const eur = (v: number) => v.toLocaleString("es-ES", { style: "currency", currency: "EUR" });
+
+  const children: (Paragraph | Table)[] = [
+    new Paragraph({ spacing: { after: 40 }, children: [new TextRun({ text: "NATU LABORATORIES · COTIZACIÓN", color: BRAND, bold: true, size: 18 })] }),
+    new Paragraph({ heading: HeadingLevel.TITLE, spacing: { after: 80 }, children: [new TextRun({ text: `Cotización ${n} · ${p.code ?? ""} · ${p.name}` })] }),
+    para(`Enviada al comercial por ${sent.actor ?? "—"} el ${when(sent.a.createdAt)}. Documento generado por la plataforma NPD el ${when(new Date())}.`, { color: "6B7280", size: 18 }),
+    h1("Proyecto"),
+    table([
+      ["Código", p.code ?? "—"],
+      ["Proyecto", p.name],
+      ["Cliente / marca", d.clientName ?? d.brandName ?? "—"],
+      ["Solicitante", d.requesterName],
+      ["Gestor de cuenta", d.accountManagerName ?? "—"],
+      ["Tipo", p.type ? TYPE_LABEL[p.type] : "—"],
+      ["Categoría", p.category ? CATEGORY_LABEL[p.category] : "—"],
+      ["Fecha de solicitud", day(p.requestedAt)],
+      ["Entrega requerida", day(p.neededBy)],
+      ...(sheet.refs.length >= 2 ? [["Referencias", sheet.refs.map(refTitle).join("\n")]] : []),
+    ]),
+    h1("Resumen"),
+    table([
+      [p.pricingMode === "per_reference" ? "Precio unitario (el menor de las referencias)" : "Precio unitario cotizado", Number.isFinite(amount) ? eur(amount) : "—"],
+      ...(sheet.refs.length >= 2
+        ? [
+            ["Precio", p.pricingMode === "per_reference" ? "Distinto por referencia" : "Único para todas las referencias"],
+            ["Envase y packaging", p.packagingMode === "per_reference" ? "Distinto por referencia" : "Común a todas las referencias"],
+          ]
+        : []),
+    ]),
+  ];
+
+  // Condiciones económicas: lo común y, si hay precio por referencia, el de cada una
+  const com = SHEET_SECTIONS.find((x) => x.key === "comercial")!;
+  const saved = await db.select().from(projectSheet).where(and(eq(projectSheet.projectId, projectId), eq(projectSheet.section, "comercial")));
+  const dataOf = (refId: number) => (saved.find((r) => r.referenceId === refId)?.data ?? {}) as Record<string, unknown>;
+  const comRows: string[][] = [];
+  for (const g of com.groups) {
+    for (const f of applicable(g.fields, sheet.ctx).filter((x): x is ScalarField => x.type !== "files")) {
+      const perRef = sheet.refs
+        .map((r) => ({ r, v: formatValue(f, dataOf(r.id)[f.key]) }))
+        .filter((x) => x.v);
+      const value = perRef.length ? perRef.map((x) => `${refTitle(x.r)}: ${x.v}`).join("\n") : formatValue(f, dataOf(0)[f.key]);
+      if (value) comRows.push([f.label, value]);
+    }
+  }
+  if (comRows.length) children.push(h1("Condiciones económicas"), table(comRows));
+
+  // Envase y packaging cotizado (por referencia si procede)
+  const pack = SHEET_SECTIONS.find((x) => x.key === "packaging");
+  const packBlock = pack && sectionBlock(pack, ctxOf(d, sheet));
+  if (packBlock) children.push(h1("Envase y packaging cotizado"), packBlock.table);
+
+  if (comment) children.push(h1("Mensaje para el comercial"), para(comment));
+
+  // Lo que se pidió (especificaciones del producto), para tener la cotización completa en un documento
+  const brief = briefSections(p.brief, lookups).filter((sec) => sec.step >= 2);
+  const briefRows = brief.flatMap((sec) => sec.rows.filter(([, v]) => v).map(([k, v]) => [k, String(v)]));
+  if (briefRows.length) children.push(h1("Especificaciones solicitadas (brief)"), table(briefRows));
+
   const doc = new Document({
     creator: "Plataforma NPD · NATU Laboratories",
-    title: `Cotización ${p.code ?? ""}`,
+    title: `Cotización ${n} ${p.code ?? ""}`,
     styles: { default: { document: { run: { font: "Calibri", size: 21 } } } },
-    sections: [
-      {
-        properties: { page: { margin: { top: 1000, bottom: 1000, left: 1000, right: 1000 } } },
-        children: [
-          new Paragraph({ spacing: { after: 40 }, children: [new TextRun({ text: "NATU LABORATORIES · COTIZACIÓN", color: BRAND, bold: true, size: 18 })] }),
-          new Paragraph({ heading: HeadingLevel.TITLE, spacing: { after: 80 }, children: [new TextRun({ text: `${p.code ?? ""} · ${p.name}` })] }),
-          para(`Cotización ${n} · enviada al comercial por ${by} el ${when(new Date())}.`, { color: "6B7280", size: 18 }),
-          h1("Proyecto"),
-          table([
-            ["Código", p.code ?? "—"],
-            ["Cliente / marca", d.clientName ?? d.brandName ?? "—"],
-            ["Solicitante", d.requesterName],
-            ["Tipo", p.type ? TYPE_LABEL[p.type] : "—"],
-            ["Categoría", p.category ? CATEGORY_LABEL[p.category] : "—"],
-          ]),
-          h1("Cotización"),
-          table(rows.length ? rows : [["Precio", "—"]]),
-          ...(comment ? [h2("Mensaje"), para(comment)] : []),
-        ],
-      },
-    ],
+    sections: [{ properties: { page: { margin: { top: 1000, bottom: 1000, left: 1000, right: 1000 } } }, children }],
   });
   await replaceFile(folder, `${p.code ?? "Proyecto"} - Cotización ${n}.docx`, await Packer.toBuffer(doc), "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
 }
