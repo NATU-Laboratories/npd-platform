@@ -25,6 +25,8 @@ import {
   FILE_TAGS,
   LAST_PHASE,
   PHASE_FOLDERS,
+  phaseFolderIndex,
+  phaseFolderName,
   PHASES,
   PREPAYMENT_TYPES,
   STAGES,
@@ -659,7 +661,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
             />
             <CardBody className="flex flex-col gap-4">
               {PHASE_FOLDERS.map((folder, i) => {
-                const list = d.files.filter((f) => f.f.phase === i);
+                const list = d.files.filter((f) => phaseFolderIndex(f.f.phase) === i);
                 if (!list.length) return null;
                 return (
                   <div key={folder}>
@@ -689,7 +691,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
               {!d.files.length && <p className="text-sm text-slate-400">Sin archivos.</p>}
               {!["rejected", "cancelled"].includes(p.status) && (
                 <div className="border-t border-slate-100 pt-3">
-                  <p className="mb-2 text-xs text-slate-500">Subir a «{PHASE_FOLDERS[Math.min(p.phase, PHASE_FOLDERS.length - 1)]}»</p>
+                  <p className="mb-2 text-xs text-slate-500">Subir a «{phaseFolderName(p.phase)}»</p>
                   <Uploader projectId={p.id} phase={p.phase} maxMb={settings.max_file_mb} showTags={false} canDelete={false} compact refreshOnUpload />
                 </div>
               )}

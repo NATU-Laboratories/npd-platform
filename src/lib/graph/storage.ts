@@ -526,12 +526,20 @@ export async function replaceFile(parentId: string, name: string, data: Buffer, 
   const safe = sanitizeName(name);
   if (storageDriver() === "sharepoint" && !isProvisionalId(parentId)) {
     const d = await driveId();
-    const item = await graphFetch<DriveItem>(`/drives/${d}/items/${parentId}:/${encodeURIComponent(safe)}:/content`, {
-      method: "PUT",
-      headers: { "Content-Type": mime },
-      body: new Uint8Array(data),
-    });
-    return toStored(item);
+    const put = () =>
+      graphFetch<DriveItem>(`/drives/${d}/items/${parentId}:/${encodeURIComponent(safe)}:/content?@microsoft.graph.conflictBehavior=replace`, {
+        method: "PUT",
+        headers: { "Content-Type": mime },
+        body: new Uint8Array(data),
+      });
+    try {
+      return toStored(await put());
+    } catch (e) {
+      // Dos escrituras a la vez del mismo archivo nuevo: la segunda choca (409); se reintenta y lo reemplaza
+      if (!(e instanceof GraphError && (e.status === 409 || e.status === 423))) throw e;
+      await new Promise((r) => setTimeout(r, 1500));
+      return toStored(await put());
+    }
   }
   // Almacén provisional: se sube la versión nueva y después se borran las anteriores (también
   // las «nombre 1.ext» que deja una subida simultánea), en serie por carpeta.

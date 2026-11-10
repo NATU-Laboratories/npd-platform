@@ -53,3 +53,12 @@ describe("Alexia: frases naturales", () => {
     expect(one("proveedor del tapón").field.key).toBe("capSupplier");
   });
 });
+
+import { phaseFolderIndex, phaseFolderName } from "@/lib/labels";
+describe("Carpetas de SharePoint por fase", () => {
+  it("solicitud · cotización y valoración · desarrollo y diseño · producción", () => {
+    expect([0, 1, 2, 3, 4, 5].map(phaseFolderIndex)).toEqual([0, 1, 1, 2, 2, 3]);
+    expect(phaseFolderName(2)).toBe("01 Cotización y valoración");
+    expect(phaseFolderName(4)).toBe("02 Desarrollo y diseño");
+  });
+});

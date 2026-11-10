@@ -603,9 +603,13 @@ export async function sendQuote(
       ["Especificaciones cotizadas", specLines.length ? specLines.join("\n") : null],
     ] as [string, string | null][]
   ).filter((r): r is [string, string] => !!r[1]);
+  // Documento de la cotización en «01 Cotización y valoración» (numerado: cada envío es una versión)
+  const [{ n }] = (await db.execute<{ n: number }>(sql`select count(*)::int as n from activity_log where project_id = ${projectId} and action = 'quote.sent'`)).rows as [{ n: number }];
+  const jobId = await enqueueJob("sharepoint.quote", { projectId, number: n, rows, comment, by: u.name });
+  kickJobs([jobId]);
   await notifyProjectEvent(projectId, "quote.sent", {
     title: "Cotización lista para presentar al cliente",
-    intro: "Preséntala al cliente (el PDF está en la carpeta 01 Cotización). Cuando responda, registra su decisión en el proyecto: «Registrar respuesta del cliente (P2)».",
+    intro: "Preséntala al cliente (el documento de la cotización está en la carpeta «01 Cotización y valoración» del proyecto). Cuando responda, registra su decisión en el proyecto: «Registrar respuesta del cliente (P2)».",
     message: comment ? { label: "Mensaje", body: comment } : null,
     extraRows: rows,
     // Solo el comercial que creó la solicitud (él registra después la respuesta del cliente, P2)

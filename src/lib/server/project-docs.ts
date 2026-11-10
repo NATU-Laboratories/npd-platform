@@ -224,3 +224,45 @@ export async function writeProjectDocs(projectId: string) {
   await replaceFile(folder, `${code} - Ficha del proyecto.docx`, docx, "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
   await replaceFile(folder, `${code} - Historial.txt`, buildHistory(ctx), "text/plain; charset=utf-8");
 }
+
+/**
+ * Documento de la cotización (cada envío al comercial es una versión: «Cotización 1», «2»…) en la
+ * carpeta «01 Cotización y valoración». Lleva lo mismo que el email al comercial (sin coste de fórmula).
+ */
+export async function writeQuoteDoc(projectId: string, number: number, rows: [string, string][], comment: string | null, by: string) {
+  const d = await loadProjectDetail(projectId);
+  if (!d || !d.p.sharepointSubfolders) return;
+  const p = d.p;
+  const { phaseFolderId } = await import("./provisioning");
+  const folder = phaseFolderId(p.sharepointSubfolders ?? {}, 1);
+  if (!folder) return;
+  if (storageDriver() === "sharepoint" && /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(folder)) return;
+  const n = Math.max(1, number || 1);
+  const doc = new Document({
+    creator: "Plataforma NPD · NATU Laboratories",
+    title: `Cotización ${p.code ?? ""}`,
+    styles: { default: { document: { run: { font: "Calibri", size: 21 } } } },
+    sections: [
+      {
+        properties: { page: { margin: { top: 1000, bottom: 1000, left: 1000, right: 1000 } } },
+        children: [
+          new Paragraph({ spacing: { after: 40 }, children: [new TextRun({ text: "NATU LABORATORIES · COTIZACIÓN", color: BRAND, bold: true, size: 18 })] }),
+          new Paragraph({ heading: HeadingLevel.TITLE, spacing: { after: 80 }, children: [new TextRun({ text: `${p.code ?? ""} · ${p.name}` })] }),
+          para(`Cotización ${n} · enviada al comercial por ${by} el ${when(new Date())}.`, { color: "6B7280", size: 18 }),
+          h1("Proyecto"),
+          table([
+            ["Código", p.code ?? "—"],
+            ["Cliente / marca", d.clientName ?? d.brandName ?? "—"],
+            ["Solicitante", d.requesterName],
+            ["Tipo", p.type ? TYPE_LABEL[p.type] : "—"],
+            ["Categoría", p.category ? CATEGORY_LABEL[p.category] : "—"],
+          ]),
+          h1("Cotización"),
+          table(rows.length ? rows : [["Precio", "—"]]),
+          ...(comment ? [h2("Mensaje"), para(comment)] : []),
+        ],
+      },
+    ],
+  });
+  await replaceFile(folder, `${p.code ?? "Proyecto"} - Cotización ${n}.docx`, await Packer.toBuffer(doc), "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+}
