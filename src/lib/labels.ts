@@ -117,15 +117,12 @@ export const APPROVAL_GATES = [
   { gate: "G2", name: "Aprobación del presupuesto", phase: 2, description: "Valoración con cliente → En curso (Desarrollo). Comercial registra que el cliente aprueba el presupuesto. El comercial que dio de alta el proyecto siempre puede decidirla; aquí se añaden aprobadores adicionales." },
 ] as const;
 
-/** Subcarpetas de SharePoint por fase (§9.1). */
-export const PHASE_FOLDERS = [
-  "00 Solicitud",
-  "01 Cotización",
-  "02 Valoración cliente",
-  "03 Desarrollo",
-  "04 Diseño-AAFF",
-  "05 Preparación producción",
-] as const;
+/** Subcarpetas de SharePoint de cada proyecto (§9.1): varias fases comparten carpeta. */
+export const PHASE_FOLDERS = ["00 Solicitud", "01 Cotización y valoración", "02 Desarrollo y diseño", "03 Preparación producción"] as const;
+/** Carpeta (índice de PHASE_FOLDERS) de cada fase: 0 Solicitud · 1-2 Cotización y valoración · 3-4 Desarrollo y diseño · 5 Producción. */
+const FOLDER_OF_PHASE = [0, 1, 1, 2, 2, 3];
+export const phaseFolderIndex = (phase: number) => FOLDER_OF_PHASE[Math.min(Math.max(phase, 0), FOLDER_OF_PHASE.length - 1)]!;
+export const phaseFolderName = (phase: number) => PHASE_FOLDERS[phaseFolderIndex(phase)]!;
 
 export const ROLE_LABEL = {
   admin: "Admin",

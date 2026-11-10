@@ -11,12 +11,13 @@ import { logError } from "./errors";
  * backoff exponencial.
  */
 
-export type JobKind = "email.send" | "sharepoint.provision" | "sharepoint.docs";
+export type JobKind = "email.send" | "sharepoint.provision" | "sharepoint.docs" | "sharepoint.quote";
 
 const handlers: Record<JobKind, (payload: Record<string, unknown>) => Promise<void>> = {
   "email.send": async (p) => (await import("./notifications")).deliverNotification(Number(p.notificationId)),
   "sharepoint.provision": async (p) => (await import("./provisioning")).provisionProjectFolder(String(p.projectId)),
   "sharepoint.docs": async (p) => (await import("./project-docs")).writeProjectDocs(String(p.projectId)),
+  "sharepoint.quote": async (p) => (await import("./project-docs")).writeQuoteDoc(String(p.projectId), Number(p.number), (p.rows as [string, string][]) ?? [], (p.comment as string | null) ?? null, String(p.by ?? "")),
 };
 
 export async function enqueueJob(kind: JobKind, payload: Record<string, unknown>, tx: DbOrTx = db) {

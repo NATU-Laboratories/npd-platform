@@ -246,7 +246,7 @@ export function QuoteDialog({
               </Field>
             </div>
           )}
-          <Field label="PDF de la cotización" hint="Recomendado. Se guarda en la carpeta 01 Cotización." className="sm:col-span-2">
+          <Field label="PDF de la cotización" hint="Opcional. Se guarda en «01 Cotización y valoración», junto al documento de cotización que genera la plataforma." className="sm:col-span-2">
             <Uploader projectId={projectId} phase={1} initial={files} maxMb={maxMb} defaultTag="cotizacion" showTags={false} compact />
           </Field>
           <Field label="Mensaje para el comercial" hint="Opcional" className="sm:col-span-2">

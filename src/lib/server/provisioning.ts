@@ -2,7 +2,7 @@ import "server-only";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { brands, clients, files, projects } from "@/db/schema";
-import { PHASE_FOLDERS } from "@/lib/labels";
+import { PHASE_FOLDERS, phaseFolderName } from "@/lib/labels";
 import { getStorage, putFile, readFile, storageFor } from "@/lib/graph/storage";
 import { logActivity } from "./activity";
 import { scheduleProjectDocs } from "./project-docs-queue";
@@ -61,10 +61,9 @@ export async function provisionProjectFolder(projectId: string) {
     : await storage.ensureFolder((await yearFolder(projectYear(p))).id, projectFolderName({ ...p, clientName: row.clientName, brandName: row.brandName }));
 
   const subfolders: Record<string, string> = { ...(p.sharepointSubfolders ?? {}) };
-  for (const name of PHASE_FOLDERS) {
-    const key = name.slice(0, 2);
-    if (!subfolders[key]) subfolders[key] = (await storage.ensureFolder(folder.id, name)).id;
-  }
+  // Carpetas por nombre. Los proyectos creados con la estructura anterior (claves «00»…«05», una por
+  // fase) la conservan.
+  if (!isLegacy(subfolders)) for (const name of PHASE_FOLDERS) if (!subfolders[name]) subfolders[name] = (await storage.ensureFolder(folder.id, name)).id;
 
   await db
     .update(projects)
@@ -76,11 +75,12 @@ export async function provisionProjectFolder(projectId: string) {
   if (p.stagingFolderId) {
     const staging = storageFor(p.stagingFolderId);
     const staged = await staging.listChildren(p.stagingFolderId);
+    const target = phaseFolderId(subfolders, 0)!;
     for (const item of staged) {
-      if (staging === storage) await storage.moveItem(item.id, subfolders["00"]!);
+      if (staging === storage) await storage.moveItem(item.id, target);
       else {
         const { data, mime } = await readFile(item.id);
-        const copy = await putFile(subfolders["00"]!, item.name, data, mime ?? "application/octet-stream");
+        const copy = await putFile(target, item.name, data, mime ?? "application/octet-stream");
         await db.update(files).set({ sharepointItemId: copy.id }).where(eq(files.sharepointItemId, item.id));
       }
     }
@@ -96,13 +96,21 @@ export async function provisionProjectFolder(projectId: string) {
   }
 }
 
+/** Estructura anterior: una subcarpeta por fase con claves «00»…«05». */
+const isLegacy = (sub: Record<string, string>) => "00" in sub;
+
+/** Subcarpeta de una fase: por nombre (estructura actual) o por número de fase (anterior). */
+export function phaseFolderId(sub: Record<string, string>, phase: number) {
+  if (isLegacy(sub)) return sub[String(Math.min(Math.max(phase, 0), 5)).padStart(2, "0")];
+  return sub[phaseFolderName(phase)];
+}
+
 /** Carpeta destino para subir un archivo al proyecto. */
 export async function uploadTargetFolder(projectId: string, phase: number) {
   const [p] = await db.select().from(projects).where(eq(projects.id, projectId));
   if (!p) throw new Error("Proyecto no encontrado");
   if (p.sharepointSubfolders) {
-    const key = String(Math.min(Math.max(phase, 0), PHASE_FOLDERS.length - 1)).padStart(2, "0");
-    const id = p.sharepointSubfolders[key];
+    const id = phaseFolderId(p.sharepointSubfolders, phase);
     if (id) return id;
   }
   if (p.status !== "draft" && p.code) {
