@@ -161,3 +161,18 @@ export async function completeLabelInfoAction(
     revalidatePath(`/proyectos/${projectId}`);
   });
 }
+
+/** Vuelve a generar el documento Word de la última cotización en «01 Cotización y valoración». */
+export async function regenerateQuoteDocAction(projectId: string) {
+  return run("regenerateQuoteDoc", async () => {
+    const u = await requireActionUser();
+    const { loadProjectRow } = await import("@/lib/server/sheet");
+    const { canSendQuote } = await import("@/lib/server/authz");
+    const p = await loadProjectRow(projectId);
+    if (!p || !canSendQuote(u, p)) throw new ActionError("No puedes generar la cotización de este proyecto");
+    if (!p.quotedAt) throw new ActionError("Este proyecto todavía no tiene ninguna cotización enviada");
+    if (!p.sharepointSubfolders) throw new ActionError("El proyecto todavía no tiene carpeta");
+    const { writeQuoteDoc } = await import("@/lib/server/project-docs");
+    await writeQuoteDoc(projectId);
+  });
+}

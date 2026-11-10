@@ -605,7 +605,7 @@ export async function sendQuote(
   ).filter((r): r is [string, string] => !!r[1]);
   // Documento de la cotización en «01 Cotización y valoración» (numerado: cada envío es una versión)
   const [{ n }] = (await db.execute<{ n: number }>(sql`select count(*)::int as n from activity_log where project_id = ${projectId} and action = 'quote.sent'`)).rows as [{ n: number }];
-  const jobId = await enqueueJob("sharepoint.quote", { projectId, number: n, rows, comment, by: u.name });
+  const jobId = await enqueueJob("sharepoint.quote", { projectId, number: n });
   kickJobs([jobId]);
   await notifyProjectEvent(projectId, "quote.sent", {
     title: "Cotización lista para presentar al cliente",
