@@ -68,8 +68,7 @@ export const FIELDS: FieldDef[] = [
   { key: "brandId", label: "Marca", step: 2, level: "required", when: isMP },
   { key: "line", label: "Línea / colección", step: 2, level: "optional", when: isMP },
   { key: "origin", label: "Origen", step: 2, level: "required", when: isMP },
-  { key: "linkedClientId", label: "Cliente/retailer vinculado", step: 2, level: "optional", when: isMP },
-  { key: "justification", label: "Justificación / oportunidad", step: 2, level: "required", when: isMP },
+  { key: "justification", label: "Justificación / oportunidad", step: 2, level: "optional", when: isMP },
 
   // Paso 3 — Producto
   { key: "format", label: "Formato", step: 3, level: "required", when: (d) => !!d.category },

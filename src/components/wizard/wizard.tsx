@@ -413,19 +413,6 @@ export function Wizard(props: WizardProps) {
                   <Input id="originText" value={brief.originText ?? ""} onChange={(e) => set("originText", e.target.value)} />
                 </Field>
               )}
-              <Field label="Cliente/retailer vinculado" hint="Opcional. Vincula al comercial de la cuenta para las notificaciones." className="sm:col-span-2">
-                <ClientPicker
-                  value={parsed.linkedClientId}
-                  selected={parsed.linkedClientId ? (clients[parsed.linkedClientId] ?? null) : null}
-                  allowNew={false}
-                  countries={opts("market")}
-                  onSelect={(c) => {
-                    if (c) setClients((m) => ({ ...m, [c.id]: c }));
-                    set("linkedClientId", c?.id);
-                  }}
-                  onNewClient={() => undefined}
-                />
-              </Field>
               <MarketsAndChannels brief={brief} set={set} opts={opts} errorFor={errorFor} hl={hl} />
               <Field label="PVP objetivo (€)" htmlFor="rrp" recommended highlight={hl("rrp")}>
                 <Input id="rrp" type="number" inputMode="decimal" step="0.01" min={0} value={brief.rrp ?? ""} onChange={(e) => set("rrp", e.target.value)} />
@@ -433,7 +420,7 @@ export function Wizard(props: WizardProps) {
               <Field label="Unidades estimadas (primer año)" htmlFor="annualUnits" recommended highlight={hl("annualUnits")}>
                 <Input id="annualUnits" type="number" inputMode="numeric" min={0} value={brief.annualUnits ?? ""} onChange={(e) => set("annualUnits", e.target.value)} />
               </Field>
-              <Field label="Justificación / oportunidad" htmlFor="justification" required error={errorFor("justification")} highlight={hl("justification")} className="sm:col-span-2">
+              <Field label="Justificación / oportunidad" htmlFor="justification" hint="Opcional." error={errorFor("justification")} highlight={hl("justification")} className="sm:col-span-2">
                 <Textarea id="justification" rows={4} value={brief.justification ?? ""} onChange={(e) => set("justification", e.target.value)} />
               </Field>
             </section>

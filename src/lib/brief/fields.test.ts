@@ -58,7 +58,7 @@ describe("submitErrors", () => {
 
   it("aplica los obligatorios de marca propia", () => {
     const errs = submitErrors({ ...plBase, type: "MP" });
-    expect(Object.keys(errs).sort()).toEqual(["brandId", "justification", "origin"]);
+    expect(Object.keys(errs).sort()).toEqual(["brandId", "origin"]);
   });
 });
 
