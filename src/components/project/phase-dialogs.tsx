@@ -229,7 +229,7 @@ export function QuoteDialog({
           {canSeeCost && (
             <div className="rounded-lg border border-amber-300 bg-amber-50/60 p-4 sm:col-span-2">
               <Field
-                label="Coste objetivo de la fórmula (€/ud) · confidencial"
+                label="Coste objetivo de la fórmula (€/litro) · confidencial"
                 htmlFor="quote-formula-cost"
                 hint="Solo lo ven Laboratorio / I+D, el gestor de proyectos y Operaciones. No aparece en la cotización ni le llega al comercial; Laboratorio lo recibe en su aviso para empezar a formular."
               >

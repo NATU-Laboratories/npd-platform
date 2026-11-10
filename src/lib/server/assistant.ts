@@ -254,7 +254,7 @@ function toolsFor(u: CurrentUser, ctx: ActionChannel & { prepared: PreparedActio
         departamentos,
         pendientes_para_avanzar_de_fase: pendingUpTo(sheet.cards, p.phase).map((c) => c.dept.name),
         datos_etiqueta_pendientes: labelInfoMissing(p, sheet.refs).map((f) => f.label),
-        ...(cost != null ? { coste_objetivo_formula_confidencial: `${cost} €/ud` } : {}),
+        ...(cost != null ? { coste_objetivo_formula_confidencial: `${cost} €/litro` } : {}),
         actividad_reciente: activity.map((a) => ({
           fecha: a.at.toISOString().slice(0, 16).replace("T", " "),
           quien: a.who ?? "Sistema",

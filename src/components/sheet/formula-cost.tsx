@@ -41,7 +41,7 @@ export function FormulaCostBox({ projectId, value }: { projectId: string; value:
             onChange={(e) => setV(e.target.value)}
             className="h-8 max-w-32"
           />
-          <span className="text-slate-500">€/ud</span>
+          <span className="text-slate-500">€/litro</span>
           <Button size="sm" onClick={save} disabled={busy}>
             {busy && <Loader2 className="animate-spin" />} Guardar
           </Button>
@@ -51,7 +51,7 @@ export function FormulaCostBox({ projectId, value }: { projectId: string; value:
         </span>
       ) : (
         <>
-          <span className="tabular-nums text-slate-900">{value != null ? `${value.toLocaleString("es-ES", { maximumFractionDigits: 4 })} €/ud` : "Sin indicar"}</span>
+          <span className="tabular-nums text-slate-900">{value != null ? `${value.toLocaleString("es-ES", { maximumFractionDigits: 4 })} €/litro` : "Sin indicar"}</span>
           <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
             <Pencil /> Editar
           </Button>
