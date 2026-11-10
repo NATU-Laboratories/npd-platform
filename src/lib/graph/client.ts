@@ -18,21 +18,32 @@ export class GraphError extends Error {
   }
 }
 
+/**
+ * Credenciales de la aplicación: las GRAPH_* o, si no están, las del inicio de sesión con
+ * Microsoft (mismo registro «NATU Proyectos NPD»; necesita los permisos de aplicación de Graph).
+ */
+const creds = () => ({
+  tenant: process.env.GRAPH_TENANT_ID || process.env.AUTH_MICROSOFT_ENTRA_ID_TENANT_ID,
+  clientId: process.env.GRAPH_CLIENT_ID || process.env.AUTH_MICROSOFT_ENTRA_ID_ID,
+  secret: process.env.GRAPH_CLIENT_SECRET || process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET,
+});
+
 export function graphConfigured() {
-  return !!(process.env.GRAPH_TENANT_ID && process.env.GRAPH_CLIENT_ID && process.env.GRAPH_CLIENT_SECRET);
+  const c = creds();
+  return !!(c.tenant && c.clientId && c.secret);
 }
 
 let cached: { token: string; exp: number } | null = null;
 
 async function getToken() {
   if (cached && cached.exp > Date.now() + 60_000) return cached.token;
-  const tenant = process.env.GRAPH_TENANT_ID;
+  const { tenant, clientId, secret } = creds();
   const res = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: process.env.GRAPH_CLIENT_ID!,
-      client_secret: process.env.GRAPH_CLIENT_SECRET!,
+      client_id: clientId!,
+      client_secret: secret!.trim(),
       scope: "https://graph.microsoft.com/.default",
       grant_type: "client_credentials",
     }),
