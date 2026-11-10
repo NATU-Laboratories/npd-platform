@@ -1,5 +1,5 @@
 import "server-only";
-import { AlignmentType, BorderStyle, Document, HeadingLevel, Packer, Paragraph, ShadingType, Table, TableCell, TableRow, TextRun, WidthType } from "docx";
+import { AlignmentType, BorderStyle, Document, ExternalHyperlink, HeadingLevel, Packer, Paragraph, ShadingType, Table, TableCell, TableRow, TextRun, WidthType } from "docx";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { labSamples, projectSheet } from "@/db/schema";
@@ -28,8 +28,21 @@ const BRAND = "56613F";
 const cellBorder = { style: BorderStyle.SINGLE, size: 4, color: "D9DED0" };
 const borders = { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder };
 
+/** Texto con saltos de línea; los enlaces (https://…) quedan clicables. */
 const text = (t: string, opts: { bold?: boolean; color?: string; size?: number } = {}) =>
-  t.split("\n").map((line, i) => new TextRun({ text: line, bold: opts.bold, color: opts.color, size: opts.size, break: i ? 1 : undefined }));
+  t.split("\n").flatMap((line, i) => {
+    const out: (TextRun | ExternalHyperlink)[] = [];
+    const parts = line.split(/(https?:\/\/\S+)/);
+    parts.forEach((part, j) => {
+      if (!part && !(j === 0 && i)) return;
+      const brk = i && !out.length ? 1 : undefined;
+      if (/^https?:\/\//.test(part))
+        out.push(new ExternalHyperlink({ link: part, children: [new TextRun({ text: linkLabel(part), style: "Hyperlink", color: "1D4ED8", underline: {}, size: opts.size, break: brk })] }));
+      else out.push(new TextRun({ text: part, bold: opts.bold, color: opts.color, size: opts.size, break: brk }));
+    });
+    return out;
+  });
+const linkLabel = (url: string) => (/sharepoint\.com/i.test(url) ? "Abrir en SharePoint" : /onedrive|1drv\.ms/i.test(url) ? "Abrir en OneDrive" : url);
 
 function cell(t: string, opts: { head?: boolean; width?: number } = {}) {
   return new TableCell({
@@ -104,6 +117,17 @@ function sectionBlock(s: (typeof SHEET_SECTIONS)[number], { d, sheet }: ReturnTy
   return { dept: cols[0]!.entry!.dept.name, table: table(rows, cols.length > 1 ? ["Campo", ...cols.map((c) => c.title)] : undefined) };
 }
 
+/** Enlace a los artes finales que añade Diseño (común o por referencia). */
+function artworkRows(sheet: SheetData): string[][] {
+  const links = sheet.entries
+    .filter((e) => e.section.key === "etiqueta" && typeof e.data.artworkUrl === "string" && e.data.artworkUrl)
+    .map((e) => {
+      const ref = sheet.refs.find((r) => r.id === e.refId);
+      return `${ref ? `${refTitle(ref)}: ` : ""}${e.data.artworkUrl as string}`;
+    });
+  return links.length ? [["Artes finales", links.join("\n")]] : [];
+}
+
 function buildDocx({ d, lookups, sheet, samples }: Ctx) {
   const p = d.p;
   const children: (Paragraph | Table)[] = [];
@@ -132,6 +156,7 @@ function buildDocx({ d, lookups, sheet, samples }: Ctx) {
       ["Entrega requerida", day(p.neededBy)],
       ["Departamentos implicados", d.departments.map((x) => x.name).join(", ") || "—"],
       ...(sheet.refs.length >= 2 ? [["Referencias", sheet.refs.map(refTitle).join("\n")]] : []),
+      ...artworkRows(sheet),
     ]),
   );
 
