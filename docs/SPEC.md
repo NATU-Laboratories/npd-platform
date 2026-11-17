@@ -391,7 +391,7 @@ Bandeja por usuario/departamento: tareas pendientes, en curso, devueltas y bloqu
 2. Permisos **delegados**: `openid`, `profile`, `email`, `User.Read` (login).
 3. Permisos de **aplicación** (con consentimiento de admin):
    - `Sites.Selected` → conceder acceso *write* **solo** al sitio "Proyectos NPD".
-   - `Mail.Send` → restringido con **Application Access Policy** (o RBAC de Exchange para aplicaciones) **solo** al buzón compartido `proyectos@…`.
+   - `Mail.Send` → restringido con **Application Access Policy** (o RBAC de Exchange para aplicaciones) **solo** al buzón compartido `projects@natuaromatic.com`.
 4. Crear el sitio de SharePoint y el buzón compartido.
 5. Facilitar: Tenant ID, Client ID, secreto/certificado, Site ID, dirección del buzón.
 

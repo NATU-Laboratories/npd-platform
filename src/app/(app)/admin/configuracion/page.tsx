@@ -37,7 +37,7 @@ export default async function SettingsPage() {
             <Input name="max_file_mb" type="number" min={1} max={250} defaultValue={s.max_file_mb} />
           </Field>
           <Field label="Buzón remitente" hint="Vacío = variable de entorno MAIL_SENDER.">
-            <Input name="sender_mailbox" type="email" defaultValue={s.sender_mailbox} placeholder="proyectos@…" />
+            <Input name="sender_mailbox" type="email" defaultValue={s.sender_mailbox} placeholder="projects@natuaromatic.com" />
           </Field>
           <div className="sm:col-span-2">
             <Checkbox name="requesters_see_all" label="Los solicitantes pueden ver todos los proyectos en modo lectura" defaultChecked={s.requesters_see_all} />
