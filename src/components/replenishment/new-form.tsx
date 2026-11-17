@@ -363,7 +363,7 @@ function ProjectPicker({ value, onChange }: { value: { id: string; label: string
             pick(results[active]!);
           }
         }}
-        placeholder="Busca por código o nombre (p. ej. 2026-PL-0007)…"
+        placeholder="Busca por código o nombre (p. ej. PL007)…"
         className="pl-9"
         aria-label="Buscar proyecto NPD"
         role="combobox"

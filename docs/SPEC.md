@@ -278,7 +278,7 @@ Guardado automático como **Borrador** en cada paso. Barra de progreso e **indic
 - Si completitud < umbral configurable (p. ej. 60%), aviso (no bloqueante) listando campos recomendados vacíos.
 - Al enviar: estado → *Solicitado*, se genera el **código** del proyecto, se crea la carpeta en SharePoint, se suben adjuntos y se notifica.
 
-**Código de proyecto**: `AAAA-PL-NNNN` / `AAAA-MP-NNNN` (secuencial por año y tipo). Ej.: `2026-PL-0042`.
+**Código de proyecto**: prefijo del tipo + número correlativo de 3 cifras, sin reinicio anual: `PL001` (marca privada), `MDF001` (marca propia), `MDD001` (marca distribuidor). Los proyectos anteriores conservan su código `AAAA-XX-NNNN`.
 
 ---
 
@@ -382,7 +382,7 @@ Bandeja por usuario/departamento: tareas pendientes, en curso, devueltas y bloqu
 
 ### 9.1 SharePoint
 - Sitio dedicado: **"Proyectos NPD"**, biblioteca **"Proyectos"**.
-- Al enviar una solicitud se crea la carpeta `AAAA-XX-NNNN · Cliente/Marca · Nombre` con subcarpetas:
+- Al enviar una solicitud se crea la carpeta `PL001 - Cliente/Marca - Nombre` (dentro de la carpeta del año) con subcarpetas:
   `00 Solicitud`, `01 Concepto`, `02 Desarrollo`, `03 Diseño-AAFF`, `04 Preparación producción`.
 - Subidas: archivos > 4 MB mediante *upload session* de Graph.
 - En BD se guarda `drive_item_id` de carpeta y archivos (no rutas de texto), para sobrevivir a renombrados.

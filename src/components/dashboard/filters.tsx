@@ -124,7 +124,7 @@ export function Filters({
           [
             ["PL", "Marca privada"],
             ["MP", "Marca propia"],
-            ["MDD", "Marca de distribuidor"],
+            ["MDD", "Marca distribuidor"],
           ],
           // La marca solo tiene sentido en Marca propia: al cambiar de tipo se quita
           (v): Record<string, string | null> => (v === "MP" ? {} : { brand: null }),

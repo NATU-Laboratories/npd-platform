@@ -18,7 +18,7 @@ import {
   type ProjectStatus,
 } from "@/db/schema";
 import { computeCompleteness, FIELD_BY_KEY, submitErrors } from "@/lib/brief/fields";
-import { FIRST_RUNNING_PHASE, LAST_PHASE, PHASES, PREPAYMENT_TYPES } from "@/lib/labels";
+import { FIRST_RUNNING_PHASE, LAST_PHASE, PHASES, PREPAYMENT_TYPES, TYPE_CODE } from "@/lib/labels";
 import { parseBriefLenient, type BriefData } from "@/lib/brief/schema";
 import { quoteSpecGroups } from "@/lib/sheet/sections";
 import { logActivity, jsonDiff } from "./activity";
@@ -258,17 +258,20 @@ async function createClient(tx: Tx, b: BriefData) {
   return c!.id;
 }
 
+/** Contador único por tipo, sin reinicio anual (en la tabla, año 0). */
+const CONTINUOUS_COUNTER_YEAR = 0;
+
+/** Código del proyecto: prefijo del tipo + número correlativo de 3 cifras (PL001, MDF001, MDD001). */
 async function nextCode(tx: Tx, type: "PL" | "MP" | "MDD") {
-  const year = Number(new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Madrid", year: "numeric" }));
   const [row] = await tx
     .insert(projectCodeCounters)
-    .values({ year, type, last: 1 })
+    .values({ year: CONTINUOUS_COUNTER_YEAR, type, last: 1 })
     .onConflictDoUpdate({
       target: [projectCodeCounters.year, projectCodeCounters.type],
       set: { last: sql`${projectCodeCounters.last} + 1` },
     })
     .returning({ last: projectCodeCounters.last });
-  return `${year}-${type}-${String(row!.last).padStart(4, "0")}`;
+  return `${TYPE_CODE[type]}${String(row!.last).padStart(3, "0")}`;
 }
 
 /** Paso 5: envío. Estado → Solicitado, código, carpeta SharePoint, notificación. */
