@@ -57,7 +57,7 @@ Con `AUTH_DEV_LOGIN=true` y `AUTH_DEV_PASSWORD=<clave>` la pantalla de login mue
 2. Variables de entorno de `.env.example` en Vercel (nunca en el repo). `ADMIN_EMAILS` con el email de quien administra: entra como Admin en su primer login.
 3. Región: `vercel.json` fija las funciones en `fra1` (Frankfurt), la misma región que Neon (`aws-eu-central-1`). Si la base de datos cambia de región, cambiar también esta: cada consulta cruzando el Atlántico añade ~90 ms y una página hace 10–20.
 4. Cron: `vercel.json` programa `/api/cron/jobs` una vez al día (06:00 UTC), compatible con el plan Hobby. En plan Pro conviene cambiarlo a `*/10 * * * *` para reintentar emails fallidos cada 10 minutos. Definir `CRON_SECRET`.
-5. IT (tenant Microsoft 365), según §9.2 del SPEC: app single-tenant en Entra ID con redirect `https://npd.natulaboratories.es/api/auth/callback/microsoft-entra-id`; permisos delegados `openid profile email User.Read`; permisos de aplicación `Sites.Selected` (write solo en "Proyectos NPD") y `Mail.Send` restringido por Application Access Policy al buzón `proyectos@…`. Facilitar Tenant ID, Client ID, secreto, Site ID y buzón.
+5. IT (tenant Microsoft 365), según §9.2 del SPEC: app single-tenant en Entra ID con redirect `https://npd.natulaboratories.es/api/auth/callback/microsoft-entra-id`; permisos delegados `openid profile email User.Read`; permisos de aplicación `Sites.Selected` (write solo en "Proyectos NPD") y `Mail.Send` + `Mail.Read` restringidos por Application Access Policy al buzón `projects@natuaromatic.com` (Alexia lee en él las respuestas de proveedores). Facilitar Tenant ID, Client ID, secreto, Site ID y buzón.
 
 ## Estructura
 

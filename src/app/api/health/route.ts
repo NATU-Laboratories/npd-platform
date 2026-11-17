@@ -4,7 +4,7 @@ import { devLoginEnabled, devLoginRequiresPassword } from "@/auth";
 import { db } from "@/db";
 import { graphConfigured } from "@/lib/graph/client";
 import { mailDriver, mailRedirect, verifyBrevo, verifySmtp } from "@/lib/graph/mail";
-import { inboundDomain, inboundEnabled } from "@/lib/server/reply-address";
+import { inboxMailbox, inboxState } from "@/lib/server/inbox";
 import { sharepointBase, storageDriver } from "@/lib/graph/storage";
 import { assistantEnabled } from "@/lib/server/assistant";
 import { teamsConfigured } from "@/lib/teams/bot";
@@ -43,13 +43,21 @@ export async function GET() {
       testMode: mailRedirect().length > 0,
       ...(mailDriver() === "smtp" ? { smtp: await verifySmtp() } : {}),
       ...(mailDriver() === "brevo" ? { brevo: await verifyBrevo() } : {}),
-      inbound: { enabled: inboundEnabled(), domain: inboundDomain() || null },
+      inbound: await inboundHealth(),
     },
     cron: env("CRON_SECRET"),
     assistant: assistantEnabled(),
     teamsBot: teamsConfigured(),
   };
   return NextResponse.json(body, { status: database.ok && body.auth.AUTH_SECRET ? 200 : 500 });
+}
+
+/** Lectura del buzón de la plataforma (sin datos sensibles). */
+async function inboundHealth() {
+  const mailbox = await inboxMailbox();
+  if (!mailbox) return { enabled: false };
+  const s = await inboxState();
+  return { enabled: true, mailbox, subscribed: !!s?.id && s.mailbox === mailbox && !s.error, expiresAt: s?.expiresAt ?? null, error: s?.error ?? null };
 }
 
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

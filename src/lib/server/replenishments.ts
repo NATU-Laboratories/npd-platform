@@ -24,7 +24,7 @@ import { AuthzError, hasRole, type CurrentUser } from "./authz";
 import { renderEmail } from "./email-template";
 import { logError } from "./errors";
 import { queueNotification, uniqEmails } from "./notifications";
-import { quoteReplyAddress } from "./reply-address";
+import { inboxMailbox, quoteReplyAddress } from "./reply-address";
 import { addRepLabNote, startRepLab, transitionRepLab } from "./rep-lab";
 
 // ─── Permisos ─────────────────────────────────────────────────────────────
@@ -438,9 +438,11 @@ export async function supplierEmails(u: CurrentUser, id: string, kind: "quote" |
   const replyTo = await replyToFor(c.requesterEmail);
   const sender = { ...c, requesterName: u.name, requesterEmail: u.email };
   const groups = bySupplier(c.itemRows, c.supplierRows).filter((g) => supplierId == null || g.s.id === supplierId);
+  const mailbox = kind === "quote" ? await inboxMailbox() : null;
   return groups.map((g) => {
-    // Recotización: la respuesta va primero a la dirección de Alexia (la lee, anota el presupuesto y avisa a Compras)
-    const alexia = kind === "quote" ? quoteReplyAddress(id, g.s.id) : null;
+    // Recotización: la respuesta va primero a la dirección de Alexia en el buzón de la plataforma
+    // (la lee, anota el presupuesto y avisa a Compras)
+    const alexia = kind === "quote" ? quoteReplyAddress(mailbox, id, g.s.id) : null;
     return (kind === "quote" ? supplierQuoteEmail : supplierPrintEmail)(sender, g.s, g.items.map((i) => ({ ...i, supplierName: null })), message, uniqEmails([alexia, u.email, ...replyTo]));
   });
 }

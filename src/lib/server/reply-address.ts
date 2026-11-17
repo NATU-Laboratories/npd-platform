@@ -1,20 +1,30 @@
 import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { mailDriver } from "@/lib/graph/mail";
+import { getSettings } from "./settings";
 
 /**
  * Dirección de respuesta de cada petición de presupuesto: identifica la reposición y el
  * proveedor y va firmada (nadie puede inventarse una para anotar presupuestos en otra
- * reposición). Las respuestas llegan a Brevo (dominio INBOUND_DOMAIN) y de ahí a la plataforma.
+ * reposición). Usa el «plus addressing» de Exchange sobre el buzón de la plataforma:
+ * projects+cot-…@natuaromatic.com llega al mismo buzón y Alexia lo lee por Graph.
  */
 const secret = () => process.env.INBOUND_SECRET || process.env.AUTH_SECRET || "";
-export const inboundDomain = () => (process.env.INBOUND_DOMAIN ?? "").trim().toLowerCase();
-export const inboundEnabled = () => !!inboundDomain() && !!process.env.INBOUND_SECRET;
+
+/** Buzón que lee Alexia: el remitente de la plataforma, solo si se envía por Graph. MAIL_INBOUND=off lo desactiva. */
+export async function inboxMailbox(): Promise<string | null> {
+  if (mailDriver() !== "graph" || process.env.MAIL_INBOUND === "off") return null;
+  const { sender_mailbox } = await getSettings();
+  return (sender_mailbox || process.env.MAIL_SENDER || "").trim().toLowerCase() || null;
+}
 
 const sign = (repId: string, supplierId: number) => createHmac("sha256", secret()).update(`${repId}:${supplierId}`).digest("hex").slice(0, 12);
 
-export function quoteReplyAddress(repId: string, supplierId: number) {
-  if (!inboundEnabled()) return null;
-  return `cot-${repId.replace(/-/g, "")}-${supplierId}-${sign(repId, supplierId)}@${inboundDomain()}`;
+/** `buzon@dominio` → `buzon+cot-<reposición>-<proveedor>-<firma>@dominio`. */
+export function quoteReplyAddress(mailbox: string | null, repId: string, supplierId: number) {
+  const m = /^([^@+\s]+)@([^@\s]+)$/.exec((mailbox ?? "").trim().toLowerCase());
+  if (!m || !secret()) return null;
+  return `${m[1]}+cot-${repId.replace(/-/g, "")}-${supplierId}-${sign(repId, supplierId)}@${m[2]}`;
 }
 
 /** Busca una dirección de respuesta válida en un texto (destinatarios del email recibido). */
@@ -31,17 +41,14 @@ export function findReplyTarget(text: string): { repId: string; supplierId: numb
   return null;
 }
 
-/**
- * Clave del webhook de entrada en la URL: derivada de INBOUND_SECRET, solo letras y números
- * (Brevo no acepta cualquier carácter en la URL del webhook).
- */
-export function inboundUrlToken() {
-  const s = process.env.INBOUND_SECRET ?? "";
-  return s ? createHmac("sha256", s).update("brevo-inbound-webhook").digest("hex").slice(0, 40) : "";
+/** Valor `clientState` de la suscripción de Graph: prueba que el aviso viene de nuestra suscripción. */
+export function graphClientState() {
+  const s = secret();
+  return s ? createHmac("sha256", s).update("graph-inbox-subscription").digest("hex").slice(0, 64) : "";
 }
 
-export function inboundTokenOk(given: string | null | undefined) {
-  const expected = inboundUrlToken();
+export function clientStateOk(given: string | null | undefined) {
+  const expected = graphClientState();
   if (!expected || !given) return false;
   const a = Buffer.from(given);
   const b = Buffer.from(expected);
