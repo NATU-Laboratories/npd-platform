@@ -121,7 +121,7 @@ async function store(u: CurrentUser, ch: ActionChannel, kind: string, payload: R
 export const notifyInput = z.object({
   destinatario: z.string().min(1).max(100).describe("Departamento (p. ej. «Diseño») o persona a la que va el aviso"),
   mensaje: z.string().min(1).max(2000).describe("Texto del aviso, redactado en primera persona por el usuario"),
-  sobre: z.string().max(120).optional().describe("Código (2026-PL-0007, REP-2026-0001) o nombre, aunque sea aproximado, del proyecto o reposición al que se refiere, si lo hay"),
+  sobre: z.string().max(120).optional().describe("Código (PL007, REP-2026-0001) o nombre, aunque sea aproximado, del proyecto o reposición al que se refiere, si lo hay"),
   urgente: z.boolean().optional().describe("Marcar como urgente"),
 });
 
@@ -142,7 +142,7 @@ export async function prepareNotify(u: CurrentUser, ch: ActionChannel, i: z.infe
 }
 
 export const commentInput = z.object({
-  sobre: z.string().min(1).max(120).describe("Código (2026-PL-0007, REP-2026-0001) o nombre aproximado del proyecto o reposición"),
+  sobre: z.string().min(1).max(120).describe("Código (PL007, REP-2026-0001) o nombre aproximado del proyecto o reposición"),
   comentario: z.string().min(1).max(4000).describe("Texto del comentario, tal como lo quiere el usuario"),
 });
 

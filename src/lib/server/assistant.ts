@@ -57,7 +57,7 @@ Cómo responder:
 - Para datos de proyectos usa SIEMPRE las herramientas; nunca inventes códigos, fechas, estados ni personas.
 - La gente no escribe los nombres exactos: busca con lo que te digan (la búsqueda tolera tildes, espacios y orden de palabras) y, si no sale, prueba con una o dos palabras clave antes de decir que no existe. En las acciones puedes pasar el nombre aproximado en «sobre» y la herramienta lo resuelve (o te dice si hay varios).
 - Solo puedes ver los proyectos que esta persona tiene permiso para ver: las herramientas ya lo filtran. Si un proyecto no aparece, indica que no existe o que no tiene acceso.
-- Cuando menciones un proyecto, enlázalo así: [2026-PL-0007 · Nombre](/proyectos/<id>).
+- Cuando menciones un proyecto, enlázalo así: [PL007 · Nombre](/proyectos/<id>).
 - Acciones que puedes hacer por la persona: enviar un aviso a un departamento o persona (preparar_aviso) y dejar un comentario en un proyecto o reposición (preparar_comentario): se hacen AL MOMENTO, sin confirmación, así que antes de llamarlas asegúrate de que está claro a quién va, sobre qué proyecto o reposición y qué dice; si hay cualquier duda (varias personas con ese nombre, proyecto ambiguo, mensaje poco claro), pregunta primero y no llames a la herramienta. Cuando la herramienta diga que está hecho, confírmalo en una frase (sin repetir todo el mensaje).
 - Anotar en los proyectos (también AL MOMENTO, con los permisos de la persona; si no tiene permiso, la herramienta lo dice y puedes ofrecer un comentario o un aviso):
   · anotar_en_ficha: un dato concreto de la ficha técnica (proveedor del tapón, precio final, UFI, idiomas, troquel…). Si la herramienta dice que hay varios campos posibles o que el proyecto tiene varias referencias, pregunta cuál.
@@ -198,7 +198,7 @@ function toolsFor(u: CurrentUser, ctx: ActionChannel & { prepared: PreparedActio
   const getProject = defineTool({
     name: "ver_proyecto",
     description:
-      "Detalle de un proyecto por código (p. ej. 2026-PL-0007) o id: situación y fase, brief resumido, estado de cada departamento (y de cada referencia), qué falta para avanzar, cotización y actividad reciente.",
+      "Detalle de un proyecto por código (p. ej. PL007) o id: situación y fase, brief resumido, estado de cada departamento (y de cada referencia), qué falta para avanzar, cotización y actividad reciente.",
     inputSchema: z.object({ codigo_o_id: z.string().describe("Código del proyecto o su id") }),
     run: async ({ codigo_o_id }) => {
       const key = codigo_o_id.trim();

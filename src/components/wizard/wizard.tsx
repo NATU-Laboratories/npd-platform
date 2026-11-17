@@ -13,7 +13,7 @@ import { briefSections, type Lookups } from "@/lib/brief/display";
 import { blacklistPending, computeCompleteness, errorStep, FIELD_BY_KEY, isInternational, MIN_ANNUAL_UNITS_PL, missingFields, needsLowVolumeApproval, submitErrors } from "@/lib/brief/fields";
 import { needsOlfactory, parseBriefLenient, type BriefInput } from "@/lib/brief/schema";
 import type { Option } from "@/lib/catalog-defaults";
-import { CATEGORY_LABEL, PRIORITY_LABEL, TYPE_LABEL } from "@/lib/labels";
+import { CATEGORY_LABEL, PRIORITY_LABEL, TYPE_CODE, TYPE_LABEL } from "@/lib/labels";
 import { cn, formatDate } from "@/lib/utils";
 import { ClientPicker } from "./client-picker";
 import { OlfactoryFields, type OlfactoryState } from "./olfactory-fields";
@@ -262,9 +262,9 @@ export function Wizard(props: WizardProps) {
                 <ChipGroup
                   multiple={false}
                   options={[
-                    { value: "PL", label: `${TYPE_LABEL.PL} (PL)` },
-                    { value: "MP", label: `${TYPE_LABEL.MP} (MP)` },
-                    { value: "MDD", label: `${TYPE_LABEL.MDD} (MDD)` },
+                    { value: "PL", label: `${TYPE_LABEL.PL} (${TYPE_CODE.PL})` },
+                    { value: "MP", label: `${TYPE_LABEL.MP} (${TYPE_CODE.MP})` },
+                    { value: "MDD", label: `${TYPE_LABEL.MDD} (${TYPE_CODE.MDD})` },
                   ]}
                   value={brief.type ? [brief.type] : []}
                   onChange={(v) => isDraft && set("type", (v[0] as BriefInput["type"]) || undefined)}

@@ -57,8 +57,10 @@ export type SituationKey = (typeof SITUATIONS)[number]["key"];
 
 export const OPEN_STATUSES: ProjectStatus[] = ["submitted", "info_requested", "in_progress", "paused"];
 
-export const TYPE_LABEL = { PL: "Marca privada", MP: "Marca propia", MDD: "Marca de distribuidor" } as const;
+export const TYPE_LABEL = { PL: "Marca privada", MP: "Marca propia", MDD: "Marca distribuidor" } as const;
 export const PROJECT_TYPE_KEYS = ["PL", "MP", "MDD"] as const;
+/** Prefijo del código de proyecto por tipo (PL001, MDF001, MDD001). Internamente marca propia sigue siendo «MP». */
+export const TYPE_CODE = { PL: "PL", MP: "MDF", MDD: "MDD" } as const;
 export type ProjectTypeKey = (typeof PROJECT_TYPE_KEYS)[number];
 /** Tipos con cliente (brief de cliente, comercial de cuenta). */
 export const CLIENT_TYPES: readonly string[] = ["PL", "MDD"];

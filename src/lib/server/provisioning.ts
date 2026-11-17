@@ -20,7 +20,7 @@ export async function ensureStagingFolder(projectId: string) {
   return folder.id;
 }
 
-/** Año de la carpeta del proyecto: el de su código (2026-PL-0009 → 2026) o el de la solicitud. */
+/** Año de la carpeta del proyecto: el de su código antiguo (2026-PL-0009 → 2026) o el de la solicitud. */
 export function projectYear(p: { code: string | null; requestedAt?: Date | null; createdAt?: Date | null }) {
   const m = p.code?.match(/^(\d{4})-/);
   return m ? m[1]! : String((p.requestedAt ?? p.createdAt ?? new Date()).getFullYear());
@@ -32,13 +32,16 @@ export async function yearFolder(year: string) {
   return storage.ensureFolder(await storage.rootId(), year);
 }
 
-/** «nº proyecto. cliente. nombre proyecto» (en marca propia, la marca en lugar del cliente). */
+/** «PL001 - Cliente - Proyecto» (en marca propia, la marca en lugar del cliente). */
 export function projectFolderName(p: { code: string | null; name: string; clientName?: string | null; brandName?: string | null }) {
-  return [p.code, p.clientName ?? p.brandName, p.name].filter(Boolean).join(". ");
+  return [p.code, p.clientName ?? p.brandName, p.name]
+    .map((x) => x?.trim())
+    .filter(Boolean)
+    .join(" - ");
 }
 
 /**
- * Crea `AAAA-XX-NNNN · Cliente/Marca · Nombre` con sus subcarpetas de fase y
+ * Crea `PL001 - Cliente/Marca - Nombre` (dentro de la carpeta del año) con sus subcarpetas de fase y
  * mueve los adjuntos del borrador a `00 Solicitud` (§5 Paso 5, §9.1).
  * Idempotente: se puede reintentar desde la cola tantas veces como haga falta.
  */
