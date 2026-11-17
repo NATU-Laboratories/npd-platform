@@ -298,6 +298,8 @@ Guardado automático como **Borrador** en cada paso. Barra de progreso e **indic
 | Cambio de puerta (P2–G5) | Solicitante + departamentos implicados |
 | Proyecto en riesgo (fecha necesaria < X días y fase atrasada) | Project Manager / Marketing (resumen diario) |
 
+**Respuestas de proveedores.** Las peticiones de presupuesto llevan como dirección de respuesta `projects+cot-<reposición>-<proveedor>-<firma>@natuaromatic.com`, que llega al buzón compartido. La plataforma se suscribe por Graph a los emails nuevos de su bandeja de entrada (`/api/inbound/graph`), renueva la suscripción en el cron diario y barre los últimos días por si se perdió algún aviso. Si el proveedor responde a la dirección normal del buzón, se reconoce por el código de la reposición en el asunto y su email. Alexia anota el presupuesto y reenvía la respuesta a Compras.
+
 - Plantillas de email en HTML, con marca NATU, resumen del proyecto y botón "Ver en la plataforma".
 - Preferencias por usuario: inmediato / resumen diario (para eventos no críticos).
 - Todo envío se registra en `notification_log` con estado (enviado/fallido) y reintentos.
@@ -391,7 +393,8 @@ Bandeja por usuario/departamento: tareas pendientes, en curso, devueltas y bloqu
 2. Permisos **delegados**: `openid`, `profile`, `email`, `User.Read` (login).
 3. Permisos de **aplicación** (con consentimiento de admin):
    - `Sites.Selected` → conceder acceso *write* **solo** al sitio "Proyectos NPD".
-   - `Mail.Send` → restringido con **Application Access Policy** (o RBAC de Exchange para aplicaciones) **solo** al buzón compartido `projects@natuaromatic.com`.
+   - `Mail.Send` y `Mail.Read` → restringidos con **Application Access Policy** (o RBAC de Exchange para aplicaciones) **solo** al buzón compartido `projects@natuaromatic.com`. `Mail.Read` sirve para que Alexia lea las respuestas de proveedores a las peticiones de presupuesto.
+   - El buzón debe admitir *plus addressing* (`projects+…@natuaromatic.com`), activado por defecto en Exchange Online.
 4. Crear el sitio de SharePoint y el buzón compartido.
 5. Facilitar: Tenant ID, Client ID, secreto/certificado, Site ID, dirección del buzón.
 

@@ -17,60 +17,23 @@ import { getSettings } from "./settings";
 import { alert, claim, department, merge } from "./watchdog";
 
 /**
- * Respuesta de un proveedor a una petición de presupuesto (llega por el webhook de entrada
- * de Brevo). Alexia lee el email y sus PDF, anota el presupuesto en la reposición y avisa a
- * Compras (y a quien abrió la reposición) con el texto del proveedor.
+ * Respuesta de un proveedor a una petición de presupuesto (llega al buzón de la plataforma y se
+ * lee por Microsoft Graph, ver inbox.ts). Alexia lee el email y sus PDF, anota el presupuesto en
+ * la reposición y avisa a Compras (y a quien abrió la reposición) con el texto del proveedor.
  */
 
-/** Un email recibido, tal como lo manda Brevo (los nombres de campo pueden variar). */
-type InboundItem = Record<string, unknown>;
-
-const str = (v: unknown) => (typeof v === "string" ? v : "");
-const pick = (o: InboundItem, ...keys: string[]) => keys.map((k) => o[k]).find((v) => v != null);
-
-function addressOf(v: unknown): string {
-  if (typeof v === "string") return v;
-  if (v && typeof v === "object") return str((v as Record<string, unknown>).Address ?? (v as Record<string, unknown>).address ?? (v as Record<string, unknown>).Email);
-  return "";
-}
-
-function stripHtml(html: string) {
-  return html
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/(p|div|tr|li|h\d)>/gi, "\n")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
-type Attachment = { name: string; type: string; token: string };
-
-function attachmentsOf(item: InboundItem): Attachment[] {
-  const list = pick(item, "Attachments", "attachments");
-  if (!Array.isArray(list)) return [];
-  return list.map((a: Record<string, unknown>) => ({
-    name: str(a.Name ?? a.name) || "adjunto",
-    type: str(a.ContentType ?? a.contentType),
-    token: str(a.DownloadToken ?? a.downloadToken),
-  }));
-}
-
-/** Descarga un adjunto del email recibido (API de Brevo). */
-async function download(a: Attachment): Promise<Buffer | null> {
-  if (!a.token || !process.env.BREVO_API_KEY) return null;
-  const r = await fetch(`https://api.brevo.com/v3/inbound/attachments/${encodeURIComponent(a.token)}`, {
-    headers: { "api-key": process.env.BREVO_API_KEY.trim() },
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!r.ok) return null;
-  const buf = Buffer.from(await r.arrayBuffer());
-  return buf.length <= 10 * 1024 * 1024 ? buf : null;
-}
+/** Un email recibido, ya normalizado. */
+export type InboundEmail = {
+  /** Identificador único (Message-ID) para no procesarlo dos veces. */
+  id: string;
+  from: string;
+  /** Destinatarios (Para y CC). */
+  recipients: string[];
+  subject: string;
+  /** Texto del email. */
+  body: string;
+  attachments: { name: string; type: string; load: () => Promise<Buffer | null> }[];
+};
 
 type Extracted = { isQuote: boolean; items: { element: string; price: number | null; notes: string }[]; leadTime: string | null; summary: string };
 
@@ -129,22 +92,32 @@ async function extract(text: string, pdfs: { name: string; data: Buffer }[], ele
 
 const fmtPrice = (n: number) => `${n.toLocaleString("es-ES", { maximumFractionDigits: 4 })} €/ud`;
 
+/**
+ * Reposición y proveedor a los que responde el email: por la dirección de respuesta firmada o, si
+ * el proveedor contestó a la dirección normal del buzón, por el código de la reposición en el
+ * asunto y su email entre los del proveedor (que tiene que tener elementos en esa reposición).
+ */
+async function targetOf(email: InboundEmail): Promise<{ repId: string; supplierId: number } | null> {
+  const signed = findReplyTarget(email.recipients.join(" "));
+  if (signed) return signed;
+  const code = /\bREP-\d{4}-\d{3,}\b/i.exec(email.subject)?.[0]?.toUpperCase();
+  if (!code || !email.from) return null;
+  const rows = await db
+    .selectDistinct({ repId: replenishments.id, supplierId: suppliers.id, emails: suppliers.emails })
+    .from(replenishments)
+    .innerJoin(replenishmentItems, eq(replenishmentItems.replenishmentId, replenishments.id))
+    .innerJoin(suppliers, eq(suppliers.id, replenishmentItems.supplierId))
+    .where(eq(replenishments.code, code));
+  const matches = rows.filter((r) => r.emails.some((e) => e.trim().toLowerCase() === email.from));
+  return matches.length === 1 ? { repId: matches[0]!.repId, supplierId: matches[0]!.supplierId } : null;
+}
+
 /** Procesa un email recibido. Devuelve qué ha hecho (para el registro). */
-export async function handleSupplierReply(item: InboundItem): Promise<string> {
-  const id = str(pick(item, "MessageId", "messageId", "Uuid", "uuid")) || JSON.stringify(pick(item, "Uuid")) || "";
-  const recipients = JSON.stringify([pick(item, "To", "to"), pick(item, "Recipients", "recipients"), pick(item, "Cc", "cc"), pick(item, "Headers", "headers")]);
-  // Primero en los destinatarios; si Brevo usa otros nombres de campo, en todo el email
-  const target = findReplyTarget(recipients) ?? findReplyTarget(JSON.stringify(item));
-  if (!target) {
-    await logError("inbound:ignored", new Error("Email recibido sin una dirección de respuesta de presupuesto válida"), {
-      keys: Object.keys(item).slice(0, 40),
-      to: recipients.slice(0, 600),
-      from: addressOf(pick(item, "From", "from")),
-      subject: str(pick(item, "Subject", "subject")).slice(0, 200),
-    });
-    return "ignorado: no va a una dirección de respuesta de presupuesto válida";
-  }
-  if (id && !(await claim("inbound_email", id.slice(0, 200), "processed"))) return "ignorado: ya procesado";
+export async function handleSupplierReply(email: InboundEmail): Promise<string> {
+  // El buzón recibe también otros correos: los que no son respuestas a una petición de presupuesto se ignoran
+  const target = await targetOf(email);
+  if (!target) return "ignorado: no es una respuesta a una petición de presupuesto";
+  if (email.id && !(await claim("inbound_email", email.id.slice(0, 200), "processed"))) return "ignorado: ya procesado";
 
   const [rep] = await db
     .select({ r: replenishments, requesterEmail: users.email, requesterId: users.id })
@@ -161,16 +134,14 @@ export async function handleSupplierReply(item: InboundItem): Promise<string> {
     .from(replenishmentItems)
     .where(and(eq(replenishmentItems.replenishmentId, rep.r.id), eq(replenishmentItems.supplierId, supplier.id)));
 
-  const from = addressOf(pick(item, "From", "from"));
-  const subject = str(pick(item, "Subject", "subject"));
-  const body = str(pick(item, "ExtractedMarkdownMessage", "extractedMarkdownMessage")) || str(pick(item, "RawTextBody", "rawTextBody")) || stripHtml(str(pick(item, "RawHtmlBody", "rawHtmlBody")));
-  const atts = attachmentsOf(item);
+  const { from, subject, body } = email;
+  const atts = email.attachments;
   // Adjuntos (PDF e imágenes): se guardan en la reposición como «Cotización del proveedor»; los PDF los lee Alexia
   const pdfs: { name: string; data: Buffer }[] = [];
   const saved: string[] = [];
   const files: { storageItemId: string; name: string; mime: string | null }[] = [];
   for (const a of atts.filter((x) => /pdf|image\//i.test(x.type) || /\.(pdf|png|jpe?g)$/i.test(x.name)).slice(0, 5)) {
-    const data = await download(a).catch(() => null);
+    const data = await a.load().catch(() => null);
     if (!data) continue;
     const isPdf = /pdf/i.test(a.type) || /\.pdf$/i.test(a.name);
     if (isPdf && pdfs.length < 3) pdfs.push({ name: a.name, data });

@@ -1,5 +1,5 @@
 "use server";
-import { inboundUrlToken } from "@/lib/server/reply-address";
+import { ensureInboxSubscription, sweepInbox } from "@/lib/server/inbox";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -358,71 +358,18 @@ export async function sendTestEmailAction() {
 }
 
 /**
- * Conecta en Brevo la recepción de respuestas de proveedores: los emails a INBOUND_DOMAIN se
- * envían a /api/inbound/brevo (webhook de entrada). Requiere BREVO_API_KEY, INBOUND_DOMAIN,
- * INBOUND_SECRET y APP_URL, y el registro MX del subdominio apuntando a Brevo.
+ * Conecta el buzón de la plataforma: crea de nuevo la suscripción de Microsoft Graph a los emails
+ * nuevos y recoge las respuestas de proveedores de los últimos días.
  */
-export async function connectInboundAction() {
+export async function connectInboxAction() {
   await requireAdminAction();
-  const key = process.env.BREVO_API_KEY?.trim();
-  const domain = process.env.INBOUND_DOMAIN?.trim().toLowerCase();
-  const secret = process.env.INBOUND_SECRET;
-  const app = process.env.APP_URL?.replace(/\/$/, "");
-  const missing = [!key && "BREVO_API_KEY", !domain && "INBOUND_DOMAIN", !secret && "INBOUND_SECRET", !app && "APP_URL"].filter(Boolean);
-  let result: string;
-  if (missing.length) result = `Faltan variables en Vercel: ${missing.join(", ")}`;
-  else {
-    const r = await fetch("https://api.brevo.com/v3/webhooks", {
-      method: "POST",
-      headers: { "api-key": key!, "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify({
-        type: "inbound",
-        events: ["inboundEmailProcessed"],
-        url: `${app}/api/inbound/brevo/${inboundUrlToken()}`,
-        domain,
-        description: "Plataforma NPD: respuestas de proveedores",
-      }),
-    }).catch((err: unknown) => ({ ok: false, status: 0, json: async () => ({ message: String(err) }) }) as unknown as Response);
-    const body = (await r.json().catch(() => null)) as { message?: string; id?: number } | null;
-    result = r.ok ? "ok" : `Brevo ${r.status}: ${body?.message ?? "error"}`;
+  const s = await ensureInboxSubscription({ force: true });
+  let result = s.error ?? (s.mailbox ? "ok" : "El buzón solo se lee si el email sale por Microsoft 365 (MAIL_SENDER)");
+  if (result === "ok") {
+    const sweep = await sweepInbox(7).catch((err: unknown) => ({ checked: 0, results: [], error: String(err).slice(0, 200) }));
+    if ("error" in sweep) result = `Conectado, pero no se pudo leer la bandeja de entrada: ${sweep.error}`;
   }
   redirect(`/admin/notificaciones?entrada=${encodeURIComponent(result)}`);
-}
-
-/** Webhooks de entrada registrados en Brevo (para comprobar que apuntan a la dirección actual). */
-export async function inboundStatus(): Promise<{ ok: boolean; error?: string; hooks: { id: number; url: string; domain: string | null; current: boolean }[] }> {
-  await requireAdminAction();
-  const key = process.env.BREVO_API_KEY?.trim();
-  if (!key) return { ok: false, error: "Falta BREVO_API_KEY", hooks: [] };
-  const app = process.env.APP_URL?.replace(/\/$/, "") ?? "";
-  const expected = `${app}/api/inbound/brevo/${inboundUrlToken()}`;
-  const r = await fetch("https://api.brevo.com/v3/webhooks?type=inbound", { headers: { "api-key": key, accept: "application/json" }, cache: "no-store" }).catch(() => null);
-  if (!r) return { ok: false, error: "No se pudo contactar con Brevo", hooks: [] };
-  const body = (await r.json().catch(() => null)) as { webhooks?: { id: number; url: string; domain?: string }[]; message?: string } | null;
-  if (!r.ok) return { ok: false, error: `Brevo ${r.status}: ${body?.message ?? "error"}`, hooks: [] };
-  return {
-    ok: true,
-    hooks: (body?.webhooks ?? []).map((h) => ({ id: h.id, url: h.url.replace(/(\/api\/inbound\/brevo\/)([0-9a-f]{6})[0-9a-f]+/, "$1$2…"), domain: h.domain ?? null, current: h.url === expected })),
-  };
-}
-
-/** Borra los webhooks de entrada antiguos (los que no apuntan a la dirección actual). */
-export async function cleanInboundAction() {
-  await requireAdminAction();
-  const key = process.env.BREVO_API_KEY?.trim();
-  const app = process.env.APP_URL?.replace(/\/$/, "") ?? "";
-  const expected = `${app}/api/inbound/brevo/${inboundUrlToken()}`;
-  let removed = 0;
-  if (key) {
-    const r = await fetch("https://api.brevo.com/v3/webhooks?type=inbound", { headers: { "api-key": key, accept: "application/json" }, cache: "no-store" });
-    const body = (await r.json().catch(() => null)) as { webhooks?: { id: number; url: string }[] } | null;
-    for (const h of body?.webhooks ?? [])
-      if (h.url !== expected) {
-        await fetch(`https://api.brevo.com/v3/webhooks/${h.id}`, { method: "DELETE", headers: { "api-key": key } });
-        removed++;
-      }
-  }
-  redirect(`/admin/notificaciones?entrada=${encodeURIComponent(removed ? `Borrados ${removed} webhooks antiguos` : "No había webhooks antiguos")}`);
 }
 
 export async function retryJobAction(fd: FormData) {
