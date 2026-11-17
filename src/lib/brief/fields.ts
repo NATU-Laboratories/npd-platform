@@ -29,6 +29,12 @@ export function blacklistPending(d: BriefData, hasFiles = false) {
 
 /** PL y MDD comparten el bloque de cliente. */
 const isPL = (d: BriefData) => d.type === "PL" || d.type === "MDD";
+
+/** Mínimo de unidades al año para fabricar a terceros (PL/MDD) sin aprobación de Dirección. */
+export const MIN_ANNUAL_UNITS_PL = 5000;
+
+/** PL/MDD con menos unidades estimadas que el mínimo: necesita aprobación de Dirección. */
+export const needsLowVolumeApproval = (d: BriefData) => isPL(d) && typeof d.annualUnits === "number" && d.annualUnits < MIN_ANNUAL_UNITS_PL;
 const isMP = (d: BriefData) => d.type === "MP";
 const isCat = (c: BriefData["category"]) => (d: BriefData) => d.category === c;
 
@@ -57,7 +63,7 @@ export const FIELDS: FieldDef[] = [
   { key: "channels", label: "Canal", step: 2, level: "required", when: (d) => !!d.type },
   { key: "references", label: "Nº de referencias", step: 2, level: "required", when: isPL },
   { key: "firstOrderUnits", label: "Unidades primer pedido", step: 2, level: "required", when: isPL },
-  { key: "annualUnits", label: "Previsión anual de unidades", step: 2, level: "recommended", when: (d) => !!d.type },
+  { key: "annualUnits", label: "Unidades estimadas (primer año)", step: 2, level: "required", when: (d) => !!d.type },
   { key: "targetPrice", label: "Precio objetivo de compra", step: 2, level: "recommended", when: isPL },
   { key: "rrp", label: "PVP previsto / objetivo", step: 2, level: "recommended", when: (d) => !!d.type },
   { key: "designBy", label: "Quién aporta el diseño", step: 2, level: "required", when: isPL },
@@ -118,6 +124,10 @@ export const FIELDS: FieldDef[] = [
 
 export const FIELD_BY_KEY = Object.fromEntries(FIELDS.map((f) => [f.key, f]));
 
+/** Paso del asistente donde se corrige un error de envío (también los que no son campos del registro). */
+const EXTRA_ERROR_STEP: Record<string, FieldDef["step"]> = { neededByReasonText: 1, formatOther: 3, lowVolumeApproved: 2, lowVolumeApprovedBy: 2 };
+export const errorStep = (k: string): FieldDef["step"] => FIELD_BY_KEY[k]?.step ?? EXTRA_ERROR_STEP[k] ?? 1;
+
 export function getPath(obj: unknown, path: string): unknown {
   return path.split(".").reduce<unknown>((acc, k) => (acc && typeof acc === "object" ? (acc as Record<string, unknown>)[k] : undefined), obj);
 }
@@ -172,5 +182,9 @@ export function submitErrors(d: BriefData): Record<string, string> {
   for (const f of missingFields(d, "required")) errors[f.key] = `${f.label} es obligatorio`;
   if (d.neededByReason === "otro" && !d.neededByReasonText) errors.neededByReasonText = "Explica el motivo de la fecha";
   if (d.format === "otro" && !d.formatOther) errors.formatOther = "Indica el formato";
+  if (needsLowVolumeApproval(d)) {
+    if (!d.lowVolumeApproved) errors.lowVolumeApproved = `Por debajo de ${MIN_ANNUAL_UNITS_PL.toLocaleString("es-ES")} uds/año hace falta la aprobación de Dirección`;
+    if (!d.lowVolumeApprovedBy) errors.lowVolumeApprovedBy = "Indica quién de Dirección lo ha aprobado";
+  }
   return errors;
 }

@@ -17,7 +17,7 @@ import { Badge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { briefSections, formatFormat, type Lookups } from "@/lib/brief/display";
-import { applicableFields, isFieldFilled } from "@/lib/brief/fields";
+import { applicableFields, isFieldFilled, MIN_ANNUAL_UNITS_PL } from "@/lib/brief/fields";
 import { canManageReferences, labelInfoMissing } from "@/lib/server/references";
 import { ReferencesCard } from "@/components/project/references-card";
 import { needsOlfactory } from "@/lib/brief/schema";
@@ -475,7 +475,12 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
                 label={p.type === "MP" ? "Unidades (1er año)" : "Unidades 1er pedido"}
                 value={p.type === "MP" ? (p.unitsAnnual ? formatNumber(p.unitsAnnual) : null) : p.unitsFirstOrder ? formatNumber(p.unitsFirstOrder) : null}
               />
-              <Datum label="Previsión anual" value={p.type === "PL" && p.unitsAnnual ? formatNumber(p.unitsAnnual) : null} />
+              {p.type !== "MP" && (
+                <Datum
+                  label="Unidades (1er año)"
+                  value={p.unitsAnnual ? `${formatNumber(p.unitsAnnual)}${b.lowVolumeApproved && b.lowVolumeApprovedBy && p.unitsAnnual < MIN_ANNUAL_UNITS_PL ? ` · aprobado por ${b.lowVolumeApprovedBy}` : ""}` : null}
+                />
+              )}
               <Datum label="Precio objetivo" value={b.targetPrice != null ? formatEuro(b.targetPrice) : null} />
               <Datum label="PVP" value={b.rrp != null ? formatEuro(b.rrp) : null} />
               <Datum label="Canal" value={b.channels?.map((x) => c.channel?.[x] ?? x).join(", ") || null} className="col-span-2" />

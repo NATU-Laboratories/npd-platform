@@ -1,5 +1,6 @@
 import { CATEGORY_LABEL, PRIORITY_LABEL, TYPE_LABEL } from "@/lib/labels";
 import { needsOlfactory, type BriefData } from "./schema";
+import { needsLowVolumeApproval } from "./fields";
 
 export type Lookups = {
   catalog: Record<string, Record<string, string>>;
@@ -66,7 +67,10 @@ export function briefSections(b: BriefData, l: Lookups): Section[] {
         ["Canal", list(b.channels, c.channel)],
         ["Nº de referencias", num(b.references)],
         ["Unidades primer pedido", num(b.firstOrderUnits)],
-        ["Previsión anual", num(b.annualUnits)],
+        ["Unidades estimadas (1er año)", num(b.annualUnits)],
+        ...((needsLowVolumeApproval(b)
+          ? [["Aprobación de Dirección (bajo volumen)", b.lowVolumeApproved ? `Sí${b.lowVolumeApprovedBy ? ` · ${b.lowVolumeApprovedBy}` : ""}` : "Pendiente"]]
+          : []) as Row[]),
         ["Precio objetivo de compra", eur(b.targetPrice)],
         ["PVP previsto", eur(b.rrp)],
         ["Diseño aporta", b.designBy ? SUPPLIER_LABEL[b.designBy] : null],
