@@ -20,7 +20,11 @@ export function fmt(v: unknown): string {
   return String(v);
 }
 
+/** Campos del brief que no están en el registro de campos. */
+const EXTRA_LABEL: Record<string, string> = { lowVolumeApproved: "Aprobación de Dirección (bajo volumen)", lowVolumeApprovedBy: "Aprobado por (bajo volumen)" };
+
 export function fieldLabel(path: string) {
+  if (EXTRA_LABEL[path]) return EXTRA_LABEL[path];
   const direct = FIELD_BY_KEY[path];
   if (direct) return direct.label;
   const parts = path.split(".");

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeCompleteness, missingFields, submitErrors } from "./fields";
+import { computeCompleteness, missingFields, needsLowVolumeApproval, submitErrors } from "./fields";
 import { parseBriefLenient, type BriefData } from "./schema";
 
 const plBase: BriefData = {
@@ -16,6 +16,7 @@ const plBase: BriefData = {
   channels: ["online"],
   references: 2,
   firstOrderUnits: 1000,
+  annualUnits: 5000,
   designBy: "natu",
   packagingBy: "cliente",
   format: "body_mist",
@@ -128,5 +129,25 @@ describe("blacklist en mercados internacionales", () => {
     expect(blacklistPending({ ...intl, olfactory: { ...intl.olfactory, blacklist: "Lyral" } })).toBe(false);
     expect(blacklistPending(intl, true)).toBe(false);
     expect(blacklistPending({ ...plBase, markets: ["ES"] })).toBe(false);
+  });
+});
+
+describe("unidades mínimas en PL/MDD", () => {
+  const pl: BriefData = { ...plBase, annualUnits: 3000 };
+
+  it("por debajo de 5.000 uds/año exige la aprobación de Dirección y quién la da", () => {
+    expect(needsLowVolumeApproval(pl)).toBe(true);
+    expect(Object.keys(submitErrors(pl)).sort()).toEqual(["lowVolumeApproved", "lowVolumeApprovedBy"]);
+    expect(submitErrors({ ...pl, lowVolumeApproved: true, lowVolumeApprovedBy: "Dirección General" })).toEqual({});
+  });
+
+  it("con 5.000 o más no hace falta aprobación", () => {
+    expect(needsLowVolumeApproval({ ...pl, annualUnits: 5000 })).toBe(false);
+    expect(submitErrors({ ...pl, annualUnits: 5000 })).toEqual({});
+  });
+
+  it("no aplica a marca propia y las unidades son obligatorias en todos los tipos", () => {
+    expect(needsLowVolumeApproval({ ...pl, type: "MP" })).toBe(false);
+    expect(submitErrors({ ...plBase, annualUnits: undefined })).toHaveProperty("annualUnits");
   });
 });

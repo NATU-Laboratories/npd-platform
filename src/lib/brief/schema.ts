@@ -120,6 +120,9 @@ export const briefSchema = z.object({
   markets: strList,
   channels: strList,
   annualUnits: optInt,
+  /** PL/MDD por debajo del mínimo anual: el comercial confirma la aprobación de Dirección y quién la da. */
+  lowVolumeApproved: z.boolean().optional(),
+  lowVolumeApprovedBy: optStr,
   rrp: optNum,
 
   // Paso 2B (MP)

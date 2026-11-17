@@ -10,7 +10,7 @@ import { ChipGroup } from "@/components/ui/chips";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Uploader, type UploadedFile } from "@/components/uploader";
 import { briefSections, type Lookups } from "@/lib/brief/display";
-import { blacklistPending, computeCompleteness, FIELD_BY_KEY, isInternational, missingFields, submitErrors } from "@/lib/brief/fields";
+import { blacklistPending, computeCompleteness, errorStep, FIELD_BY_KEY, isInternational, MIN_ANNUAL_UNITS_PL, missingFields, needsLowVolumeApproval, submitErrors } from "@/lib/brief/fields";
 import { needsOlfactory, parseBriefLenient, type BriefInput } from "@/lib/brief/schema";
 import type { Option } from "@/lib/catalog-defaults";
 import { CATEGORY_LABEL, PRIORITY_LABEL, TYPE_LABEL } from "@/lib/labels";
@@ -162,7 +162,7 @@ export function Wizard(props: WizardProps) {
     }
   }
 
-  const stepHasErrors = (n: number) => showErrors && Object.keys(reqErrors).some((k) => (FIELD_BY_KEY[k]?.step ?? 1) === n);
+  const stepHasErrors = (n: number) => showErrors && Object.keys(reqErrors).some((k) => errorStep(k) === n);
   const recommendedMissing = missingFields(parsed, "recommended");
   const briefType = parsed.type;
 
@@ -362,12 +362,45 @@ export function Wizard(props: WizardProps) {
               <Field label="Unidades primer pedido" htmlFor="firstOrderUnits" required error={errorFor("firstOrderUnits")} highlight={hl("firstOrderUnits")}>
                 <Input id="firstOrderUnits" type="number" inputMode="numeric" min={0} value={brief.firstOrderUnits ?? ""} onChange={(e) => set("firstOrderUnits", e.target.value)} />
               </Field>
-              <Field label="Previsión anual de unidades" htmlFor="annualUnits" recommended highlight={hl("annualUnits")}>
+              <Field
+                label="Unidades estimadas (primer año)"
+                htmlFor="annualUnits"
+                required
+                hint={`Mínimo ${MIN_ANNUAL_UNITS_PL.toLocaleString("es-ES")} uds/año; por debajo hace falta aprobación de Dirección.`}
+                error={errorFor("annualUnits")}
+                highlight={hl("annualUnits")}
+              >
                 <Input id="annualUnits" type="number" inputMode="numeric" min={0} value={brief.annualUnits ?? ""} onChange={(e) => set("annualUnits", e.target.value)} />
               </Field>
               <Field label="Precio objetivo de compra (€)" htmlFor="targetPrice" recommended highlight={hl("targetPrice")}>
                 <Input id="targetPrice" type="number" inputMode="decimal" step="0.01" min={0} value={brief.targetPrice ?? ""} onChange={(e) => set("targetPrice", e.target.value)} />
               </Field>
+              {needsLowVolumeApproval(parsed) && (
+                <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 sm:col-span-2">
+                  <p className="font-semibold">Menos de {MIN_ANNUAL_UNITS_PL.toLocaleString("es-ES")} unidades al año</p>
+                  <p className="mt-1">Para fabricar menos unidades se necesita la aprobación de Dirección. Confírmala e indica quién la ha dado para poder enviar la solicitud.</p>
+                  <label className="mt-3 flex items-center gap-2 font-medium">
+                    <input
+                      type="checkbox"
+                      className="size-4 accent-brand-600"
+                      checked={brief.lowVolumeApproved === true}
+                      onChange={(e) => set("lowVolumeApproved", e.target.checked || undefined)}
+                      aria-invalid={!!errorFor("lowVolumeApproved")}
+                    />
+                    Tengo la aprobación de Dirección
+                  </label>
+                  {errorFor("lowVolumeApproved") && <p className="mt-1 text-xs text-rose-700">{errorFor("lowVolumeApproved")}</p>}
+                  <Field label="Aprobado por" htmlFor="lowVolumeApprovedBy" required error={errorFor("lowVolumeApprovedBy")} className="mt-3 sm:max-w-sm">
+                    <Input
+                      id="lowVolumeApprovedBy"
+                      value={brief.lowVolumeApprovedBy ?? ""}
+                      onChange={(e) => set("lowVolumeApprovedBy", e.target.value)}
+                      placeholder="Nombre de quien lo aprueba…"
+                      autoComplete="off"
+                    />
+                  </Field>
+                </div>
+              )}
               <Field label="PVP previsto (€)" htmlFor="rrp" recommended highlight={hl("rrp")}>
                 <Input id="rrp" type="number" inputMode="decimal" step="0.01" min={0} value={brief.rrp ?? ""} onChange={(e) => set("rrp", e.target.value)} />
               </Field>
@@ -417,7 +450,7 @@ export function Wizard(props: WizardProps) {
               <Field label="PVP objetivo (€)" htmlFor="rrp" recommended highlight={hl("rrp")}>
                 <Input id="rrp" type="number" inputMode="decimal" step="0.01" min={0} value={brief.rrp ?? ""} onChange={(e) => set("rrp", e.target.value)} />
               </Field>
-              <Field label="Unidades estimadas (primer año)" htmlFor="annualUnits" recommended highlight={hl("annualUnits")}>
+              <Field label="Unidades estimadas (primer año)" htmlFor="annualUnits" required error={errorFor("annualUnits")} highlight={hl("annualUnits")}>
                 <Input id="annualUnits" type="number" inputMode="numeric" min={0} value={brief.annualUnits ?? ""} onChange={(e) => set("annualUnits", e.target.value)} />
               </Field>
               <Field label="Justificación / oportunidad" htmlFor="justification" hint="Opcional." error={errorFor("justification")} highlight={hl("justification")} className="sm:col-span-2">
@@ -593,7 +626,7 @@ export function Wizard(props: WizardProps) {
                   <ul className="mt-1 list-inside list-disc">
                     {Object.entries(reqErrors).map(([k, msg]) => (
                       <li key={k}>
-                        <button type="button" className="underline" onClick={() => go(FIELD_BY_KEY[k]?.step ?? (k === "formatOther" ? 3 : 1))}>
+                        <button type="button" className="underline" onClick={() => go(errorStep(k))}>
                           {msg}
                         </button>
                       </li>
