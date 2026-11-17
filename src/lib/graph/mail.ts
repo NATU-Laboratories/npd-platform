@@ -46,6 +46,9 @@ Iba dirigido a: ${esc(msg.to.join(", "))}${msg.replyTo?.length ? `<br>Responder 
   return { to, subject: `[PRUEBA] ${msg.subject}`, html, replyTo: msg.replyTo, attachments: msg.attachments };
 }
 
+/** Nombre del remitente de los emails de la plataforma. */
+const fromName = () => process.env.MAIL_FROM_NAME?.trim() || "ALEXIA - NATU Lab";
+
 export async function sendMail(original: MailMessage, sender?: string) {
   const driver = mailDriver();
   if (driver === "fail") throw new Error("MAIL_DRIVER=fail: fallo simulado del envío de email");
@@ -69,6 +72,8 @@ export async function sendMail(original: MailMessage, sender?: string) {
     method: "POST",
     json: {
       message: {
+        // Nombre del remitente (puede que Exchange use el del buzón en su lugar)
+        from: { emailAddress: { address: from, name: fromName() } },
         subject: msg.subject,
         body: { contentType: "HTML", content: msg.html },
         toRecipients: msg.to.map((address) => ({ emailAddress: { address } })),
@@ -96,7 +101,7 @@ async function sendSmtp(msg: MailMessage) {
   });
   const fromAddress = process.env.MAIL_FROM || process.env.SMTP_USER!;
   await transport.sendMail({
-    from: { name: process.env.MAIL_FROM_NAME || "NATU · Proyectos NPD", address: fromAddress },
+    from: { name: fromName(), address: fromAddress },
     to: msg.to,
     subject: msg.subject,
     html: msg.html,
@@ -158,7 +163,7 @@ async function sendBrevo(msg: MailMessage) {
     method: "POST",
     headers: { "api-key": brevoKey(), "content-type": "application/json", accept: "application/json" },
     body: JSON.stringify({
-      sender: { name: process.env.MAIL_FROM_NAME || "NATU · Proyectos NPD", email: process.env.MAIL_FROM },
+      sender: { name: fromName(), email: process.env.MAIL_FROM },
       to: msg.to.map((email) => ({ email })),
       subject: msg.subject,
       htmlContent: msg.html,
