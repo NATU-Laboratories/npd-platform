@@ -8,6 +8,7 @@ import { canEditSection, deptStartPhases, loadProjectRow, saveSection, setFormul
 import { z } from "zod";
 import { deptNotes } from "@/db/schema";
 import { logActivity } from "@/lib/server/activity";
+import { deptStageName } from "@/lib/server/lab";
 import type { ActionResult } from "./projects";
 
 async function run<T>(name: string, projectId: string, fn: () => Promise<T>): Promise<ActionResult<T>> {
@@ -41,7 +42,7 @@ export async function transitionDeptAction(
   return run("transitionDept", projectId, async () => transitionDept(await requireActionUser(), projectId, departmentId, targetId, comment, values, referenceId, lab));
 }
 
-/** Nota en la bitácora de un departamento (Laboratorio: trabajo en curso, esperas y su motivo). */
+/** Nota en la bitácora de un departamento (trabajo en curso; Laboratorio también esperas y su motivo). Queda en el historial. */
 export async function addDeptNoteAction(projectId: string, departmentKey: string, body: string, isWait: boolean, referenceId?: number) {
   return run("addDeptNote", projectId, async () => {
     const u = await requireActionUser();
@@ -51,8 +52,11 @@ export async function addDeptNoteAction(projectId: string, departmentKey: string
     const phase = (await deptStartPhases())[key];
     if (phase == null || !canEditSection(u, key, phase, p)) throw new SheetError("Solo el departamento puede escribir en su bitácora");
     const text = z.string().trim().min(1, "Escribe la nota").max(4000).parse(body);
-    await db.insert(deptNotes).values({ projectId, departmentKey: key, referenceId: referenceId ?? 0, body: text, isWait: !!isWait, authorId: u.id });
-    await logActivity({ projectId, actorId: u.id, action: "dept.note", entity: "department", entityId: key, diff: { body: text.slice(0, 300), wait: !!isWait } });
+    // Las esperas solo cuentan en Laboratorio (avisos de Alexia)
+    const wait = key === "idi" && !!isWait;
+    const { department, stage } = await deptStageName(projectId, key, referenceId ?? 0);
+    await db.insert(deptNotes).values({ projectId, departmentKey: key, referenceId: referenceId ?? 0, body: text, isWait: wait, stage, authorId: u.id });
+    await logActivity({ projectId, actorId: u.id, action: "dept.note", entity: "department", entityId: key, diff: { department, stage, body: text.slice(0, 2000), wait } });
   });
 }
 

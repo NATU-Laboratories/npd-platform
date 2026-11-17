@@ -265,6 +265,7 @@ export const SHEET_SECTIONS: SheetSection[] = [
             type: "select",
             options: [
               { value: "estuche", label: "Estuche" },
+              { value: "estuche_interior", label: "Estuche + interior" },
               { value: "caja", label: "Caja / cofre" },
               { value: "blister", label: "Blíster" },
               { value: "sin", label: "Sin packaging secundario" },
@@ -653,7 +654,7 @@ export const SHEET_SECTIONS: SheetSection[] = [
   {
     key: "aprovisionamiento",
     title: "Aprovisionamiento",
-    description: "Compra de frascos, tapones, válvulas, etiquetas, estuches y cajas master para el proyecto.",
+    description: "Compra de los componentes del proyecto. Los proveedores y precios de cada componente van en «Componentes y proveedores».",
     dept: "compras",
     phase: 3,
     // Empieza con Laboratorio pero solo hace falta terminar antes de pasar a producción
@@ -663,7 +664,8 @@ export const SHEET_SECTIONS: SheetSection[] = [
       {
         title: "Pedidos de materiales",
         fields: [
-          { key: "suppliersLeadTimes", label: "Proveedores y plazos por componente", type: "textarea", placeholder: "Frasco: proveedor, plazo… · Tapón: … · Etiqueta: … · Estuche: … · Caja master: …" },
+          // Lo usa un estado de Compras configurado en Backoffice; los proveedores y precios van en «Componentes y proveedores»
+          { key: "suppliersLeadTimes", label: "Plazos por componente", type: "textarea", placeholder: "Frasco: 4 semanas · Tapón: … · Etiqueta: … · Estuche: …" },
           { key: "ordersPlaced", label: "Pedidos lanzados", type: "bool" },
           { key: "orderDate", label: "Fecha de pedido", type: "date" },
           { key: "expectedArrival", label: "Llegada prevista de materiales", type: "date" },

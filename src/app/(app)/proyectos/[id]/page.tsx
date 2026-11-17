@@ -21,6 +21,9 @@ import { applicableFields, isFieldFilled, MIN_ANNUAL_UNITS_PL } from "@/lib/brie
 import { canManageReferences, labelInfoMissing } from "@/lib/server/references";
 import { ReferencesCard } from "@/components/project/references-card";
 import { needsOlfactory } from "@/lib/brief/schema";
+import { asc, eq } from "drizzle-orm";
+import { db } from "@/db";
+import { suppliers } from "@/db/schema";
 import {
   CATEGORY_LABEL,
   FILE_TAGS,
@@ -42,7 +45,9 @@ import { canCompleteLabelInfo, canDecideGate, canEditBrief, canManageProject, ca
 import { getActiveUsers, getAllCatalogs, getBrands, getDepartments } from "@/lib/server/catalogs";
 import { loadProjectDetail, templatesWithDepartments, templateScore } from "@/lib/server/project-detail";
 import { getSettings } from "@/lib/server/settings";
-import { canSeeLabFormula, listNotes, listSamples } from "@/lib/server/lab";
+import { canSeeLabFormula, listAllNotes, listSamples } from "@/lib/server/lab";
+import { canEditPurchasing, listComponents } from "@/lib/server/purchasing";
+import { ComponentsCard } from "@/components/purchasing/components-card";
 import { canEditSection, getFormulaTargetCost, loadSheet, pendingUpTo } from "@/lib/server/sheet";
 import { canTransition } from "@/lib/server/state-machine";
 import { cn, formatBytes, formatDate, formatEuro, formatNumber } from "@/lib/utils";
@@ -88,8 +93,18 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
   const seeFormulaCost = canSeeFormulaCost(u);
   const formulaCost = seeFormulaCost ? await getFormulaTargetCost(p.id) : null;
   // Laboratorio: muestras (fórmula solo para Laboratorio, Calidad y admin) y bitácora
-  const [labSampleRows, labNoteRows] = await Promise.all([listSamples(u, p.id), listNotes(p.id, "idi")]);
-  const lab = { samples: labSampleRows, notes: labNoteRows, canSeeFormula: canSeeLabFormula(u) };
+  // Bitácoras de cada departamento (la de Laboratorio va con sus muestras)
+  const [labSampleRows, deptNoteRows] = await Promise.all([listSamples(u, p.id), listAllNotes(p.id)]);
+  const lab = { samples: labSampleRows, notes: deptNoteRows.idi ?? [], canSeeFormula: canSeeLabFormula(u) };
+  // Compras: componentes con sus proveedores (los proveedores activos solo si puede editar)
+  const purchasingEditable = await canEditPurchasing(u, p);
+  const purchasing = {
+    canEdit: purchasingEditable,
+    components: await listComponents(p.id),
+    suppliers: purchasingEditable
+      ? await db.select({ id: suppliers.id, name: suppliers.name, emails: suppliers.emails }).from(suppliers).where(eq(suppliers.isActive, true)).orderBy(asc(suppliers.name))
+      : [],
+  };
   const lookups: Lookups = {
     catalog: Object.fromEntries(Object.entries(catalogs).map(([k, v]) => [k, Object.fromEntries(v.map((o) => [o.value, o.label]))])),
     brands: Object.fromEntries(brands.map((x) => [x.id, x.name])),
@@ -343,6 +358,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
         editable={Object.fromEntries(sheet.cards.map((c) => [c.dept.key, canEditSection(u, c.dept.key, c.phase, p)]))}
         mine={u.departmentKeys.filter(Boolean)}
         lab={lab}
+        notes={deptNoteRows}
         actions={[
           ...(canDecide ? [{ label: "Revisar la solicitud (P1)", hint: "Apruébala, pide más información o recházala con el botón de arriba." }] : []),
           ...(canQuote ? [{ label: "Enviar la cotización al comercial", hint: "Con el botón «Enviar cotización al comercial» de arriba." }] : []),
@@ -608,6 +624,18 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
               {...(seeFormulaCost ? { formulaCost } : {})}
               mine={u.departmentKeys.filter(Boolean)}
               lab={lab}
+              notes={deptNoteRows}
+            />
+          )}
+
+          {/* 5. Compras: desglose de componentes y proveedores */}
+          {showSheet && (
+            <ComponentsCard
+              projectId={p.id}
+              components={purchasing.components}
+              suppliers={purchasing.suppliers}
+              canEdit={purchasing.canEdit}
+              mikado={b.format === "mikado" || p.category === "ambient"}
             />
           )}
 

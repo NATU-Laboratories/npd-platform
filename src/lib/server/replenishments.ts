@@ -329,7 +329,7 @@ export async function previewCreationEmails(u: CurrentUser, raw: unknown): Promi
 }
 
 /** Busca o crea un proveedor por nombre (los nuevos se dan de alta al crear la solicitud). */
-async function resolveSupplier(tx: DbOrTx, n: { name: string; email?: string }) {
+export async function resolveSupplier(tx: DbOrTx, n: { name: string; email?: string }) {
   const name = n.name.trim();
   const [found] = await tx.select().from(suppliers).where(sql`lower(${suppliers.name}) = ${name.toLowerCase()}`);
   if (found) {
