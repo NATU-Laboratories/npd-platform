@@ -70,7 +70,7 @@ export async function listRepNotes(repId: string): Promise<NoteView[]> {
     .where(eq(deptNotes.replenishmentId, repId))
     .orderBy(desc(deptNotes.createdAt))
     .limit(100);
-  return rows.map(({ n, by }) => ({ id: n.id, referenceId: 0, body: n.body, isWait: n.isWait, createdAt: n.createdAt.toISOString(), by }));
+  return rows.map(({ n, by }) => ({ id: n.id, referenceId: 0, body: n.body, isWait: n.isWait, stage: n.stage, createdAt: n.createdAt.toISOString(), by }));
 }
 
 /** Arranca (o vuelve a arrancar) Laboratorio en su primer subestado. */

@@ -21,8 +21,15 @@ describe("dirección de respuesta de presupuestos", () => {
 
   it("reconoce la dirección entre los destinatarios y rechaza firmas falsas", () => {
     const a = mod.quoteReplyAddress("projects@natuaromatic.com", REP, 12)!;
-    expect(mod.findReplyTarget(`compras@natuaromatic.com ${a.toUpperCase()}`)).toEqual({ repId: REP, supplierId: 12 });
+    expect(mod.findReplyTarget(`compras@natuaromatic.com ${a.toUpperCase()}`)).toEqual({ kind: "replenishment", id: REP, supplierId: 12 });
     expect(mod.findReplyTarget(a.replace("-12-", "-13-"))).toBeNull();
+  });
+
+  it("distingue las de componentes de proyecto y no admite cambiar el tipo", () => {
+    const a = mod.quoteReplyAddress("projects@natuaromatic.com", REP, 7, "project")!;
+    expect(a).toMatch(/^projects\+cpr-/);
+    expect(mod.findReplyTarget(a)).toEqual({ kind: "project", id: REP, supplierId: 7 });
+    expect(mod.findReplyTarget(a.replace("+cpr-", "+cot-"))).toBeNull();
   });
 
   it("sin buzón válido no hay dirección", () => {

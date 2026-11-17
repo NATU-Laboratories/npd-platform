@@ -8,7 +8,7 @@ import type { DeptCard, DeptState, SheetEntry } from "@/lib/server/sheet";
 import { applicable, checkField, fieldApplies, fieldLabelInSection, formatValue, resolveFieldRef, sanitizeData, type SheetCtx, type SheetData, type SheetField } from "@/lib/sheet/sections";
 import { cn, formatBytes, formatDate } from "@/lib/utils";
 import { DeptTransition, type LabMode } from "./dept-transition";
-import { LabNotes, LabSamples } from "./lab-box";
+import { DeptNotes, LabNotes, LabSamples } from "./lab-box";
 import type { NoteView, SampleView } from "@/lib/server/lab";
 import { FormulaCostBox } from "./formula-cost";
 import { Button } from "@/components/ui/button";
@@ -233,7 +233,17 @@ type PanelCtx = {
   now: number;
   /** Laboratorio: muestras y bitácora (la fórmula ya viene vacía si no se puede ver). */
   lab?: { samples: SampleView[]; notes: NoteView[]; canSeeFormula: boolean };
+  /** Bitácoras del resto de departamentos, por clave. */
+  notes?: Record<string, NoteView[]>;
 };
+
+/** Bitácora de un departamento que no es Laboratorio (el de Laboratorio va con sus muestras). */
+function NotesBlock({ c, canEdit, pc, compact }: { c: DeptCard; canEdit: boolean; pc: PanelCtx; compact?: boolean }) {
+  if (c.dept.key === "idi" || !c.dept.key) return null;
+  const notes = pc.notes?.[c.dept.key] ?? [];
+  if (!canEdit && !notes.length) return null;
+  return <DeptNotes projectId={pc.projectId} departmentKey={c.dept.key} title={`Bitácora de ${c.dept.name}`} notes={notes} canWrite={canEdit} limit={compact ? 3 : 10} />;
+}
 
 /** Modo de la ventana de Laboratorio según el estado al que se avanza. */
 function labModeFor(c: DeptCard, next: { name: string; isFinal: boolean } | null | undefined, refId: number, pc: PanelCtx): LabMode | undefined {
@@ -450,6 +460,7 @@ export function SheetPanel({
   formulaCost,
   mine = [],
   lab,
+  notes,
 }: PanelCtx & {
   editable: Record<string, boolean>;
   /** Coste objetivo de la fórmula (confidencial); undefined si el usuario no puede verlo. */
@@ -457,7 +468,7 @@ export function SheetPanel({
   /** Departamentos de la persona: van primero y destacados. */
   mine?: string[];
 }) {
-  const pc: PanelCtx = { projectId, cards, entries, ctx, files, maxMb, now, lab };
+  const pc: PanelCtx = { projectId, cards, entries, ctx, files, maxMb, now, lab, notes };
   const ordered = [...cards.filter((c) => mine.includes(c.dept.key)), ...cards.filter((c) => !mine.includes(c.dept.key))];
   const firstOther = ordered.findIndex((c) => !mine.includes(c.dept.key));
   return (
@@ -502,6 +513,7 @@ export function SheetPanel({
               {c.dept.key === "idi" && formulaCost !== undefined && <FormulaCostBox projectId={projectId} value={formulaCost} />}
 
               {c.dept.key === "idi" && c.active && <LabBlock c={c} refId={null} canEdit={canEdit} pc={pc} />}
+              {c.active && <NotesBlock c={c} canEdit={canEdit} pc={pc} />}
 
               {!c.steps.length && <p className="text-sm text-slate-500">Este departamento no tiene estados configurados (Backoffice → Estados de departamento).</p>}
 
@@ -648,6 +660,7 @@ export function MyWork({
                   ))
               )}
               <LabBlock c={c} refId={null} canEdit={canEdit} pc={ctx} compact />
+              <NotesBlock c={c} canEdit={canEdit} pc={ctx} compact />
             </div>
           );
         })}

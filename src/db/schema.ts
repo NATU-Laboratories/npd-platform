@@ -913,10 +913,60 @@ export const deptNotes = pgTable(
     body: text("body").notNull(),
     /** Nota de espera (motivo por el que el trabajo está parado) */
     isWait: boolean("is_wait").notNull().default(false),
+    /** Estado del departamento cuando se escribió la nota (p. ej. «Desarrollo de muestras»). */
+    stage: text("stage"),
     authorId: uuid("author_id").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("dept_notes_project_idx").on(t.projectId, t.departmentKey)],
+);
+
+/**
+ * Desglose de componentes del proyecto (Compras / Aprovisionamiento): frasco, tapón, etiqueta…
+ * Cada uno se cotiza con hasta 3 proveedores y Compras elige uno.
+ */
+export const projectComponents = pgTable(
+  "project_components",
+  {
+    id: serial("id").primaryKey(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    /** Tipo de componente (catálogo en lib/purchasing/components.ts). */
+    component: text("component").notNull(),
+    description: text("description"),
+    sort: integer("sort").notNull().default(0),
+    /** Cotización elegida y por qué. */
+    chosenQuoteId: integer("chosen_quote_id"),
+    choiceComment: text("choice_comment"),
+    chosenAt: timestamp("chosen_at", { withTimezone: true }),
+    chosenBy: uuid("chosen_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("project_components_project_idx").on(t.projectId)],
+);
+
+/** Cotización de un componente con uno de sus proveedores (hasta 3 por componente). */
+export const componentQuotes = pgTable(
+  "component_quotes",
+  {
+    id: serial("id").primaryKey(),
+    componentId: integer("component_id")
+      .notNull()
+      .references(() => projectComponents.id, { onDelete: "cascade" }),
+    /** Posición del proveedor: 1, 2 o 3. */
+    slot: integer("slot").notNull(),
+    supplierId: integer("supplier_id")
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "restrict" }),
+    /** pending (sin pedir) · requested (pedida al proveedor) · received */
+    status: text("status").notNull().default("pending"),
+    price: numeric("price", { precision: 12, scale: 4 }),
+    notes: text("notes"),
+    requestedAt: timestamp("requested_at", { withTimezone: true }),
+    receivedAt: timestamp("received_at", { withTimezone: true }),
+  },
+  (t) => [uniqueIndex("component_quotes_slot_idx").on(t.componentId, t.slot), index("component_quotes_supplier_idx").on(t.supplierId)],
 );
 
 /** Avisos proactivos de Alexia ya enviados (para no repetirlos): riesgo de proyectos, proveedores sin respuesta… */

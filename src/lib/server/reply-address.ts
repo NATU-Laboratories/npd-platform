@@ -18,25 +18,38 @@ export async function inboxMailbox(): Promise<string | null> {
   return (sender_mailbox || process.env.MAIL_SENDER || "").trim().toLowerCase() || null;
 }
 
-const sign = (repId: string, supplierId: number) => createHmac("sha256", secret()).update(`${repId}:${supplierId}`).digest("hex").slice(0, 12);
+export type ReplyKind = "replenishment" | "project";
+const PREFIX: Record<ReplyKind, string> = { replenishment: "cot", project: "cpr" };
+const KIND_OF: Record<string, ReplyKind> = { cot: "replenishment", cpr: "project" };
 
-/** `buzon@dominio` → `buzon+cot-<reposición>-<proveedor>-<firma>@dominio`. */
-export function quoteReplyAddress(mailbox: string | null, repId: string, supplierId: number) {
+// Las reposiciones firman «id:proveedor» (formato original); los proyectos llevan además el tipo
+const sign = (kind: ReplyKind, id: string, supplierId: number) =>
+  createHmac("sha256", secret())
+    .update(kind === "replenishment" ? `${id}:${supplierId}` : `${kind}:${id}:${supplierId}`)
+    .digest("hex")
+    .slice(0, 12);
+
+/**
+ * `buzon@dominio` → `buzon+cot-<reposición>-<proveedor>-<firma>@dominio` (reposiciones) o
+ * `buzon+cpr-<proyecto>-<proveedor>-<firma>@dominio` (componentes de un proyecto).
+ */
+export function quoteReplyAddress(mailbox: string | null, id: string, supplierId: number, kind: ReplyKind = "replenishment") {
   const m = /^([^@+\s]+)@([^@\s]+)$/.exec((mailbox ?? "").trim().toLowerCase());
   if (!m || !secret()) return null;
-  return `${m[1]}+cot-${repId.replace(/-/g, "")}-${supplierId}-${sign(repId, supplierId)}@${m[2]}`;
+  return `${m[1]}+${PREFIX[kind]}-${id.replace(/-/g, "")}-${supplierId}-${sign(kind, id, supplierId)}@${m[2]}`;
 }
 
 /** Busca una dirección de respuesta válida en un texto (destinatarios del email recibido). */
-export function findReplyTarget(text: string): { repId: string; supplierId: number } | null {
-  const re = /cot-([0-9a-f]{32})-(\d+)-([0-9a-f]{12})@([a-z0-9.-]+)/gi;
+export function findReplyTarget(text: string): { kind: ReplyKind; id: string; supplierId: number } | null {
+  const re = /(cot|cpr)-([0-9a-f]{32})-(\d+)-([0-9a-f]{12})@([a-z0-9.-]+)/gi;
   for (const m of text.matchAll(re)) {
-    const hex = m[1]!.toLowerCase();
-    const repId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-    const supplierId = Number(m[2]);
-    const a = Buffer.from(sign(repId, supplierId));
-    const b = Buffer.from(m[3]!.toLowerCase());
-    if (a.length === b.length && timingSafeEqual(a, b)) return { repId, supplierId };
+    const kind = KIND_OF[m[1]!.toLowerCase()]!;
+    const hex = m[2]!.toLowerCase();
+    const id = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+    const supplierId = Number(m[3]);
+    const a = Buffer.from(sign(kind, id, supplierId));
+    const b = Buffer.from(m[4]!.toLowerCase());
+    if (a.length === b.length && timingSafeEqual(a, b)) return { kind, id, supplierId };
   }
   return null;
 }

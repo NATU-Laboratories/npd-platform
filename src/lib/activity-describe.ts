@@ -165,6 +165,37 @@ export function describeActivity(
               : `pasó ${diff.department} de «${diff.from}» a «${diff.to}»`,
         detail: (diff.comment as string) || null,
       };
+    case "dept.note":
+      return {
+        group: "ficha",
+        text: `escribió en la bitácora${diff.department ? ` de ${diff.department}` : ""}${diff.stage ? ` («${diff.stage}»)` : ""}${diff.wait ? " · espera" : ""}`,
+        detail: (diff.body as string) || null,
+      };
+    case "purchasing.component_added":
+    case "purchasing.component_removed":
+      return { group: "ficha", text: `${ACTION_LABEL[a.action]}: ${diff.component ?? ""}` };
+    case "purchasing.quote_requested":
+      return { group: "ficha", text: `pidió cotización de componentes a ${(diff.suppliers as string[] | undefined)?.join(", ") ?? "proveedores"}` };
+    case "purchasing.quote_registered":
+      return {
+        group: "ficha",
+        text: `registró la cotización de ${diff.supplier ?? "un proveedor"} para ${diff.component ?? "un componente"}${diff.price != null ? ` (${Number(diff.price).toLocaleString("es-ES", { maximumFractionDigits: 4 })} €/ud)` : ""}`,
+        detail: (diff.notes as string) || null,
+      };
+    case "purchasing.supplier_chosen":
+      return {
+        group: "decisiones",
+        text: `eligió a ${diff.supplier ?? "un proveedor"} para ${diff.component ?? "un componente"}${diff.price != null ? ` (${Number(diff.price).toLocaleString("es-ES", { maximumFractionDigits: 4 })} €/ud)` : ""}`,
+        detail: diff.comment ? `Motivo: ${diff.comment}` : null,
+      };
+    case "purchasing.supplier_unchosen":
+      return { group: "decisiones", text: `quitó el proveedor elegido de ${diff.component ?? "un componente"}` };
+    case "purchasing.supplier_reply":
+      return {
+        group: "ficha",
+        text: `${diff.supplier ?? "Un proveedor"} respondió a la petición de cotización${(diff.registered as string[] | undefined)?.length ? `: ${(diff.registered as string[]).join("; ")}` : ""}`,
+        detail: (diff.summary as string) || (diff.body as string)?.slice(0, 1000) || null,
+      };
     case "sheet.done":
       return {
         group: "ficha",

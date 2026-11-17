@@ -17,6 +17,7 @@ import { addComment, canAccessReplenishments, canActAs, departmentRecipients, li
 import { normalizeText, searchTokens } from "./fuzzy";
 import { refTitle } from "./references";
 import { canEditSection, deptStartPhases, loadProjectRow, sectionDeptKeys, sheetContext, sheetRefsFor, setSheetField } from "./sheet";
+import { deptStageName } from "./lab";
 
 /**
  * Acciones que Alexia puede hacer por una persona. Nunca se ejecutan al momento:
@@ -419,8 +420,9 @@ async function execute(u: CurrentUser, a: Row): Promise<string> {
       const proj = await loadProjectRow(subject!.id);
       const phase = (await deptStartPhases()).idi;
       if (!proj || phase == null || !canEditSection(u, "idi", phase, proj)) throw new Error("Solo Laboratorio / I+D puede escribir en su bitácora.");
-      await db.insert(deptNotes).values({ projectId: subject!.id, departmentKey: "idi", body, isWait, authorId: u.id });
-      await logActivity({ projectId: subject!.id, actorId: u.id, action: "dept.note", entity: "project", entityId: subject!.id, diff: { department: "idi", wait: isWait, via: "Alexia" } });
+      const { department, stage } = await deptStageName(subject!.id, "idi");
+      await db.insert(deptNotes).values({ projectId: subject!.id, departmentKey: "idi", body, isWait, stage, authorId: u.id });
+      await logActivity({ projectId: subject!.id, actorId: u.id, action: "dept.note", entity: "project", entityId: subject!.id, diff: { department, stage, body: body.slice(0, 2000), wait: isWait, via: "Alexia" } });
     }
     return `Apuntado en la bitácora de Laboratorio de ${subject!.code}.`;
   }

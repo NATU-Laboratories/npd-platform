@@ -333,6 +333,8 @@ Botón destacado: **+ Nueva solicitud** (abre el asistente).
 6. **Actividad** (timeline único, filtrable): comentarios, peticiones de info y respuestas, decisiones en puertas (con quién, cuándo y motivo), cambios de estado de tareas, devoluciones, ediciones de campos (valor anterior → nuevo), subidas de archivos.
 7. **Comentarios**: generales o vinculados a una tarea; menciones `@usuario` y `@departamento`; adjuntos en comentarios.
 8. **Archivos**: listado sincronizado con la carpeta de SharePoint (por subcarpeta de fase) + enlace "Abrir en SharePoint" + subida desde la ficha.
+9. **Bitácora por departamento**: cada departamento activo escribe notas de su trabajo; cada nota guarda el estado del departamento en ese momento y aparece en el historial. Laboratorio puede marcar además esperas (con su motivo).
+10. **Componentes y proveedores** (Compras / Aprovisionamiento, desde la cotización): desglose de piezas del proyecto añadidas con «Añadir componente» (frasco, tapón, válvula, anilla, varillas o flor de mikado, etiqueta, etiqueta base, estuche, caja logística, caja expositora). Cada componente admite hasta 3 proveedores; se les pide cotización por email con la dirección de respuesta de Alexia (`projects+cpr-…`), que anota los precios. Compras elige uno de los proveedores con un comentario opcional del porqué; todo queda en el historial.
 
 **Edición**: los campos del brief son editables por el solicitante (mientras esté en *Solicitado/Pendiente de info*) y por Marketing/Admin en cualquier momento. Toda edición queda auditada.
 

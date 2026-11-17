@@ -21,6 +21,7 @@ import {
   roles,
   userRoles,
   users,
+  componentQuotes,
 } from "@/db/schema";
 import type { AppSettings } from "@/lib/catalog-defaults";
 import { EDITABLE_ROLES, TEST_EMAIL_DOMAIN } from "@/lib/labels";
@@ -410,7 +411,9 @@ export async function deleteSupplierAction(id: number): Promise<{ ok: boolean; e
   const admin = await requireAdminAction();
   const sid = z.number().int().positive().parse(id);
   const [used] = await db.select({ id: replenishmentItems.id }).from(replenishmentItems).where(eq(replenishmentItems.supplierId, sid)).limit(1);
-  if (used) {
+  // También si está en el desglose de componentes de algún proyecto: se desactiva en lugar de borrarlo
+  const [inProject] = used ? [] : await db.select({ id: componentQuotes.id }).from(componentQuotes).where(eq(componentQuotes.supplierId, sid)).limit(1);
+  if (used || inProject) {
     await db.update(suppliers).set({ isActive: false }).where(eq(suppliers.id, sid));
     await audit(admin.id, "admin.supplier.deactivated", "supplier", sid);
     revalidatePath("/admin/proveedores");

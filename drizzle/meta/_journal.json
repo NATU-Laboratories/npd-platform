@@ -148,6 +148,13 @@
       "when": 1794226839427,
       "tag": "0020_notification_attachments",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1794924807938,
+      "tag": "0021_componentes_y_bitacoras",
+      "breakpoints": true
     }
   ]
 }

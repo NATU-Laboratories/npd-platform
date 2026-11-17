@@ -17,7 +17,33 @@ const STATUS: Record<string, [string, string]> = {
 };
 
 /** Bitácora de Laboratorio: notas del trabajo en curso y esperas (con su motivo). */
-export function LabNotes({ projectId, repId, notes, canWrite, limit }: { projectId?: string; repId?: string; notes: NoteView[]; canWrite: boolean; limit?: number }) {
+export function LabNotes(props: { projectId?: string; repId?: string; notes: NoteView[]; canWrite: boolean; limit?: number }) {
+  return <DeptNotes {...props} departmentKey="idi" title="Bitácora de Laboratorio" allowWait />;
+}
+
+/**
+ * Bitácora de un departamento: comentarios del trabajo en sus distintos estados (quedan también en
+ * el historial del proyecto). En Laboratorio, además, las esperas con su motivo.
+ */
+export function DeptNotes({
+  projectId,
+  repId,
+  departmentKey,
+  title,
+  allowWait = false,
+  notes,
+  canWrite,
+  limit,
+}: {
+  projectId?: string;
+  repId?: string;
+  departmentKey: string;
+  title: string;
+  allowWait?: boolean;
+  notes: NoteView[];
+  canWrite: boolean;
+  limit?: number;
+}) {
   const router = useRouter();
   const [body, setBody] = React.useState("");
   const [wait, setWait] = React.useState(false);
@@ -26,7 +52,7 @@ export function LabNotes({ projectId, repId, notes, canWrite, limit }: { project
   const shown = limit && !all ? notes.slice(0, limit) : notes;
   async function add() {
     setBusy(true);
-    const res = repId ? await addRepLabNoteAction(repId, body, wait) : await addDeptNoteAction(projectId!, "idi", body, wait);
+    const res = repId ? await addRepLabNoteAction(repId, body, wait) : await addDeptNoteAction(projectId!, departmentKey, body, allowWait && wait);
     setBusy(false);
     if (!res.ok) return toast.error(res.error);
     setBody("");
@@ -35,22 +61,26 @@ export function LabNotes({ projectId, repId, notes, canWrite, limit }: { project
   }
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Bitácora de Laboratorio</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</p>
       {canWrite && (
         <div className="flex flex-col gap-2">
           <Textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            placeholder={wait ? "Motivo de la espera (p. ej. a la espera de la materia prima X)…" : "Qué estáis haciendo, pruebas, avances…"}
-            aria-label="Nota para la bitácora de Laboratorio"
+            placeholder={wait ? "Motivo de la espera (p. ej. a la espera de la materia prima X)…" : "Qué estáis haciendo, avances, incidencias…"}
+            aria-label={`Nota para la ${title.toLowerCase()}`}
             maxLength={4000}
             className="min-h-14"
           />
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-slate-700">
-              <input type="checkbox" checked={wait} onChange={(e) => setWait(e.target.checked)} className="size-4 accent-amber-500" />
-              Es una espera (el trabajo está parado)
-            </label>
+            {allowWait ? (
+              <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-slate-700">
+                <input type="checkbox" checked={wait} onChange={(e) => setWait(e.target.checked)} className="size-4 accent-amber-500" />
+                Es una espera (el trabajo está parado)
+              </label>
+            ) : (
+              <span className="text-xs text-slate-500">La nota queda también en el historial del proyecto.</span>
+            )}
             <Button size="sm" variant="secondary" onClick={add} disabled={busy || !body.trim()}>
               {busy ? <Loader2 className="animate-spin" /> : <Send aria-hidden />} Añadir nota
             </Button>
@@ -69,6 +99,7 @@ export function LabNotes({ projectId, repId, notes, canWrite, limit }: { project
             <span className="whitespace-pre-line">{n.body}</span>
             <span className="mt-0.5 block text-[11px] text-slate-400">
               {n.by ?? "—"} · {formatDate(n.createdAt, true)}
+              {n.stage ? ` · ${n.stage}` : ""}
             </span>
           </li>
         ))}
