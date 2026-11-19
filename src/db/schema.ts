@@ -962,6 +962,8 @@ export const componentQuotes = pgTable(
     /** pending (sin pedir) · requested (pedida al proveedor) · received */
     status: text("status").notNull().default("pending"),
     price: numeric("price", { precision: 12, scale: 4 }),
+    /** Plazo de entrega que da el proveedor (p. ej. «4 semanas»). */
+    leadTime: text("lead_time"),
     notes: text("notes"),
     requestedAt: timestamp("requested_at", { withTimezone: true }),
     receivedAt: timestamp("received_at", { withTimezone: true }),

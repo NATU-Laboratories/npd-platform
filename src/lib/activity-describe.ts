@@ -180,7 +180,7 @@ export function describeActivity(
       return {
         group: "ficha",
         text: `registró la cotización de ${diff.supplier ?? "un proveedor"} para ${diff.component ?? "un componente"}${diff.price != null ? ` (${Number(diff.price).toLocaleString("es-ES", { maximumFractionDigits: 4 })} €/millar)` : ""}`,
-        detail: (diff.notes as string) || null,
+        detail: [diff.leadTime ? `Plazo: ${diff.leadTime}` : null, diff.notes as string].filter(Boolean).join(" · ") || null,
       };
     case "purchasing.supplier_chosen":
       return {

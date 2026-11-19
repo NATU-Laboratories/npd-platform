@@ -1,0 +1,1 @@
+ALTER TABLE "component_quotes" ADD COLUMN "lead_time" text;

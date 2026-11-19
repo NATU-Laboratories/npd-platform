@@ -305,10 +305,10 @@ async function handleProjectReply(email: InboundEmail, target: Target): Promise<
           ? extracted.items[0]
           : extracted.items.find((e) => normalizeText(labelOf(x)).includes(normalizeText(e.element)) || normalizeText(e.element).includes(normalizeText(COMPONENT_LABEL[x.c.component] ?? x.c.component)));
       if (!match || match.price == null) continue;
-      const notes = [match.notes, extracted.leadTime ? `Plazo: ${extracted.leadTime}` : null, "Anotado por Alexia desde el email del proveedor."].filter(Boolean).join(" · ").slice(0, 1000);
+      const notes = [match.notes, "Anotado por Alexia desde el email del proveedor."].filter(Boolean).join(" · ").slice(0, 1000);
       await db
         .update(componentQuotes)
-        .set({ price: String(Math.round(match.price * 10000) / 10000), notes, status: "received", receivedAt: new Date() })
+        .set({ price: String(Math.round(match.price * 10000) / 10000), leadTime: extracted.leadTime?.slice(0, 100) || null, notes, status: "received", receivedAt: new Date() })
         .where(eq(componentQuotes.id, x.q.id));
       registered.push(`${labelOf(x)}: ${fmtPrice(match.price)}`);
     }
