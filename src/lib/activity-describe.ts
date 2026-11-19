@@ -80,7 +80,7 @@ export function describeActivity(
     case "quote.sent":
       return {
         group: "decisiones",
-        text: `envió la cotización al comercial${diff.amount != null ? ` (${Number(diff.amount).toLocaleString("es-ES", { style: "currency", currency: "EUR" })})` : ""}`,
+        text: `${diff.ownBrand ? "calculó los costes (cotización)" : "envió la cotización al comercial"}${diff.amount != null ? ` (${Number(diff.amount).toLocaleString("es-ES", { style: "currency", currency: "EUR" })})` : ""}`,
         detail: (diff.comment as string) || null,
       };
     case "phase.advanced":
@@ -179,13 +179,13 @@ export function describeActivity(
     case "purchasing.quote_registered":
       return {
         group: "ficha",
-        text: `registró la cotización de ${diff.supplier ?? "un proveedor"} para ${diff.component ?? "un componente"}${diff.price != null ? ` (${Number(diff.price).toLocaleString("es-ES", { maximumFractionDigits: 4 })} €/ud)` : ""}`,
+        text: `registró la cotización de ${diff.supplier ?? "un proveedor"} para ${diff.component ?? "un componente"}${diff.price != null ? ` (${Number(diff.price).toLocaleString("es-ES", { maximumFractionDigits: 4 })} €/millar)` : ""}`,
         detail: (diff.notes as string) || null,
       };
     case "purchasing.supplier_chosen":
       return {
         group: "decisiones",
-        text: `eligió a ${diff.supplier ?? "un proveedor"} para ${diff.component ?? "un componente"}${diff.price != null ? ` (${Number(diff.price).toLocaleString("es-ES", { maximumFractionDigits: 4 })} €/ud)` : ""}`,
+        text: `eligió a ${diff.supplier ?? "un proveedor"} para ${diff.component ?? "un componente"}${diff.price != null ? ` (${Number(diff.price).toLocaleString("es-ES", { maximumFractionDigits: 4 })} €/millar)` : ""}`,
         detail: diff.comment ? `Motivo: ${diff.comment}` : null,
       };
     case "purchasing.supplier_unchosen":

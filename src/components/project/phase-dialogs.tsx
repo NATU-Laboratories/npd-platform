@@ -1,5 +1,5 @@
 "use client";
-import { ArrowRight, CheckCircle2, Factory, Loader2, PauseCircle, RotateCcw, Send, Wallet, XCircle } from "lucide-react";
+import { ArrowRight, Calculator, CheckCircle2, Factory, Loader2, PauseCircle, RotateCcw, Send, Wallet, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
@@ -36,6 +36,14 @@ function useAction() {
 
 // ─── Fase 1: enviar cotización ────────────────────────────────────────────
 
+/** Marca propia: los campos de la cotización son costes calculados por el equipo. */
+const OWN_BRAND_FIELDS: Record<string, { label: string; hint?: string; placeholder?: string }> = {
+  unitPrice: { label: "Coste unitario calculado", hint: "Fórmula, envase, packaging y fabricación." },
+  rrp: { label: "PVP objetivo" },
+  units: { label: "Unidades estimadas", hint: "Se precargan las del primer año del brief." },
+  conditions: { label: "Notas de costes", placeholder: "Desglose, supuestos, margen previsto, mínimos de proveedores…" },
+};
+
 /** Selector de dos opciones (único / por referencia). */
 function ModeChoice({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: [string, string][] }) {
   return (
@@ -60,8 +68,11 @@ export function QuoteDialog({
   formulaCost,
   references = [],
   modes,
+  ownBrand = false,
 }: {
   projectId: string;
+  /** Marca propia: sin cliente; «Cotizar» es el cálculo de costes del equipo y pasa a su aprobación interna (P2). */
+  ownBrand?: boolean;
   /** Comercial que creó la solicitud: único destinatario del aviso. */
   requesterName: string;
   /** Datos actuales de «Envase y packaging» (Marketing): se rellenan con las especificaciones cotizadas. */
@@ -96,7 +107,10 @@ export function QuoteDialog({
   const specGroups = quoteSpecGroups();
   const perRefPrice = multi && pricing === "per_reference";
   const perRefPack = multi && packaging === "per_reference";
-  const fields = section.groups.flatMap((g) => g.fields).filter((f) => f.key !== "finalUnitPrice" && !(perRefPrice && f.key === "unitPrice"));
+  const fields = section.groups
+    .flatMap((g) => g.fields)
+    .filter((f) => f.key !== "finalUnitPrice" && !(perRefPrice && f.key === "unitPrice") && !(ownBrand && f.key === "targetPrice"))
+    .map((f) => (ownBrand ? { ...f, ...OWN_BRAND_FIELDS[f.key] } : f));
   const priceReady = perRefPrice ? references.every((r) => refPrices[String(r.id)]?.trim()) : typeof data.unitPrice === "number";
   const curSpecs = perRefPack ? (refSpecs[specRef] ?? {}) : specs;
   const setSpec = (k: string, v: unknown) =>
@@ -118,24 +132,28 @@ export function QuoteDialog({
     >
       <DialogTrigger asChild>
         <Button>
-          <Send /> Enviar cotización al comercial
+          {ownBrand ? <Calculator /> : <Send />} {ownBrand ? "Cotizar" : "Enviar cotización al comercial"}
         </Button>
       </DialogTrigger>
       <DialogContent
-        title="Enviar cotización al comercial"
-        description={`Completa la cotización. Solo ${requesterName} (quien creó la solicitud) recibirá un email de aviso con estas condiciones para presentárselas al cliente. El proyecto pasa a «Valoración con cliente».`}
+        title={ownBrand ? "Cotizar · costes de marca propia" : "Enviar cotización al comercial"}
+        description={
+          ownBrand
+            ? "Calcula los costes del producto (no hay cliente). Al guardar, el proyecto pasa a «Aprobación de costes» y se avisa a quien los aprueba (P2)."
+            : `Completa la cotización. Solo ${requesterName} (quien creó la solicitud) recibirá un email de aviso con estas condiciones para presentárselas al cliente. El proyecto pasa a «Valoración con cliente».`
+        }
         wide
       >
         <div className="grid gap-4 sm:grid-cols-2">
           {multi && (
             <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-4 sm:col-span-2">
               <ModeChoice
-                label={`Precio (${references.length} referencias)`}
+                label={`${ownBrand ? "Coste" : "Precio"} (${references.length} referencias)`}
                 value={pricing}
                 onChange={(v) => setPricing(v as typeof pricing)}
                 options={[
-                  ["single", "Precio único"],
-                  ["per_reference", "Precio por referencia"],
+                  ["single", ownBrand ? "Coste único" : "Precio único"],
+                  ["per_reference", ownBrand ? "Coste por referencia" : "Precio por referencia"],
                 ]}
               />
               {perRefPrice && (
@@ -177,8 +195,12 @@ export function QuoteDialog({
           })}
           <div className="flex flex-col gap-4 border-t border-slate-100 pt-4 sm:col-span-2">
             <div>
-              <h3 className="text-sm font-semibold text-slate-900">Presupuesto desglosado</h3>
-              <p className="text-xs text-slate-500">Especificaciones cotizadas. Se incluyen en el email al comercial y quedan en «Envase y packaging» de Marketing.</p>
+              <h3 className="text-sm font-semibold text-slate-900">{ownBrand ? "Especificaciones de los costes" : "Presupuesto desglosado"}</h3>
+              <p className="text-xs text-slate-500">
+                {ownBrand
+                  ? "Envase y packaging con los que se han calculado los costes. Quedan en «Envase y packaging» de Marketing."
+                  : "Especificaciones cotizadas. Se incluyen en el email al comercial y quedan en «Envase y packaging» de Marketing."}
+              </p>
             </div>
             {multi && (
               <ModeChoice
@@ -231,7 +253,7 @@ export function QuoteDialog({
               <Field
                 label="Coste objetivo de la fórmula (€/litro) · confidencial"
                 htmlFor="quote-formula-cost"
-                hint="Solo lo ven Laboratorio / I+D, el gestor de proyectos y Operaciones. No aparece en la cotización ni le llega al comercial; Laboratorio lo recibe en su aviso para empezar a formular."
+                hint={`Solo lo ven Laboratorio / I+D, el gestor de proyectos y Operaciones. No aparece en la cotización${ownBrand ? "" : " ni le llega al comercial"}; Laboratorio lo recibe en su aviso para empezar a formular.`}
               >
                 <Input
                   id="quote-formula-cost"
@@ -246,10 +268,14 @@ export function QuoteDialog({
               </Field>
             </div>
           )}
-          <Field label="PDF de la cotización" hint="Opcional. Se guarda en «01 Cotización y valoración», junto al documento de cotización que genera la plataforma." className="sm:col-span-2">
+          <Field
+            label={ownBrand ? "Escandallo o cálculo de costes" : "PDF de la cotización"}
+            hint="Opcional. Se guarda en «01 Cotización y valoración», junto al documento de cotización que genera la plataforma."
+            className="sm:col-span-2"
+          >
             <Uploader projectId={projectId} phase={1} initial={files} maxMb={maxMb} defaultTag="cotizacion" showTags={false} compact />
           </Field>
-          <Field label="Mensaje para el comercial" hint="Opcional" className="sm:col-span-2">
+          <Field label={ownBrand ? "Comentario para quien aprueba los costes" : "Mensaje para el comercial"} hint="Opcional" className="sm:col-span-2">
             <Textarea rows={2} value={comment} onChange={(e) => setComment(e.target.value)} />
           </Field>
         </div>
@@ -276,12 +302,12 @@ export function QuoteDialog({
                       : {}),
                     ...(canSeeCost ? { formulaTargetCost: num(cost) } : {}),
                   }),
-                "Cotización enviada al comercial. El proyecto pasa a Valoración con cliente.",
+                ownBrand ? "Costes guardados. El proyecto pasa a Aprobación de costes." : "Cotización enviada al comercial. El proyecto pasa a Valoración con cliente.",
                 () => setOpen(false),
               )
             }
           >
-            {busy && <Loader2 className="animate-spin" />} Enviar al comercial
+            {busy && <Loader2 className="animate-spin" />} {ownBrand ? "Guardar y pasar a aprobación" : "Enviar al comercial"}
           </Button>
         </div>
       </DialogContent>
@@ -292,11 +318,11 @@ export function QuoteDialog({
 // ─── Fase 2: G2 · aprobación del presupuesto ──────────────────────────────
 
 type BudgetKind = "approve" | "changes" | "reject" | "pause";
-const TABS: { k: BudgetKind; label: string; icon: React.ElementType; tone: string }[] = [
-  { k: "approve", label: "Cliente aprueba", icon: CheckCircle2, tone: "text-[#56613f]" },
-  { k: "changes", label: "Pide cambios", icon: RotateCcw, tone: "text-amber-700" },
-  { k: "reject", label: "Cliente rechaza", icon: XCircle, tone: "text-rose-700" },
-  { k: "pause", label: "Pausar", icon: PauseCircle, tone: "text-slate-700" },
+const TABS: { k: BudgetKind; label: string; ownLabel: string; icon: React.ElementType; tone: string }[] = [
+  { k: "approve", label: "Cliente aprueba", ownLabel: "Aprobar costes", icon: CheckCircle2, tone: "text-[#56613f]" },
+  { k: "changes", label: "Pide cambios", ownLabel: "Pedir cambios", icon: RotateCcw, tone: "text-amber-700" },
+  { k: "reject", label: "Cliente rechaza", ownLabel: "Descartar", icon: XCircle, tone: "text-rose-700" },
+  { k: "pause", label: "Pausar", ownLabel: "Pausar", icon: PauseCircle, tone: "text-slate-700" },
 ];
 
 export function BudgetDialog({
@@ -306,8 +332,11 @@ export function BudgetDialog({
   quoteInfo,
   rejectionReasons,
   priceReferences = [],
+  ownBrand = false,
 }: {
   projectId: string;
+  /** Marca propia: aprobación interna de los costes (no hay cliente). */
+  ownBrand?: boolean;
   requiresPrepayment: boolean;
   currentUserName: string;
   quoteInfo: string | null;
@@ -350,18 +379,31 @@ export function BudgetDialog({
         : kind === "reject"
           ? { kind, reasonCode, reasonText: reason }
           : { kind, reason };
-    const msg = { approve: "Presupuesto aprobado. El proyecto pasa a En curso · Desarrollo.", changes: "El proyecto vuelve a Cotización.", reject: "Proyecto rechazado.", pause: "Proyecto en pausa." }[kind];
+    const msg = {
+      approve: ownBrand ? "Costes aprobados. El proyecto pasa a En curso · Desarrollo." : "Presupuesto aprobado. El proyecto pasa a En curso · Desarrollo.",
+      changes: "El proyecto vuelve a Cotización.",
+      reject: ownBrand ? "Proyecto descartado." : "Proyecto rechazado.",
+      pause: "Proyecto en pausa.",
+    }[kind];
     return run(() => decideBudgetAction(projectId, decision as Parameters<typeof decideBudgetAction>[1]), msg, () => setOpen(false));
   };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>Registrar respuesta del cliente (P2)</Button>
+        <Button>{ownBrand ? "Aprobar costes (P2)" : "Registrar respuesta del cliente (P2)"}</Button>
       </DialogTrigger>
-      <DialogContent title="P2 · Aprobación del presupuesto" description={quoteInfo ?? "Registra la respuesta del cliente a la cotización."} wide>
+      <DialogContent
+        title={ownBrand ? "P2 · Aprobación de costes" : "P2 · Aprobación del presupuesto"}
+        description={
+          ownBrand
+            ? `${quoteInfo ? `${quoteInfo} ` : ""}Revisa los costes calculados y decide si el proyecto sigue adelante.`
+            : (quoteInfo ?? "Registra la respuesta del cliente a la cotización.")
+        }
+        wide
+      >
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="tablist">
-          {TABS.map(({ k, label, icon: Icon, tone }) => (
+          {TABS.map(({ k, label, ownLabel, icon: Icon, tone }) => (
             <button
               key={k}
               type="button"
@@ -373,7 +415,7 @@ export function BudgetDialog({
                 kind === k ? "bg-slate-900 text-white ring-slate-900" : cn("bg-white ring-slate-200 hover:bg-slate-50", tone),
               )}
             >
-              <Icon className="size-4" /> {label}
+              <Icon className="size-4" /> {ownBrand ? ownLabel : label}
             </button>
           ))}
         </div>
@@ -383,11 +425,11 @@ export function BudgetDialog({
             <>
               {priceReferences.length ? (
                 <fieldset className="flex flex-col gap-2">
-                  <legend className="mb-1 text-sm font-medium text-slate-900">Precio unitario final por referencia (€/ud)</legend>
-                  <p className="text-xs text-slate-500">Opcional: el acordado con el cliente. Se guarda en la ficha de Comercial.</p>
+                  <legend className="mb-1 text-sm font-medium text-slate-900">{ownBrand ? "Coste unitario aprobado por referencia (€/ud)" : "Precio unitario final por referencia (€/ud)"}</legend>
+                  <p className="text-xs text-slate-500">{ownBrand ? "Opcional: si cambia respecto al calculado." : "Opcional: el acordado con el cliente."} Se guarda en la ficha de Comercial.</p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     {priceReferences.map((r) => (
-                      <Field key={r.id} label={r.title} hint={r.quoted != null ? `Cotizado: ${r.quoted.toLocaleString("es-ES", { style: "currency", currency: "EUR" })}` : undefined} htmlFor={`final-${r.id}`}>
+                      <Field key={r.id} label={r.title} hint={r.quoted != null ? `${ownBrand ? "Calculado" : "Cotizado"}: ${r.quoted.toLocaleString("es-ES", { style: "currency", currency: "EUR" })}` : undefined} htmlFor={`final-${r.id}`}>
                         <Input
                           id={`final-${r.id}`}
                           type="number"
@@ -403,7 +445,10 @@ export function BudgetDialog({
                   </div>
                 </fieldset>
               ) : (
-                <Field label="Precio unitario final (€/ud)" hint="Opcional: el acordado con el cliente. Se guarda en la ficha de Comercial.">
+                <Field
+                  label={ownBrand ? "Coste unitario aprobado (€/ud)" : "Precio unitario final (€/ud)"}
+                  hint={`${ownBrand ? "Opcional: si cambia respecto al calculado." : "Opcional: el acordado con el cliente."} Se guarda en la ficha de Comercial.`}
+                >
                   <Input type="number" inputMode="decimal" step="0.01" min={0} value={finalPrice} onChange={(e) => setFinalPrice(e.target.value)} className="max-w-40" />
                 </Field>
               )}

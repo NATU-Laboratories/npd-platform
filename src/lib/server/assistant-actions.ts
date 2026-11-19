@@ -275,7 +275,7 @@ export const quoteReplyInput = z.object({
   reposicion: z.string().min(1).max(60).describe("Código (REP-2026-0001) o nombre aproximado de la reposición"),
   proveedor: z.string().min(1).max(100).describe("Proveedor que ha respondido"),
   elemento: z.string().max(60).optional().describe("Elemento (etiqueta, estuche, caja master…) si el proveedor tiene varios en la reposición"),
-  precio: z.string().max(20).optional().describe("Precio unitario en euros, solo el número (p. ej. «0,045»)"),
+  precio: z.string().max(20).optional().describe("Precio en euros por millar (1.000 uds), solo el número (p. ej. «45»). Si el proveedor lo da por unidad, multiplícalo por 1.000"),
   notas: z.string().max(1000).optional().describe("Condiciones: plazo de entrega, mínimos, portes, validez…"),
 });
 
@@ -308,7 +308,7 @@ export async function prepareQuoteReply(u: CurrentUser, ch: ActionChannel, i: z.
     lines: [
       ["Reposición", `${subject.code} · ${subject.name}`],
       ["Elemento", mine.map((x) => ELEMENT_LABEL[x.element] ?? x.element).join(", ")],
-      ...(price ? ([["Precio", `${price} €/ud`]] as [string, string][]) : []),
+      ...(price ? ([["Precio", `${price} €/millar`]] as [string, string][]) : []),
       ...(i.notas?.trim() ? ([["Condiciones", i.notas.trim()]] as [string, string][]) : []),
     ],
   });
@@ -429,7 +429,7 @@ async function execute(u: CurrentUser, a: Row): Promise<string> {
 
   if (a.kind === "quote_reply") {
     for (const itemId of p.itemIds as number[]) await registerQuote(u, { itemId, price: String(p.price ?? ""), notes: String(p.notes ?? "") || null });
-    return `Presupuesto registrado en ${subject!.code}${p.price ? `: ${p.price} €/ud` : ""}.`;
+    return `Presupuesto registrado en ${subject!.code}${p.price ? `: ${p.price} €/millar` : ""}.`;
   }
 
   if (a.kind === "notify") {

@@ -39,6 +39,10 @@ import {
   TYPE_LABEL,
   GATE_LABEL,
   FIRST_RUNNING_PHASE,
+  gateName,
+  isOwnBrand,
+  phaseName,
+  phaseShort,
 } from "@/lib/labels";
 import { GENDER_LABEL } from "@/lib/brief/display";
 import { canCompleteLabelInfo, canDecideGate, canEditBrief, canManageProject, canSeeFormulaCost, canSendQuote, canViewProject, requireUser } from "@/lib/server/authz";
@@ -63,6 +67,8 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
   if (!d || d.p.status === "draft") notFound();
   const p = d.p;
   const b = p.brief;
+  // Marca propia: sin cliente. «Cotizar» es el cálculo de costes y P2 su aprobación interna
+  const ownBrand = isOwnBrand(p.type);
 
   const [settings, catalogs, brands, users, departments, templates, sheet] = await Promise.all([
     getSettings(),
@@ -165,7 +171,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-mono text-sm text-slate-500">{p.code}</span>
-              <StatusBadge status={p.status} phase={p.phase} />
+              <StatusBadge status={p.status} phase={p.phase} type={p.type} />
               {p.priority && <span className={cn("text-xs", PRIORITY_COLOR[p.priority])}>Prioridad {PRIORITY_LABEL[p.priority].toLowerCase()}</span>}
             </div>
             <h1 className="mt-1 text-2xl font-semibold text-slate-900">{p.name}</h1>
@@ -220,7 +226,12 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
             {canQuote && (
               <QuoteDialog
                 projectId={p.id}
-                initial={sheet.entries.find((e) => e.section.key === "comercial")?.data ?? {}}
+                ownBrand={ownBrand}
+                initial={(() => {
+                  const data = sheet.entries.find((e) => e.section.key === "comercial")?.data ?? {};
+                  // Marca propia: las unidades de referencia son las estimadas del primer año
+                  return ownBrand && data.units == null && b.annualUnits ? { ...data, units: b.annualUnits } : data;
+                })()}
                 files={d.files.filter(({ f }) => f.tag === "cotizacion").map(({ f }) => ({ id: f.id, name: f.name, size: f.size, mime: f.mime, tag: f.tag }))}
                 maxMb={settings.max_file_mb}
                 requesterName={lookups.users[p.requesterId] ?? "el solicitante"}
@@ -238,11 +249,12 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
             {canBudget && (
               <BudgetDialog
                 projectId={p.id}
+                ownBrand={ownBrand}
                 requiresPrepayment={needsPrepayment}
                 currentUserName={u.name}
                 quoteInfo={
                   p.quotedAt
-                    ? `Cotización enviada al comercial el ${formatDate(p.quotedAt)}${
+                    ? `${ownBrand ? "Costes calculados" : "Cotización enviada al comercial"} el ${formatDate(p.quotedAt)}${
                         sheet.refPrices.length ? " · precio por referencia" : p.quoteAmount ? ` · ${formatEuro(p.quoteAmount)}/ud` : ""
                       }.`
                     : null
@@ -254,7 +266,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
             {canAdvance && !advanceWaitingOn.length && (
               <AdvanceDialog
                 projectId={p.id}
-                nextLabel={PHASES[p.phase + 1]?.name ?? ""}
+                nextLabel={phaseName(p.phase + 1, p.type)}
                 toProduction={p.phase === LAST_PHASE}
                 pendingSections={sheetPending}
               />
@@ -361,14 +373,26 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
         notes={deptNoteRows}
         actions={[
           ...(canDecide ? [{ label: "Revisar la solicitud (P1)", hint: "Apruébala, pide más información o recházala con el botón de arriba." }] : []),
-          ...(canQuote ? [{ label: "Enviar la cotización al comercial", hint: "Con el botón «Enviar cotización al comercial» de arriba." }] : []),
-          ...(canBudget ? [{ label: "Registrar la respuesta del cliente (P2)", hint: "Indica si el cliente aprueba el presupuesto, pide cambios o lo rechaza." }] : []),
+          ...(canQuote
+            ? [
+                ownBrand
+                  ? { label: "Cotizar y calcular los costes", hint: "Con el botón «Cotizar» de arriba." }
+                  : { label: "Enviar la cotización al comercial", hint: "Con el botón «Enviar cotización al comercial» de arriba." },
+              ]
+            : []),
+          ...(canBudget
+            ? [
+                ownBrand
+                  ? { label: "Aprobar los costes (P2)", hint: "Revisa los costes calculados: apruébalos, pide cambios o descarta el proyecto." }
+                  : { label: "Registrar la respuesta del cliente (P2)", hint: "Indica si el cliente aprueba el presupuesto, pide cambios o lo rechaza." },
+              ]
+            : []),
           ...(canCompleteLabelInfo(u, p) && labDone && missingLabel.length
             ? [{ label: "Completar los datos para la etiqueta", hint: "Naming definitivo, facing, idiomas y países: sin ellos no se pasa a Diseño." }]
             : []),
           ...(p.status === "info_requested" && isRequester ? [{ label: "Responder la petición de información", hint: "Te han pedido más datos para poder aprobar la solicitud." }] : []),
           ...(canAdvance && !advanceWaitingOn.length && p.status === "in_progress" && p.phase >= FIRST_RUNNING_PHASE
-            ? [{ label: `Avanzar el proyecto a «${p.phase === LAST_PHASE ? "Producción" : (PHASES[p.phase + 1]?.name ?? "")}»`, hint: "Todos los departamentos de esta fase han terminado." }]
+            ? [{ label: `Avanzar el proyecto a «${p.phase === LAST_PHASE ? "Producción" : phaseName(p.phase + 1, p.type)}»`, hint: "Todos los departamentos de esta fase han terminado." }]
             : []),
         ]}
       />
@@ -410,8 +434,8 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
                   >
                     <span className="hidden lg:inline">{ph.n} · </span>
                     <span className="sm:hidden">{ph.n}</span>
-                    <span className="hidden sm:inline lg:hidden">{ph.short}</span>
-                    <span className="hidden lg:inline">{ph.name}</span>
+                    <span className="hidden sm:inline lg:hidden">{phaseShort(ph.n, p.type)}</span>
+                    <span className="hidden lg:inline">{phaseName(ph.n, p.type)}</span>
                   </p>
                   <p className="hidden text-[11px] text-slate-500 md:block">{inDate && (done || current) ? `Desde ${formatDate(inDate)}` : " "}</p>
                   {ph.gate && (
@@ -428,7 +452,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
                                 : "bg-white text-slate-500",
                         )}
                       >
-                        {GATE_LABEL[ph.gate]} · {ph.gateName}
+                        {GATE_LABEL[ph.gate]} · {gateName(ph.gate, p.type)}
                       </Badge>
                     </p>
                   )}
@@ -437,11 +461,11 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
             })}
           </ol>
           <p className="mt-2 text-xs text-slate-600 sm:hidden">
-            Fase {p.phase} de {LAST_PHASE} · <span className="font-medium text-brand-800">{PHASES[p.phase]?.name}</span>
+            Fase {p.phase} de {LAST_PHASE} · <span className="font-medium text-brand-800">{phaseName(p.phase, p.type)}</span>
           </p>
           {canAdvance && advanceWaitingOn.length > 0 && (
             <p className="mt-3 border-t border-slate-100 pt-3 text-sm text-slate-600">
-              Pasará a «{p.phase === LAST_PHASE ? "Producción" : PHASES[p.phase + 1]?.name}» cuando terminen: <span className="font-medium text-slate-800">{advanceWaitingOn.join(", ")}</span>.
+              Pasará a «{p.phase === LAST_PHASE ? "Producción" : phaseName(p.phase + 1, p.type)}» cuando terminen: <span className="font-medium text-slate-800">{advanceWaitingOn.join(", ")}</span>.
             </p>
           )}
         </CardBody>

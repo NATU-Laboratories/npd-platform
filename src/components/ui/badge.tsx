@@ -7,9 +7,9 @@ export function Badge({ className, ...props }: React.HTMLAttributes<HTMLSpanElem
   return <span className={cn("inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset", className)} {...props} />;
 }
 
-export function StatusBadge({ status, phase, className }: { status: ProjectStatus; phase?: number | null; className?: string }) {
+export function StatusBadge({ status, phase, type, className }: { status: ProjectStatus; phase?: number | null; type?: string | null; className?: string }) {
   const validating = status === "in_progress" && phase != null && phase < FIRST_RUNNING_PHASE;
-  return <Badge className={cn(validating ? VALIDATION_COLOR : STATUS_COLOR[status], className)}>{statusLabel(status, phase)}</Badge>;
+  return <Badge className={cn(validating ? VALIDATION_COLOR : STATUS_COLOR[status], className)}>{statusLabel(status, phase, type)}</Badge>;
 }
 
 export function DeptChip({ name, color }: { name: string; color: string }) {

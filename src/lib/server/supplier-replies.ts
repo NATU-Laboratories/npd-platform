@@ -3,7 +3,7 @@ import OpenAI from "openai";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { componentQuotes, files as projectFiles, projectComponents, projects, replenishmentFiles, replenishmentItems, replenishments, suppliers, users } from "@/db/schema";
-import { COMPONENT_LABEL, componentLabel } from "@/lib/purchasing/components";
+import { COMPONENT_LABEL, componentLabel, fmtSupplierPrice } from "@/lib/purchasing/components";
 import { putFile } from "@/lib/graph/storage";
 import { ELEMENT_LABEL } from "@/lib/replenishment/config";
 import { normalizeText } from "@/lib/sheet/field-input";
@@ -49,7 +49,7 @@ async function extract(text: string, pdfs: { name: string; data: Buffer }[], ele
     reasoning: { effort: "low" },
     store: false,
     instructions:
-      "Eres Alexia, asistente de Compras de NATU. Te paso la respuesta de un proveedor a una petición de presupuesto (texto del email y, si hay, PDF adjuntos). Extrae el presupuesto de cada elemento pedido. El precio es el unitario en euros por unidad (si dan precio por millar o por lote, conviértelo a €/ud y explícalo en las notas). En «notes» pon condiciones relevantes (cantidad mínima, portes, validez…). Si el proveedor no da precio (pregunta algo, dice que lo enviará más tarde…), isQuote=false y explica en «summary» qué dice. No inventes datos.",
+      "Eres Alexia, asistente de Compras de NATU. Te paso la respuesta de un proveedor a una petición de presupuesto (texto del email y, si hay, PDF adjuntos). Extrae el presupuesto de cada elemento pedido. El precio va en euros por millar (1.000 unidades), que es como suelen cotizar los proveedores de envases, componentes y etiquetas: si lo dan por unidad, multiplícalo por 1.000; si lo dan por otra cantidad o por lote, conviértelo a €/millar y explícalo en las notas. Si hay precios por tramos de cantidad, usa el del tramo más cercano a la cantidad pedida y pon los demás en las notas. En «notes» pon condiciones relevantes (cantidad mínima, portes, validez…). Si el proveedor no da precio (pregunta algo, dice que lo enviará más tarde…), isQuote=false y explica en «summary» qué dice. No inventes datos.",
     input: [
       {
         role: "user",
@@ -93,7 +93,7 @@ async function extract(text: string, pdfs: { name: string; data: Buffer }[], ele
   }
 }
 
-const fmtPrice = (n: number) => `${n.toLocaleString("es-ES", { maximumFractionDigits: 4 })} €/ud`;
+const fmtPrice = fmtSupplierPrice;
 
 type Target = { kind: "replenishment" | "project"; id: string; supplierId: number };
 

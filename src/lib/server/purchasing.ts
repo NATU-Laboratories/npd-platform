@@ -231,7 +231,7 @@ export async function chooseComponentQuote(u: CurrentUser, componentId: number, 
 
 // ─── Petición de cotización por email ─────────────────────────────────────
 
-const QUOTE_INTRO = "desde Laboratorios NatuAromatic (NATU) estamos desarrollando un nuevo producto y necesitamos cotización de los siguientes componentes. ¿Nos podéis enviar precio unitario, cantidad mínima y plazo de entrega?";
+const QUOTE_INTRO = "desde Laboratorios NatuAromatic (NATU) estamos desarrollando un nuevo producto y necesitamos cotización de los siguientes componentes. ¿Nos podéis enviar precio por millar, cantidad mínima y plazo de entrega?";
 
 type SupplierGroup = { supplier: typeof suppliers.$inferSelect; items: { component: string; description: string | null }[] };
 

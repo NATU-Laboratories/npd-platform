@@ -99,10 +99,29 @@ export const PHASES = [
   { n: 5, stage: "en_curso", name: "Preparación para producción", short: "Producción", gate: null, gateName: null },
 ] as const;
 export const FIRST_RUNNING_PHASE = 3;
-/** Etiqueta de estado teniendo en cuenta la etapa: un proyecto activo antes de G2 está "Validando cliente". */
-export function statusLabel(status: ProjectStatus, phase?: number | null) {
-  if (status === "in_progress" && phase != null && phase < FIRST_RUNNING_PHASE) return "Validando cliente";
+/** Etiqueta de estado teniendo en cuenta la etapa: un proyecto activo antes de G2 está "Validando cliente" (en marca propia, "En validación"). */
+export function statusLabel(status: ProjectStatus, phase?: number | null, type?: string | null) {
+  if (status === "in_progress" && phase != null && phase < FIRST_RUNNING_PHASE) return isOwnBrand(type) ? "En validación" : "Validando cliente";
   return STATUS_LABEL[status];
+}
+
+/**
+ * Marca propia: no hay cliente. La cotización es el cálculo de costes del equipo («Cotizar») y la
+ * fase 2 / P2 es la aprobación interna de esos costes.
+ */
+export const isOwnBrand = (type?: string | null) => type === "MP";
+const OWN_BRAND_PHASE2 = { name: "Aprobación de costes", short: "Aprob. costes", gateName: "Aprobación de costes" };
+/** Nombre de la fase según el tipo de proyecto. */
+export function phaseName(n: number, type?: string | null) {
+  return n === 2 && isOwnBrand(type) ? OWN_BRAND_PHASE2.name : (PHASES[n]?.name ?? "");
+}
+export function phaseShort(n: number, type?: string | null) {
+  return n === 2 && isOwnBrand(type) ? OWN_BRAND_PHASE2.short : (PHASES[n]?.short ?? "");
+}
+/** Nombre de la puerta según el tipo de proyecto. */
+export function gateName(gate: string | null | undefined, type?: string | null) {
+  if (gate === "G2" && isOwnBrand(type)) return OWN_BRAND_PHASE2.gateName;
+  return PHASES.find((p) => p.gate === gate)?.gateName ?? "";
 }
 export function stageOf(phase: number) {
   return STAGES.find((s) => phase >= s.from && phase <= s.to) ?? STAGES[0];
@@ -116,7 +135,7 @@ export const GATE_LABEL: Record<string, string> = { G1: "P1", G2: "P2" };
 export const LAST_PHASE = PHASES.length - 1;
 export const APPROVAL_GATES = [
   { gate: "G1", name: "Aprobación de la solicitud", phase: 0, description: "Solicitud → Cotización. Decide si el proyecto es viable y se cotiza." },
-  { gate: "G2", name: "Aprobación del presupuesto", phase: 2, description: "Valoración con cliente → En curso (Desarrollo). Comercial registra que el cliente aprueba el presupuesto. El comercial que dio de alta el proyecto siempre puede decidirla; aquí se añaden aprobadores adicionales." },
+  { gate: "G2", name: "Aprobación del presupuesto", phase: 2, description: "Valoración con cliente → En curso (Desarrollo). Comercial registra que el cliente aprueba el presupuesto. En marca propia es la aprobación interna de los costes calculados al cotizar. Quien dio de alta el proyecto siempre puede decidirla; aquí se añaden aprobadores adicionales." },
 ] as const;
 
 /** Subcarpetas de SharePoint de cada proyecto (§9.1): varias fases comparten carpeta. */

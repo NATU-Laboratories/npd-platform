@@ -5,7 +5,7 @@ import { PrintButton } from "@/components/print-button";
 import { LabSamples } from "@/components/sheet/lab-box";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { briefSections, type Lookups } from "@/lib/brief/display";
-import { FILE_TAGS, PHASES, statusLabel } from "@/lib/labels";
+import { FILE_TAGS, phaseName, statusLabel } from "@/lib/labels";
 import { canViewProject, requireUser } from "@/lib/server/authz";
 import { getActiveUsers, getAllCatalogs, getBrands } from "@/lib/server/catalogs";
 import { loadProjectDetail } from "@/lib/server/project-detail";
@@ -95,7 +95,7 @@ export default async function FullSheetPage({ params }: PageProps<"/proyectos/[i
           <p className="font-mono text-sm text-slate-500">{p.code}</p>
           <h1 className="text-2xl font-semibold text-slate-900">Ficha completa · {p.name}</h1>
           <p className="mt-0.5 text-sm text-slate-500">
-            {statusLabel(p.status, p.phase)} · fase {p.phase} · {PHASES[p.phase]?.name} · todo lo que han aportado los departamentos, en una sola página.
+            {statusLabel(p.status, p.phase, p.type)} · fase {p.phase} · {phaseName(p.phase, p.type)} · todo lo que han aportado los departamentos, en una sola página.
           </p>
         </div>
         <PrintButton />

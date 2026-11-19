@@ -6,7 +6,7 @@ import { db } from "@/db";
 import { activityLog, clients, projects, replenishments, users } from "@/db/schema";
 import { ELEMENT_LABEL, QUOTE_STATUS_LABEL, REP_ACTION_LABEL, REP_STATUS_LABEL, REPLENISHMENT_TEMPLATES, STATUS_STEPS } from "@/lib/replenishment/config";
 import { briefSections, type Lookups } from "@/lib/brief/display";
-import { ACTION_LABEL, CATEGORY_LABEL, PHASES, PRIORITY_LABEL, ROLE_LABEL, SITUATIONS, statusLabel, TYPE_LABEL } from "@/lib/labels";
+import { ACTION_LABEL, CATEGORY_LABEL, phaseName, PRIORITY_LABEL, ROLE_LABEL, SITUATIONS, statusLabel, TYPE_LABEL } from "@/lib/labels";
 import { canSeeFormulaCost, canViewProject, type CurrentUser } from "./authz";
 import { getActiveUsers, getBrands, getCatalogLabels } from "./catalogs";
 import { listProjects } from "./dashboard";
@@ -62,7 +62,7 @@ Cómo responder:
 - Anotar en los proyectos (también AL MOMENTO, con los permisos de la persona; si no tiene permiso, la herramienta lo dice y puedes ofrecer un comentario o un aviso):
   · anotar_en_ficha: un dato concreto de la ficha técnica (proveedor del tapón, precio final, UFI, idiomas, troquel…). Si la herramienta dice que hay varios campos posibles o que el proyecto tiene varias referencias, pregunta cuál.
   · anotar_en_bitacora: una nota o una espera (con su motivo) en la bitácora de Laboratorio / I+D de un proyecto o de una reposición en reformulación.
-  · registrar_presupuesto: el presupuesto que ha dado un proveedor en una reposición (precio unitario y condiciones), solo Compras.
+  · registrar_presupuesto: el presupuesto que ha dado un proveedor en una reposición (precio en €/millar, como cotizan los proveedores, y condiciones), solo Compras.
   · Si el proveedor responde al email de recotización, lo anotas tú automáticamente (y avisas a Compras); registrar_presupuesto es para cuando el presupuesto llega por otra vía (teléfono, WhatsApp…) o hay que corregirlo.
   · Lo que no sea un dato de la ficha (una conversación, un acuerdo, un recordatorio) apúntalo como comentario con preparar_comentario.
 - Pedir recotización a proveedores (preparar_recotizacion, solo Compras) envía un email a una empresa externa: esa SÍ queda pendiente de confirmación; di en una frase qué has preparado y pide que la confirme según el canal (lo indica el mensaje de contexto). No digas que está hecha hasta que la confirme.
@@ -75,6 +75,7 @@ Cómo funciona la plataforma:
 - Etapas y fases: VALIDACIÓN (0 Solicitud, 1 Cotización, 2 Valoración con cliente) y EN CURSO (3 Desarrollo, 4 Diseño y artes finales, 5 Preparación para producción). Después, «En producción».
 - P1 (paso 1): aprobación de la solicitud. La revisa el gestor de proyectos (o aprobadores de P1 configurados) con «Revisar solicitud (P1)»: aprobar (pasa a Cotización y se eligen los departamentos implicados), pedir más información, rechazar o pausar.
 - Cotización: quien cotiza pulsa «Enviar cotización al comercial» con precio, condiciones y presupuesto desglosado (envase/tapón, etiqueta, estuche, caja master). Le llega un email al comercial que creó la solicitud para presentarla al cliente. El proyecto pasa a «Valoración con cliente».
+- Marca propia (MDF): no hay cliente. En la fase de cotización el equipo pulsa «Cotizar» y calcula los costes (coste unitario, PVP objetivo, unidades, notas de costes y especificaciones de envase y packaging); se avisa a los aprobadores de P2. La fase 2 se llama «Aprobación de costes»: en «Aprobar costes (P2)» se aprueban los costes, se piden cambios (vuelve a Cotización), se descarta o se pausa.
 - P2 (paso 2): el comercial registra la respuesta del cliente con «Registrar respuesta del cliente (P2)»: aprueba (en Marca privada se pide el anticipo del 30 %), pide cambios (vuelve a Cotización), rechaza o pausa. Al aprobar, el proyecto pasa a En curso y se avisa a los departamentos.
 - Departamentos: cada uno avanza por sus estados en la ficha del proyecto (stepper, «Avanzar a…», «Retroceder», nueva ronda al volver atrás). Solo sus miembros, el gestor de proyectos y el admin pueden cambiar su estado y editar sus datos. Algunos estados exigen datos (p. ej. Marketing no pasa a «Naming y códigos» sin envase y packaging). Un email solo se envía cuando un departamento completa su parte.
 - Laboratorio / I+D formula (recibe el coste objetivo de la fórmula, confidencial). Compras / Aprovisionamiento pide frascos, tapones, etiquetas, estuches… y se activa a la vez que Laboratorio. En la tarjeta «Componentes y proveedores» del proyecto Compras añade los componentes (frasco, tapón, válvula, anilla, varillas o flor de mikado, etiqueta, etiqueta base, estuche, caja logística o expositora), pide cotización de cada uno a hasta 3 proveedores por email (tú lees sus respuestas y anotas el precio) y elige uno, con un comentario opcional del porqué. Cada departamento tiene su bitácora en el proyecto; sus notas quedan en el historial. Marketing / NPD lleva envase, packaging, naming y códigos (EAN, QR). Calidad y Regulatory, los requisitos legales de etiqueta. Diseño, etiqueta y artes finales. Operaciones, la preparación para producción.
@@ -183,8 +184,8 @@ function toolsFor(u: CurrentUser, ctx: ActionChannel & { prepared: PreparedActio
           nombre: r.name,
           tipo: r.type ? TYPE_LABEL[r.type] : null,
           categoria: r.category ? CATEGORY_LABEL[r.category] : null,
-          situacion: statusLabel(r.status, r.phase),
-          fase: PHASES[r.phase]?.name,
+          situacion: statusLabel(r.status, r.phase, r.type),
+          fase: phaseName(r.phase, r.type),
           prioridad: r.priority ? PRIORITY_LABEL[r.priority] : null,
           cliente_o_marca: r.clientName ?? r.brandName ?? null,
           solicitante: r.requesterName,
@@ -239,8 +240,8 @@ function toolsFor(u: CurrentUser, ctx: ActionChannel & { prepared: PreparedActio
         codigo: p.code,
         nombre: p.name,
         tipo: p.type ? TYPE_LABEL[p.type] : null,
-        situacion: statusLabel(p.status, p.phase),
-        fase: `${p.phase} · ${PHASES[p.phase]?.name}`,
+        situacion: statusLabel(p.status, p.phase, p.type),
+        fase: `${p.phase} · ${phaseName(p.phase, p.type)}`,
         solicitante: requester[0]?.name,
         solicitado: p.requestedAt?.toISOString().slice(0, 10) ?? null,
         entrega_requerida: p.neededBy,
@@ -344,7 +345,7 @@ function toolsFor(u: CurrentUser, ctx: ActionChannel & { prepared: PreparedActio
           cantidad: i.quantity,
           proveedor: d.supplierRows.find((s) => s.id === i.supplierId)?.name ?? null,
           recotizacion: QUOTE_STATUS_LABEL[i.quoteStatus] ?? i.quoteStatus,
-          precio_unitario: i.quotePrice ? `${Number(i.quotePrice)} €/ud` : null,
+          precio: i.quotePrice ? `${Number(i.quotePrice)} €/millar` : null,
         })),
         arte_final: d.files.filter((f) => f.f.tag === "arte_final").map((f) => `${f.f.name} (ronda ${f.f.round}, ${f.by})`),
         historial_reciente: d.activity.slice(0, 10).map(({ a, who }) => ({
@@ -436,8 +437,8 @@ export async function currentSubject(u: CurrentUser, page?: string | null): Prom
   if (!m) return undefined;
   if (m[1] === "proyectos") {
     if (!(await canViewProject(u, m[2]!))) return undefined;
-    const [p] = await db.select({ code: projects.code, name: projects.name, status: projects.status, phase: projects.phase }).from(projects).where(eq(projects.id, m[2]!));
-    return p?.code ? { kind: "proyecto", id: m[2]!, code: p.code, name: p.name, extra: `${statusLabel(p.status, p.phase)}, fase ${p.phase} · ${PHASES[p.phase]?.name}` } : undefined;
+    const [p] = await db.select({ code: projects.code, name: projects.name, status: projects.status, phase: projects.phase, type: projects.type }).from(projects).where(eq(projects.id, m[2]!));
+    return p?.code ? { kind: "proyecto", id: m[2]!, code: p.code, name: p.name, extra: `${statusLabel(p.status, p.phase, p.type)}, fase ${p.phase} · ${phaseName(p.phase, p.type)}` } : undefined;
   }
   if (!canAccessReplenishments(u)) return undefined;
   const [r] = await db.select({ code: replenishments.code, title: replenishments.title, status: replenishments.status }).from(replenishments).where(eq(replenishments.id, m[2]!));

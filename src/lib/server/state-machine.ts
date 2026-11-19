@@ -18,7 +18,7 @@ import {
   type ProjectStatus,
 } from "@/db/schema";
 import { computeCompleteness, FIELD_BY_KEY, submitErrors } from "@/lib/brief/fields";
-import { FIRST_RUNNING_PHASE, LAST_PHASE, PHASES, PREPAYMENT_TYPES, TYPE_CODE } from "@/lib/labels";
+import { FIRST_RUNNING_PHASE, isOwnBrand, LAST_PHASE, PHASES, PREPAYMENT_TYPES, TYPE_CODE } from "@/lib/labels";
 import { parseBriefLenient, type BriefData } from "@/lib/brief/schema";
 import { quoteSpecGroups } from "@/lib/sheet/sections";
 import { logActivity, jsonDiff } from "./activity";
@@ -577,7 +577,7 @@ export async function sendQuote(
       .insert(gates)
       .values({ projectId, gate: "G2", status: "pending", openedAt: now })
       .onConflictDoUpdate({ target: [gates.projectId, gates.gate], set: { status: "pending", openedAt: now, decidedBy: null, decidedAt: null } });
-    await logActivity({ projectId, actorId: u.id, action: "quote.sent", entity: "project", entityId: projectId, diff: { amount: price, comment } }, tx);
+    await logActivity({ projectId, actorId: u.id, action: "quote.sent", entity: "project", entityId: projectId, diff: { amount: price, comment, ...(isOwnBrand(p.type) ? { ownBrand: true } : {}) } }, tx);
     await patchSheetSection(u, pNow, "comercial", data, tx);
     for (const x of refPrices) await patchSheetSection(u, pNow, "comercial", { unitPrice: x.price }, tx, x.ref.id);
     if (Object.keys(specs).length) await patchSheetSection(u, pNow, "packaging", specs, tx);
@@ -610,6 +610,18 @@ export async function sendQuote(
   const [{ n }] = (await db.execute<{ n: number }>(sql`select count(*)::int as n from activity_log where project_id = ${projectId} and action = 'quote.sent'`)).rows as [{ n: number }];
   const jobId = await enqueueJob("sharepoint.quote", { projectId, number: n });
   kickJobs([jobId]);
+  if (isOwnBrand(saved?.type)) {
+    // Marca propia: no hay cliente; se avisa a quien aprueba los costes (P2) y a quien creó la solicitud
+    await notifyProjectEvent(projectId, "quote.sent", {
+      title: "Costes calculados: pendientes de aprobación (P2)",
+      intro: `${u.name} ha calculado los costes del proyecto de marca propia. Revísalos y apruébalos, pide cambios o descarta el proyecto con «Aprobar costes (P2)».`,
+      message: comment ? { label: "Comentario", body: comment } : null,
+      extraRows: rows.map(([k, v]) => [k.replace("Precio unitario cotizado", "Coste unitario calculado").replace("Condiciones", "Notas de costes"), v] as [string, string]),
+      to: { deciders: "G2", requester: true },
+      exclude: u.email,
+    });
+    return;
+  }
   await notifyProjectEvent(projectId, "quote.sent", {
     title: "Cotización lista para presentar al cliente",
     intro: "Preséntala al cliente (el documento de la cotización está en la carpeta «01 Cotización y valoración» del proyecto). Cuando responda, registra su decisión en el proyecto: «Registrar respuesta del cliente (P2)».",
@@ -689,10 +701,13 @@ export async function decideBudget(u: CurrentUser, projectId: string, decision: 
             : prepayment?.status === "waived"
               ? `Se inicia SIN anticipo del 30 % bajo la responsabilidad de ${prepayment.responsible}.`
               : null;
+        const own = isOwnBrand(p.type);
         return async () => {
           await notifyProjectEvent(projectId, "gate.approved.g2", {
-            title: "Presupuesto aprobado (P2)",
-            intro: `${u.name} ha registrado que el cliente ha aprobado el presupuesto. El proyecto pasa a En curso · Desarrollo.`,
+            title: own ? "Costes aprobados (P2)" : "Presupuesto aprobado (P2)",
+            intro: own
+              ? `${u.name} ha aprobado los costes del proyecto de marca propia. El proyecto pasa a En curso · Desarrollo.`
+              : `${u.name} ha registrado que el cliente ha aprobado el presupuesto. El proyecto pasa a En curso · Desarrollo.`,
             message: [decision.comment?.trim(), ppText].filter(Boolean).length
               ? { label: "Detalle", body: [ppText, decision.comment?.trim()].filter(Boolean).join("\n") }
               : null,
@@ -703,19 +718,19 @@ export async function decideBudget(u: CurrentUser, projectId: string, decision: 
             exclude: u.email,
           });
           await notifyPhaseSections(projectId, FIRST_RUNNING_PHASE);
-          await notifyProjectStarted(projectId);
+          await notifyProjectStarted(projectId, own);
         };
       }
       case "changes": {
         const reason = decision.reason.trim();
-        if (!reason) throw new ActionError("Indica qué cambios pide el cliente", { reason: "Obligatorio" });
+        if (!reason) throw new ActionError(isOwnBrand(p.type) ? "Indica qué cambios hay que hacer en los costes" : "Indica qué cambios pide el cliente", { reason: "Obligatorio" });
         await tx.update(gates).set({ ...decided, status: "recycled", comment: reason }).where(eq(gates.id, g!.id));
         await tx.update(projects).set({ phase: 1, updatedAt: now }).where(eq(projects.id, projectId));
         await syncValidationDepts(u, projectId, "restart", reason, tx);
         await logActivity({ projectId, actorId: u.id, action: "gate.recycled", entity: "gate", entityId: "G2", diff: { gate: "G2", reason } }, tx);
         return () =>
           notifyProjectEvent(projectId, "gate.recycled", {
-            title: "El cliente pide cambios en la cotización",
+            title: isOwnBrand(p.type) ? "Se piden cambios en los costes" : "El cliente pide cambios en la cotización",
             intro: "El proyecto vuelve a la fase de Cotización.",
             message: { label: "Cambios solicitados", body: reason },
             to: { requester: true, accountManager: true, departments: true },
