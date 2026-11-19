@@ -235,6 +235,8 @@ type PanelCtx = {
   lab?: { samples: SampleView[]; notes: NoteView[]; canSeeFormula: boolean };
   /** Bitácoras del resto de departamentos, por clave. */
   notes?: Record<string, NoteView[]>;
+  /** Compras: «Componentes y proveedores», dentro de la tarjeta de su departamento. */
+  purchasing?: { deptKey: string; block: React.ReactNode };
 };
 
 /** Bitácora de un departamento que no es Laboratorio (el de Laboratorio va con sus muestras). */
@@ -348,6 +350,7 @@ function StateRow({ c, s, canEdit, refInfo, pc }: { c: DeptCard; s: DeptState; c
                   name: s.next.name,
                   isFinal: s.next.isFinal,
                   promptFields: s.next.promptFields,
+                  requiredFields: s.next.requiredFields,
                   missing: [],
                 },
               ]}
@@ -461,6 +464,7 @@ export function SheetPanel({
   mine = [],
   lab,
   notes,
+  purchasing,
 }: PanelCtx & {
   editable: Record<string, boolean>;
   /** Coste objetivo de la fórmula (confidencial); undefined si el usuario no puede verlo. */
@@ -468,7 +472,7 @@ export function SheetPanel({
   /** Departamentos de la persona: van primero y destacados. */
   mine?: string[];
 }) {
-  const pc: PanelCtx = { projectId, cards, entries, ctx, files, maxMb, now, lab, notes };
+  const pc: PanelCtx = { projectId, cards, entries, ctx, files, maxMb, now, lab, notes, purchasing };
   const ordered = [...cards.filter((c) => mine.includes(c.dept.key)), ...cards.filter((c) => !mine.includes(c.dept.key))];
   const firstOther = ordered.findIndex((c) => !mine.includes(c.dept.key));
   return (
@@ -514,6 +518,7 @@ export function SheetPanel({
 
               {c.dept.key === "idi" && c.active && <LabBlock c={c} refId={null} canEdit={canEdit} pc={pc} />}
               {c.active && <NotesBlock c={c} canEdit={canEdit} pc={pc} />}
+              {purchasing && c.dept.key === purchasing.deptKey && purchasing.block}
 
               {!c.steps.length && <p className="text-sm text-slate-500">Este departamento no tiene estados configurados (Backoffice → Estados de departamento).</p>}
 
@@ -661,6 +666,11 @@ export function MyWork({
               )}
               <LabBlock c={c} refId={null} canEdit={canEdit} pc={ctx} compact />
               <NotesBlock c={c} canEdit={canEdit} pc={ctx} compact />
+              {ctx.purchasing && c.dept.key === ctx.purchasing.deptKey && (
+                <a href="#componentes" className="self-start text-xs font-medium text-brand-600 hover:text-brand-800">
+                  Componentes y proveedores ↓
+                </a>
+              )}
             </div>
           );
         })}

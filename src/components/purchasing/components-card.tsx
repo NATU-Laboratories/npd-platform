@@ -16,7 +16,6 @@ import {
 import { EmailPreview } from "@/components/replenishment/email-preview";
 import type { SupplierOption } from "@/components/replenishment/new-form";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader } from "@/components/ui/card";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { COMPONENT_LABEL, COMPONENT_QUOTE_STATUS, COMPONENTS, componentLabel, fmtSupplierPrice, isMikadoOnly, MAX_SUPPLIERS, SUPPLIER_PRICE_UNIT } from "@/lib/purchasing/components";
@@ -62,22 +61,25 @@ export function ComponentsCard({
   if (!canEdit && !components.length) return null;
 
   return (
-    <Card id="componentes" className="scroll-mt-24">
-      <CardHeader
-        title="Componentes y proveedores"
-        description={`Desglose de piezas del proyecto. Compras pide cotización de cada componente a hasta ${MAX_SUPPLIERS} proveedores y elige uno.${components.length ? ` ${chosen} de ${components.length} con proveedor elegido.` : ""}`}
-        actions={
-          canEdit && allSuppliers > 0 ? (
-            <Button size="sm" variant="secondary" onClick={() => setAsk({ supplierId: null, componentId: null, title: `Pedir cotización a ${allSuppliers === 1 ? "1 proveedor" : `los ${allSuppliers} proveedores`}` })}>
-              <Send /> Pedir cotizaciones
-            </Button>
-          ) : undefined
-        }
-      />
+    <div id="componentes" className="scroll-mt-24 rounded-lg border border-slate-200 bg-white">
+      <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 px-3 py-3 sm:px-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Componentes y proveedores</p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Añade cada componente, hasta {MAX_SUPPLIERS} proveedores por componente, pide cotización y elige uno.
+            {components.length ? ` ${chosen} de ${components.length} con proveedor elegido.` : ""}
+          </p>
+        </div>
+        {canEdit && allSuppliers > 0 && (
+          <Button size="sm" variant="secondary" onClick={() => setAsk({ supplierId: null, componentId: null, title: `Pedir cotización a ${allSuppliers === 1 ? "1 proveedor" : `los ${allSuppliers} proveedores`}` })}>
+            <Send /> Pedir cotización a todos
+          </Button>
+        )}
+      </div>
       <div className="flex flex-col divide-y divide-slate-100">
-        {!components.length && <p className="px-5 py-4 text-sm text-slate-500">Todavía no hay componentes. Añade los que lleva el producto (frasco, tapón, etiqueta…).</p>}
+        {!components.length && <p className="px-3 py-4 text-sm text-slate-500 sm:px-4">Todavía no hay componentes. Añade los que lleva el producto (frasco, tapón, etiqueta…).</p>}
         {components.map((c) => (
-          <section key={c.id} className="flex flex-col gap-3 px-4 py-4 sm:px-5" aria-label={componentLabel(c)}>
+          <section key={c.id} className="flex flex-col gap-3 px-3 py-4 sm:px-4" aria-label={componentLabel(c)}>
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <h3 className="font-semibold text-slate-900">{COMPONENT_LABEL[c.component] ?? c.component}</h3>
@@ -87,7 +89,7 @@ export function ComponentsCard({
                 <div className="flex items-center gap-1">
                   {c.quotes.length > 0 && (
                     <Button size="sm" variant="ghost" onClick={() => setAsk({ supplierId: null, componentId: c.id, title: `Pedir cotización · ${componentLabel(c)}` })}>
-                      <Send /> Pedir cotización
+                      <Send /> Pedir cotización a sus proveedores
                     </Button>
                   )}
                   <button type="button" onClick={() => setEdit(c)} className="rounded p-1.5 text-slate-500 hover:bg-slate-100" aria-label={`Editar ${componentLabel(c)}`} title="Editar">
@@ -135,27 +137,25 @@ export function ComponentsCard({
                     {q.notes && <p className="whitespace-pre-line text-xs text-slate-600">{q.notes}</p>}
                     {q.status === "requested" && q.requestedAt && <p className="text-xs text-slate-400">Pedida el {formatDate(q.requestedAt)}</p>}
                     {canEdit && (
-                      <div className="mt-auto flex flex-wrap items-center gap-1 pt-1">
-                        <button type="button" onClick={() => setPrice({ c, q })} className="rounded p-1.5 text-slate-500 hover:bg-slate-100" title="Registrar precio" aria-label={`Registrar precio de ${q.supplierName}`}>
-                          <Receipt className="size-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setAsk({ supplierId: q.supplierId, componentId: c.id, title: `Pedir cotización a ${q.supplierName}` })}
-                          className="rounded p-1.5 text-slate-500 hover:bg-slate-100"
-                          title="Pedir cotización a este proveedor"
-                          aria-label={`Pedir cotización a ${q.supplierName}`}
-                        >
-                          <Send className="size-4" />
-                        </button>
-                        <button type="button" onClick={() => setSlot({ c, slot: n, q })} className="rounded p-1.5 text-slate-500 hover:bg-slate-100" title="Cambiar proveedor" aria-label={`Cambiar proveedor ${n}`}>
-                          <Pencil className="size-4" />
-                        </button>
-                        {!isChosen && (
-                          <Button size="sm" variant="secondary" className="ml-auto" onClick={() => setChoose({ c, q })}>
-                            Elegir
+                      <div className="mt-auto flex flex-col gap-1.5 pt-2">
+                        <div className="flex flex-wrap gap-1.5">
+                          <Button size="sm" variant="secondary" onClick={() => setAsk({ supplierId: q.supplierId, componentId: c.id, title: `Pedir cotización a ${q.supplierName}` })}>
+                            <Send /> {q.status === "pending" ? "Pedir cotización" : "Volver a pedir"}
                           </Button>
-                        )}
+                          <Button size="sm" variant="ghost" onClick={() => setPrice({ c, q })}>
+                            <Receipt /> {q.price ? "Editar precio" : "Anotar precio"}
+                          </Button>
+                        </div>
+                        <div className="flex items-center justify-between gap-1.5">
+                          <button type="button" onClick={() => setSlot({ c, slot: n, q })} className="inline-flex items-center gap-1 rounded px-1 py-1 text-xs text-slate-500 hover:bg-slate-100" aria-label={`Cambiar proveedor ${n}`}>
+                            <Pencil className="size-3.5" aria-hidden /> Cambiar proveedor
+                          </button>
+                          {!isChosen && (
+                            <Button size="sm" onClick={() => setChoose({ c, q })}>
+                              <Check /> Elegir
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -174,7 +174,7 @@ export function ComponentsCard({
       {choose && <ChooseDialog {...choose} onClose={() => setChoose(null)} />}
       {edit && <EditDialog c={edit} onClose={() => setEdit(null)} />}
       {ask && <AskDialog projectId={projectId} ask={ask} onClose={() => setAsk(null)} />}
-    </Card>
+    </div>
   );
 }
 
@@ -248,7 +248,7 @@ function AddComponent({ projectId, mikado }: { projectId: string; mikado: boolea
     }
   }
   return (
-    <div className="flex flex-wrap items-end gap-2 bg-slate-50/60 px-4 py-3 sm:px-5">
+    <div className="flex flex-wrap items-end gap-2 rounded-b-lg bg-slate-50/60 px-3 py-3 sm:px-4">
       <Field label="Añadir componente" htmlFor="pc-new" className="min-w-44">
         <Select id="pc-new" value={component} onChange={(e) => setComponent(e.target.value)}>
           <option value="">Elige componente…</option>

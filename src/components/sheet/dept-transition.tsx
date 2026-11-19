@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import type { SampleView } from "@/lib/server/lab";
-import { resolveFieldRef } from "@/lib/sheet/sections";
+import { resolveFieldRef, VIRTUAL_REQUIREMENTS } from "@/lib/sheet/sections";
 import { cn } from "@/lib/utils";
 import { ScalarInput } from "./section-editor";
 
@@ -19,7 +19,7 @@ type SampleDraft = { key: number; code: string; formula: string };
 let seq = 0;
 const newSample = (): SampleDraft => ({ key: ++seq, code: "", formula: "" });
 
-type Target = { id: number; name: string; isFinal: boolean; promptFields: string[]; missing: string[] };
+type Target = { id: number; name: string; isFinal: boolean; promptFields: string[]; missing: string[]; requiredFields?: string[] };
 
 /** Botón + diálogo para avanzar o retroceder el subestado de un departamento. */
 export function DeptTransition({
@@ -207,6 +207,14 @@ export function DeptTransition({
               </Select>
             </Field>
           )}
+          {forward &&
+            (target.requiredFields ?? [])
+              .filter((ref) => VIRTUAL_REQUIREMENTS[ref])
+              .map((ref) => (
+                <p key={ref} className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  Requisito de este estado: {VIRTUAL_REQUIREMENTS[ref]!.label}.
+                </p>
+              ))}
           {forward &&
             target.promptFields.map((ref) => {
               const r = resolveFieldRef(ref);
