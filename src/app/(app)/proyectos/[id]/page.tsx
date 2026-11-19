@@ -50,7 +50,7 @@ import { getActiveUsers, getAllCatalogs, getBrands, getDepartments } from "@/lib
 import { loadProjectDetail, templatesWithDepartments, templateScore } from "@/lib/server/project-detail";
 import { getSettings } from "@/lib/server/settings";
 import { canSeeLabFormula, listAllNotes, listSamples } from "@/lib/server/lab";
-import { canEditPurchasing, listComponents } from "@/lib/server/purchasing";
+import { canEditPurchasing, listComponents, purchasingDeptKey } from "@/lib/server/purchasing";
 import { ComponentsCard } from "@/components/purchasing/components-card";
 import { canEditSection, getFormulaTargetCost, loadSheet, pendingUpTo } from "@/lib/server/sheet";
 import { canTransition } from "@/lib/server/state-machine";
@@ -105,12 +105,23 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
   // Compras: componentes con sus proveedores (los proveedores activos solo si puede editar)
   const purchasingEditable = await canEditPurchasing(u, p);
   const purchasing = {
+    deptKey: await purchasingDeptKey(),
     canEdit: purchasingEditable,
     components: await listComponents(p.id),
     suppliers: purchasingEditable
       ? await db.select({ id: suppliers.id, name: suppliers.name, emails: suppliers.emails }).from(suppliers).where(eq(suppliers.isActive, true)).orderBy(asc(suppliers.name))
       : [],
   };
+  // «Componentes y proveedores» va dentro de la tarjeta de Compras / Aprovisionamiento
+  const purchasingBlock = (
+    <ComponentsCard
+      projectId={p.id}
+      components={purchasing.components}
+      suppliers={purchasing.suppliers}
+      canEdit={purchasing.canEdit}
+      mikado={b.format === "mikado" || p.category === "ambient"}
+    />
+  );
   const lookups: Lookups = {
     catalog: Object.fromEntries(Object.entries(catalogs).map(([k, v]) => [k, Object.fromEntries(v.map((o) => [o.value, o.label]))])),
     brands: Object.fromEntries(brands.map((x) => [x.id, x.name])),
@@ -371,6 +382,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
         mine={u.departmentKeys.filter(Boolean)}
         lab={lab}
         notes={deptNoteRows}
+        purchasing={{ deptKey: purchasing.deptKey, block: null }}
         actions={[
           ...(canDecide ? [{ label: "Revisar la solicitud (P1)", hint: "Apruébala, pide más información o recházala con el botón de arriba." }] : []),
           ...(canQuote
@@ -649,17 +661,7 @@ export default async function ProjectPage({ params }: PageProps<"/proyectos/[id]
               mine={u.departmentKeys.filter(Boolean)}
               lab={lab}
               notes={deptNoteRows}
-            />
-          )}
-
-          {/* 5. Compras: desglose de componentes y proveedores */}
-          {showSheet && (
-            <ComponentsCard
-              projectId={p.id}
-              components={purchasing.components}
-              suppliers={purchasing.suppliers}
-              canEdit={purchasing.canEdit}
-              mikado={b.format === "mikado" || p.category === "ambient"}
+              purchasing={{ deptKey: purchasing.deptKey, block: purchasingBlock }}
             />
           )}
 
