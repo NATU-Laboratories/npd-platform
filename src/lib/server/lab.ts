@@ -2,7 +2,8 @@ import "server-only";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { departments, deptNotes, deptSubstates, labSamples, projectDeptProgress, users } from "@/db/schema";
+import { departments, deptNotes, deptSubstates, labSamples, projectDeptProgress, projects, users } from "@/db/schema";
+import { FIRST_RUNNING_PHASE, isOwnBrand } from "@/lib/labels";
 import { isAdmin, type CurrentUser } from "./authz";
 
 /** La fórmula de las muestras es confidencial: solo Laboratorio, Calidad y admin (ni el gestor de proyectos). */
@@ -78,6 +79,19 @@ export async function deptStageName(projectId: string, departmentKey: string, re
     .from(projectDeptProgress)
     .innerJoin(deptSubstates, eq(deptSubstates.id, projectDeptProgress.substateId))
     .where(and(eq(projectDeptProgress.projectId, projectId), eq(projectDeptProgress.departmentId, dept.id), eq(projectDeptProgress.referenceId, referenceId)));
+  const [proj] = await db.select({ type: projects.type }).from(projects).where(eq(projects.id, projectId));
+  if (isOwnBrand(proj?.type)) {
+    // Marca propia: los estados de la cotización se llaman «Costes calculados» / «Costes aprobados»
+    const { deptStartPhases, ownBrandValidationSteps } = await import("./sheet");
+    if ((await deptStartPhases())[departmentKey]! < FIRST_RUNNING_PHASE) {
+      const steps = ownBrandValidationSteps(await db.select().from(deptSubstates).where(eq(deptSubstates.departmentId, dept.id)).orderBy(asc(deptSubstates.sort), asc(deptSubstates.id)));
+      const [prog] = await db
+        .select({ id: projectDeptProgress.substateId })
+        .from(projectDeptProgress)
+        .where(and(eq(projectDeptProgress.projectId, projectId), eq(projectDeptProgress.departmentId, dept.id), eq(projectDeptProgress.referenceId, referenceId)));
+      return { department: dept.name, stage: (steps.find((s) => s.id === prog?.id) ?? steps[0])?.name ?? null };
+    }
+  }
   if (cur) return { department: dept.name, stage: cur.name };
   const [first] = await db.select({ name: deptSubstates.name }).from(deptSubstates).where(eq(deptSubstates.departmentId, dept.id)).orderBy(asc(deptSubstates.sort)).limit(1);
   return { department: dept.name, stage: first?.name ?? null };

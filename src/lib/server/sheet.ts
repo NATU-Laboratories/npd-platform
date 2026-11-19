@@ -21,7 +21,7 @@ import {
 } from "@/db/schema";
 import { briefSections, type Lookups } from "@/lib/brief/display";
 import { needsOlfactory, parseBriefLenient } from "@/lib/brief/schema";
-import { FIRST_RUNNING_PHASE, PHASES } from "@/lib/labels";
+import { FIRST_RUNNING_PHASE, isOwnBrand, PHASES } from "@/lib/labels";
 import {
   checkField,
   fieldApplies,
@@ -157,6 +157,17 @@ export async function allSubstates() {
   return db.select().from(deptSubstates).orderBy(asc(deptSubstates.departmentId), asc(deptSubstates.sort), asc(deptSubstates.id));
 }
 
+/**
+ * Marca propia: los estados del departamento que sigue la cotización (Comercial) se muestran
+ * como costes. El 2.º estado («Cotización enviada») y el final («Presupuesto aprobado») cambian
+ * de nombre; los nombres configurados en Backoffice se mantienen para el resto de tipos.
+ */
+export function ownBrandValidationSteps<T extends { id: number; name: string; isFinal: boolean }>(steps: T[]): T[] {
+  const final = steps.find((s) => s.isFinal) ?? steps.at(-1);
+  const second = steps[1] && steps[1] !== final ? steps[1] : null;
+  return steps.map((s) => (s === final ? { ...s, name: "Costes aprobados" } : s === second ? { ...s, name: "Costes calculados" } : s));
+}
+
 type ProgressRow = typeof projectDeptProgress.$inferSelect;
 type TransitionRow = typeof projectDeptTransitions.$inferSelect;
 
@@ -251,8 +262,9 @@ export async function loadSheet(p: Project): Promise<{
     const perRef = deptIsPerRef(e.dept.key, deptOf, multi, p.packagingMode);
     const progOf = (refId: number) => progress.find((x) => x.departmentId === e.dept.id && x.referenceId === refId);
     const transOf = (refId: number) => transitions.filter((t) => t.departmentId === e.dept.id && t.referenceId === refId);
-    const allSteps = substates.filter((s) => s.departmentId === e.dept.id);
     const auto = phase < FIRST_RUNNING_PHASE;
+    const deptSteps = substates.filter((s) => s.departmentId === e.dept.id);
+    const allSteps = auto && isOwnBrand(p.type) ? ownBrandValidationSteps(deptSteps) : deptSteps;
     // Comercial sigue el flujo (1.º → 2.º → final): no se muestran estados intermedios que nunca se alcanzan
     const flowSteps = auto ? [allSteps[0], allSteps[1], allSteps.find((s) => s.isFinal) ?? allSteps.at(-1)] : allSteps;
     const steps = [...new Set(flowSteps.filter((s): s is DeptSubstate => !!s))];
@@ -409,8 +421,10 @@ export async function syncValidationDepts(u: CurrentUser, projectId: string, to:
   const keys = Object.keys(starts).filter((k) => starts[k]! < FIRST_RUNNING_PHASE);
   if (!keys.length) return;
   const ds = await tx.select().from(departments).where(inArray(departments.key, keys));
+  const [proj] = await tx.select({ type: projects.type }).from(projects).where(eq(projects.id, projectId));
   for (const d of ds) {
-    const steps = await tx.select().from(deptSubstates).where(eq(deptSubstates.departmentId, d.id)).orderBy(asc(deptSubstates.sort), asc(deptSubstates.id));
+    const raw = await tx.select().from(deptSubstates).where(eq(deptSubstates.departmentId, d.id)).orderBy(asc(deptSubstates.sort), asc(deptSubstates.id));
+    const steps = isOwnBrand(proj?.type) ? ownBrandValidationSteps(raw) : raw;
     const final = steps.find((s) => s.isFinal) ?? steps.at(-1);
     if (!final) continue;
     const target = to === "approved" ? final : to === "restart" ? steps[0]! : (steps[1] ?? final);
