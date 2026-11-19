@@ -131,6 +131,7 @@ export function ComponentsCard({
                       <span className={cn("rounded-full px-2 py-0.5 text-xs", TONE[q.status])}>{COMPONENT_QUOTE_STATUS[q.status] ?? q.status}</span>
                       {q.price && <span className="font-medium tabular-nums text-slate-900">{eur(q.price)}</span>}
                     </div>
+                    {q.leadTime && <p className="text-xs text-slate-700">Plazo: {q.leadTime}</p>}
                     {q.notes && <p className="whitespace-pre-line text-xs text-slate-600">{q.notes}</p>}
                     {q.status === "requested" && q.requestedAt && <p className="text-xs text-slate-400">Pedida el {formatDate(q.requestedAt)}</p>}
                     {canEdit && (
@@ -203,6 +204,8 @@ function ChosenNote({ c, canEdit }: { c: ComponentView; canEdit: boolean }) {
       <p>
         <strong className="font-semibold">Proveedor elegido: {q?.supplierName ?? "—"}</strong>
         {c.chosenBy ? ` · ${c.chosenBy}` : ""}
+        {q?.price ? ` · ${eur(q.price)}` : ""}
+        {q?.leadTime ? ` · plazo ${q.leadTime}` : ""}
         {c.chosenAt ? ` · ${formatDate(c.chosenAt)}` : ""}
         {canEdit && (
           <button type="button" disabled={busy} onClick={() => exec(() => chooseComponentQuoteAction(c.id, null))} className="ml-2 underline hover:no-underline">
@@ -343,9 +346,10 @@ function SupplierDialog({ c, slot, q, suppliers, onClose }: { c: ComponentView; 
 function PriceDialog({ c, q, onClose }: { c: ComponentView; q: ComponentQuoteView; onClose: () => void }) {
   const { busy, exec } = useAction();
   const [price, setPrice] = React.useState(q.price ? String(Number(q.price)).replace(".", ",") : "");
+  const [leadTime, setLeadTime] = React.useState(q.leadTime ?? "");
   const [notes, setNotes] = React.useState(q.notes ?? "");
   async function save() {
-    if (await exec(() => registerComponentQuoteAction(c.id, { quoteId: q.id, price: price.trim(), notes }), "Cotización registrada")) onClose();
+    if (await exec(() => registerComponentQuoteAction(c.id, { quoteId: q.id, price: price.trim(), leadTime, notes }), "Cotización registrada")) onClose();
   }
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -354,7 +358,10 @@ function PriceDialog({ c, q, onClose }: { c: ComponentView; q: ComponentQuoteVie
           <Field label={`Precio (${SUPPLIER_PRICE_UNIT})`} hint="Precio por cada 1.000 unidades, como lo cotizan los proveedores." htmlFor="cq-price">
             <Input id="cq-price" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="45,00…" className="tabular-nums" autoComplete="off" />
           </Field>
-          <Field label="Notas" hint="Cantidad mínima, plazo de entrega, validez de la oferta…" htmlFor="cq-notes">
+          <Field label="Plazo de entrega" htmlFor="cq-lead">
+            <Input id="cq-lead" value={leadTime} onChange={(e) => setLeadTime(e.target.value)} maxLength={100} placeholder="4 semanas…" autoComplete="off" />
+          </Field>
+          <Field label="Notas" hint="Cantidad mínima, portes, validez de la oferta…" htmlFor="cq-notes">
             <Textarea id="cq-notes" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={1000} />
           </Field>
           <Actions busy={busy} onClose={onClose} onSave={save} />

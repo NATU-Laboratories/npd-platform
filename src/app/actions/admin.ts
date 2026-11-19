@@ -25,7 +25,7 @@ import {
 } from "@/db/schema";
 import type { AppSettings } from "@/lib/catalog-defaults";
 import { EDITABLE_ROLES, TEST_EMAIL_DOMAIN } from "@/lib/labels";
-import { scalarFields, SHEET_SECTIONS } from "@/lib/sheet/sections";
+import { scalarFields, SHEET_SECTIONS, VIRTUAL_REQUIREMENTS } from "@/lib/sheet/sections";
 import { sectionDeptKeys } from "@/lib/server/sheet";
 import { logActivity } from "@/lib/server/activity";
 import { AuthzError, getRealUser, requireAdminAction, VIEW_AS_COOKIE } from "@/lib/server/authz";
@@ -270,7 +270,12 @@ export async function saveSheetDepartmentsAction(fd: FormData) {
 /** Referencias «apartado.campo» válidas para un departamento (sus apartados en la ficha). */
 async function deptFieldRefs(deptKey: string) {
   const deptOf = await sectionDeptKeys();
-  return new Set(SHEET_SECTIONS.filter((sec) => deptOf[sec.key] === deptKey).flatMap((sec) => scalarFields(sec).map((f) => `${sec.key}.${f.key}`)));
+  return new Set([
+    ...SHEET_SECTIONS.filter((sec) => deptOf[sec.key] === deptKey).flatMap((sec) => scalarFields(sec).map((f) => `${sec.key}.${f.key}`)),
+    ...Object.entries(VIRTUAL_REQUIREMENTS)
+      .filter(([, v]) => deptOf[v.section] === deptKey)
+      .map(([k]) => k),
+  ]);
 }
 
 export async function addSubstateAction(fd: FormData) {

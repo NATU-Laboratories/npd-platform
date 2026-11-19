@@ -10,6 +10,7 @@ import {
   files,
   labSamples,
   projectConfidential,
+  projectComponents,
   projectDepartments,
   projectDeptProgress,
   projectDeptTransitions,
@@ -19,6 +20,7 @@ import {
   type Project,
   users,
 } from "@/db/schema";
+import { componentLabel } from "@/lib/purchasing/components";
 import { briefSections, type Lookups } from "@/lib/brief/display";
 import { needsOlfactory, parseBriefLenient } from "@/lib/brief/schema";
 import { FIRST_RUNNING_PHASE, isOwnBrand, PHASES } from "@/lib/labels";
@@ -660,6 +662,18 @@ export async function transitionDept(
         return res.ok ? null : `${fieldLabelInSection(r.section, r.field.key)} (${r.section.title})`;
       })
       .filter(Boolean);
+    // Requisitos que no son campos de la ficha (p. ej. proveedor elegido en todos los componentes)
+    if (target.requiredFields.includes("aprovisionamiento.componentsChosen")) {
+      const comps = await db
+        .select({ component: projectComponents.component, description: projectComponents.description, chosen: projectComponents.chosenQuoteId })
+        .from(projectComponents)
+        .where(eq(projectComponents.projectId, projectId));
+      if (!comps.length) missing.push("los componentes del proyecto con su proveedor elegido («Componentes y proveedores»)");
+      else {
+        const pending = comps.filter((c) => !c.chosen).map(componentLabel);
+        if (pending.length) missing.push(`proveedor elegido para ${pending.join(", ")} («Componentes y proveedores»)`);
+      }
+    }
     if (missing.length) throw new SheetError(`Para pasar a «${target.name}»${ref ? ` (${refTitle(ref)})` : ""} falta: ${missing.join("; ")}`);
   }
 

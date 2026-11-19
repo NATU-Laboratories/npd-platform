@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/form";
 import { addSubstateAction, deleteSubstateAction, saveSubstateAction } from "@/app/actions/admin";
 import { getDepartments } from "@/lib/server/catalogs";
 import { allSubstates, sectionDeptKeys } from "@/lib/server/sheet";
-import { scalarFields, SHEET_SECTIONS } from "@/lib/sheet/sections";
+import { scalarFields, SHEET_SECTIONS, VIRTUAL_REQUIREMENTS } from "@/lib/sheet/sections";
 
 export const metadata = { title: "Estados de departamento" };
 
@@ -46,9 +46,14 @@ export default async function SubstatesPage() {
       <div className="flex flex-col gap-4">
         {list.map((d) => {
           const steps = substates.filter((s) => s.departmentId === d.id);
-          const fieldOptions = SHEET_SECTIONS.filter((s) => deptOf[s.key] === d.key).flatMap((sec) =>
-            scalarFields(sec).map((f) => ({ value: `${sec.key}.${f.key}`, label: `${sec.title} · ${f.label}` })),
-          );
+          const fieldOptions = [
+            ...SHEET_SECTIONS.filter((s) => deptOf[s.key] === d.key).flatMap((sec) =>
+              scalarFields(sec).map((f) => ({ value: `${sec.key}.${f.key}`, label: `${sec.title} · ${f.label}` })),
+            ),
+            ...Object.entries(VIRTUAL_REQUIREMENTS)
+              .filter(([, v]) => deptOf[v.section] === d.key)
+              .map(([k, v]) => ({ value: k, label: v.label })),
+          ];
           return (
             <Card key={d.id}>
               <details open={steps.length > 0 && firstPhase(d.key!) < 99}>

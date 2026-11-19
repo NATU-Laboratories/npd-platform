@@ -58,7 +58,7 @@ export async function setComponentSupplierAction(input: { componentId: number; s
   return run("purchasing:supplier", await projectOf(Number(input.componentId) || 0), async () => setComponentSupplier(await requireActionUser(), input));
 }
 
-export async function registerComponentQuoteAction(componentId: number, input: { quoteId: number; price: string; notes?: string | null }) {
+export async function registerComponentQuoteAction(componentId: number, input: { quoteId: number; price: string; leadTime?: string | null; notes?: string | null }) {
   return run("purchasing:quote", await projectOf(Number(componentId) || 0), async () => registerComponentQuote(await requireActionUser(), input));
 }
 

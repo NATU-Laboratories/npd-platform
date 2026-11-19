@@ -54,6 +54,7 @@ export type ComponentQuoteView = {
   supplierEmails: string[];
   status: string;
   price: string | null;
+  leadTime: string | null;
   notes: string | null;
   requestedAt: string | null;
   receivedAt: string | null;
@@ -106,6 +107,7 @@ export async function listComponents(projectId: string): Promise<ComponentView[]
         supplierEmails: emails,
         status: q.status,
         price: q.price,
+        leadTime: q.leadTime,
         notes: q.notes,
         requestedAt: q.requestedAt?.toISOString() ?? null,
         receivedAt: q.receivedAt?.toISOString() ?? null,
@@ -175,7 +177,7 @@ export async function setComponentSupplier(u: CurrentUser, raw: unknown) {
   if (existing) {
     if (existing.supplierId === supplierId) return;
     // Otro proveedor: la cotización vuelve a «Sin pedir»
-    await db.update(componentQuotes).set({ supplierId, status: "pending", price: null, notes: null, requestedAt: null, receivedAt: null }).where(eq(componentQuotes.id, existing.id));
+    await db.update(componentQuotes).set({ supplierId, status: "pending", price: null, leadTime: null, notes: null, requestedAt: null, receivedAt: null }).where(eq(componentQuotes.id, existing.id));
     if (c.chosenQuoteId === existing.id) await db.update(projectComponents).set({ chosenQuoteId: null, choiceComment: null, chosenAt: null, chosenBy: null }).where(eq(projectComponents.id, c.id));
   } else {
     await db.insert(componentQuotes).values({ componentId: c.id, slot: i.slot, supplierId });
@@ -185,6 +187,7 @@ export async function setComponentSupplier(u: CurrentUser, raw: unknown) {
 const quoteInput = z.object({
   quoteId: z.number().int().positive(),
   price: z.union([z.literal(""), z.string().trim().regex(/^\d+([.,]\d{1,4})?$/, "Precio no válido")]),
+  leadTime: z.string().trim().max(100).optional().nullable(),
   notes: z.string().trim().max(1000).optional().nullable(),
 });
 
@@ -195,12 +198,12 @@ export async function registerComponentQuote(u: CurrentUser, raw: unknown) {
   if (!row) throw new PurchasingError("Cotización no encontrada");
   const { c } = await componentGuard(u, row.q.componentId);
   const price = q.price ? q.price.replace(",", ".") : null;
-  const received = !!(price || q.notes);
+  const received = !!(price || q.notes || q.leadTime);
   await db
     .update(componentQuotes)
-    .set({ price, notes: q.notes || null, status: received ? "received" : row.q.status, receivedAt: received ? new Date() : row.q.receivedAt })
+    .set({ price, leadTime: q.leadTime || null, notes: q.notes || null, status: received ? "received" : row.q.status, receivedAt: received ? new Date() : row.q.receivedAt })
     .where(eq(componentQuotes.id, q.quoteId));
-  await logActivity({ projectId: c.projectId, actorId: u.id, action: "purchasing.quote_registered", entity: "component", entityId: String(c.id), diff: { component: componentLabel(c), supplier: row.supplier, price: price ? Number(price) : null, notes: q.notes || null } });
+  await logActivity({ projectId: c.projectId, actorId: u.id, action: "purchasing.quote_registered", entity: "component", entityId: String(c.id), diff: { component: componentLabel(c), supplier: row.supplier, price: price ? Number(price) : null, leadTime: q.leadTime || null, notes: q.notes || null } });
 }
 
 /** Elige el proveedor de un componente (o quita la elección), con un comentario opcional del porqué. */
@@ -213,7 +216,7 @@ export async function chooseComponentQuote(u: CurrentUser, componentId: number, 
     return;
   }
   const [q] = await db
-    .select({ id: componentQuotes.id, supplier: suppliers.name, price: componentQuotes.price })
+    .select({ id: componentQuotes.id, supplier: suppliers.name, price: componentQuotes.price, leadTime: componentQuotes.leadTime })
     .from(componentQuotes)
     .innerJoin(suppliers, eq(suppliers.id, componentQuotes.supplierId))
     .where(and(eq(componentQuotes.id, quoteId), eq(componentQuotes.componentId, c.id)));
@@ -225,7 +228,7 @@ export async function chooseComponentQuote(u: CurrentUser, componentId: number, 
     action: "purchasing.supplier_chosen",
     entity: "component",
     entityId: String(c.id),
-    diff: { component: componentLabel(c), supplier: q.supplier, price: q.price ? Number(q.price) : null, comment: why },
+    diff: { component: componentLabel(c), supplier: q.supplier, price: q.price ? Number(q.price) : null, leadTime: q.leadTime, comment: why },
   });
 }
 

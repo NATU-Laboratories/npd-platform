@@ -664,8 +664,6 @@ export const SHEET_SECTIONS: SheetSection[] = [
       {
         title: "Pedidos de materiales",
         fields: [
-          // Lo usa un estado de Compras configurado en Backoffice; los proveedores y precios van en «Componentes y proveedores»
-          { key: "suppliersLeadTimes", label: "Plazos por componente", type: "textarea", placeholder: "Frasco: 4 semanas · Tapón: … · Etiqueta: … · Estuche: …" },
           { key: "ordersPlaced", label: "Pedidos lanzados", type: "bool" },
           { key: "orderDate", label: "Fecha de pedido", type: "date" },
           { key: "expectedArrival", label: "Llegada prevista de materiales", type: "date" },
@@ -696,6 +694,14 @@ export const SHEET_SECTIONS: SheetSection[] = [
 ];
 
 export const SECTION_BY_KEY: Record<string, SheetSection> = Object.fromEntries(SHEET_SECTIONS.map((s) => [s.key, s]));
+
+/**
+ * Requisitos que no son un campo de la ficha y que se pueden exigir para entrar en un estado
+ * (Backoffice → Estados de departamento), como los campos obligatorios. Los comprueba el servidor.
+ */
+export const VIRTUAL_REQUIREMENTS: Record<string, { section: string; label: string }> = {
+  "aprovisionamiento.componentsChosen": { section: "aprovisionamiento", label: "Todos los componentes con proveedor elegido («Componentes y proveedores»)" },
+};
 
 /**
  * Con varias referencias, estos apartados van siempre por referencia (fórmula,
