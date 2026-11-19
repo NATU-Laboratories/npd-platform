@@ -136,7 +136,7 @@ async function loadProject(projectId: string) {
     requesterName: row.requesterName,
     neededBy: p.neededBy,
     priorityLabel: p.priority ? PRIORITY_LABEL[p.priority] : null,
-    statusLabel: statusLabel(p.status, p.phase),
+    statusLabel: statusLabel(p.status, p.phase, p.type),
   };
   return { ...row, summary };
 }

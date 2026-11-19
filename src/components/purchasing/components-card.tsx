@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
-import { COMPONENT_LABEL, COMPONENT_QUOTE_STATUS, COMPONENTS, componentLabel, isMikadoOnly, MAX_SUPPLIERS } from "@/lib/purchasing/components";
+import { COMPONENT_LABEL, COMPONENT_QUOTE_STATUS, COMPONENTS, componentLabel, fmtSupplierPrice, isMikadoOnly, MAX_SUPPLIERS, SUPPLIER_PRICE_UNIT } from "@/lib/purchasing/components";
 import type { ComponentQuoteView, ComponentView } from "@/lib/server/purchasing";
 import type { RepEmail } from "@/lib/server/replenishments";
 import { cn, formatDate } from "@/lib/utils";
@@ -29,8 +29,8 @@ const TONE: Record<string, string> = {
   requested: "bg-amber-50 text-amber-800",
   received: "bg-[#eef0e6] text-[#56613f]",
 };
-const QUOTE_MESSAGE = "Por favor, enviadnos precio unitario, cantidad mínima y plazo de entrega de cada componente.\n\nGracias.";
-const eur = (v: string) => `${Number(v).toLocaleString("es-ES", { maximumFractionDigits: 4 })} €/ud`;
+const QUOTE_MESSAGE = "Por favor, enviadnos precio por millar, cantidad mínima y plazo de entrega de cada componente.\n\nGracias.";
+const eur = fmtSupplierPrice;
 
 type Ask = { supplierId: number | null; componentId: number | null; title: string };
 
@@ -351,8 +351,8 @@ function PriceDialog({ c, q, onClose }: { c: ComponentView; q: ComponentQuoteVie
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent title={`Cotización · ${componentLabel(c)}`} description={q.supplierName}>
         <div className="flex flex-col gap-3">
-          <Field label="Precio unitario (€/ud)" htmlFor="cq-price">
-            <Input id="cq-price" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0,045…" className="tabular-nums" autoComplete="off" />
+          <Field label={`Precio (${SUPPLIER_PRICE_UNIT})`} hint="Precio por cada 1.000 unidades, como lo cotizan los proveedores." htmlFor="cq-price">
+            <Input id="cq-price" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="45,00…" className="tabular-nums" autoComplete="off" />
           </Field>
           <Field label="Notas" hint="Cantidad mínima, plazo de entrega, validez de la oferta…" htmlFor="cq-notes">
             <Textarea id="cq-notes" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={1000} />

@@ -377,7 +377,7 @@ export async function loadProjectRow(projectId: string, tx: DbOrTx = db) {
 
 export class SheetError extends Error {}
 
-const LOCKED_MSG = "Este departamento se activa cuando el cliente aprueba el presupuesto (P2)";
+const LOCKED_MSG = "Este departamento se activa cuando se aprueba el presupuesto o, en marca propia, los costes (P2)";
 
 /** Datos guardados (sin efectivos) de un apartado: común o de una referencia. */
 async function savedData(projectId: string, sectionKey: string, refId: number, tx: DbOrTx = db) {
@@ -570,7 +570,7 @@ export async function transitionDept(
   const deptPhase = (await deptStartPhases())[dept.key] ?? FIRST_RUNNING_PHASE;
   if (!deptActive(deptPhase, p)) throw new SheetError(LOCKED_MSG);
   if (deptPhase < FIRST_RUNNING_PHASE)
-    throw new SheetError(`El estado de ${dept.name} se actualiza solo al enviar la cotización y al registrar la respuesta del cliente (P2)`);
+    throw new SheetError(`El estado de ${dept.name} se actualiza solo al cotizar y al decidir la P2`);
   if (!canEditSection(u, dept.key, deptPhase, p)) throw new SheetError("Solo los miembros del departamento pueden cambiar su estado");
 
   const deptOf = await sectionDeptKeys();
@@ -762,7 +762,8 @@ export async function requestLabelInfo(u: CurrentUser, projectId: string) {
  * Operaciones, Compras…) reciben solo un aviso de que el proyecto está en marcha.
  * Los que empiezan ya en Desarrollo reciben el de notifyPhaseSections.
  */
-export async function notifyProjectStarted(projectId: string) {
+export async function notifyProjectStarted(projectId: string, ownBrand = false) {
+  const approved = ownBrand ? "Se han aprobado los costes" : "El cliente ha aprobado el presupuesto";
   const [starts, involved] = await Promise.all([
     deptStartPhases(),
     db
@@ -779,8 +780,8 @@ export async function notifyProjectStarted(projectId: string) {
       title: "Nuevo proyecto en marcha",
       intro:
         start != null
-          ? `El cliente ha aprobado el presupuesto y el proyecto arranca en «${PHASES[FIRST_RUNNING_PHASE]?.name}». ${d.name} entra más adelante, en la fase ${start} · ${PHASES[start]?.name}: os avisaremos cuando os toque.`
-          : `El cliente ha aprobado el presupuesto y el proyecto arranca en «${PHASES[FIRST_RUNNING_PHASE]?.name}». ${d.name} está implicado en el proyecto; de momento no tenéis nada que hacer.`,
+          ? `${approved} y el proyecto arranca en «${PHASES[FIRST_RUNNING_PHASE]?.name}». ${d.name} entra más adelante, en la fase ${start} · ${PHASES[start]?.name}: os avisaremos cuando os toque.`
+          : `${approved} y el proyecto arranca en «${PHASES[FIRST_RUNNING_PHASE]?.name}». ${d.name} está implicado en el proyecto; de momento no tenéis nada que hacer.`,
       to: { departmentKeys: [d.key] },
     });
   }

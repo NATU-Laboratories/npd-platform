@@ -7,6 +7,7 @@ import { previewSupplierEmailsAction, registerQuoteAction, requestQuotesAction, 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
+import { fmtSupplierPrice, SUPPLIER_PRICE_UNIT } from "@/lib/purchasing/components";
 import { ELEMENT_LABEL, QUOTE_STATUS_LABEL } from "@/lib/replenishment/config";
 import type { RepEmail } from "@/lib/server/replenishments";
 import { cn, formatDate } from "@/lib/utils";
@@ -68,7 +69,7 @@ export function RepItems({ id, items, suppliers, canEdit }: { id: string; items:
                 </td>
                 <td className="py-2 pr-3">
                   <span className={cn("rounded-full px-2 py-0.5 text-xs", QUOTE_TONE[i.quoteStatus])}>{QUOTE_STATUS_LABEL[i.quoteStatus] ?? i.quoteStatus}</span>
-                  {i.quotePrice && <p className="mt-1 text-xs font-medium tabular-nums text-slate-800">{Number(i.quotePrice).toLocaleString("es-ES", { maximumFractionDigits: 4 })} €/ud</p>}
+                  {i.quotePrice && <p className="mt-1 text-xs font-medium tabular-nums text-slate-800">{fmtSupplierPrice(i.quotePrice)}</p>}
                   {i.quoteNotes && <p className="text-xs text-slate-500">{i.quoteNotes}</p>}
                   {i.quoteStatus === "requested" && i.quoteRequestedAt && <p className="text-xs text-slate-400">Pedida el {formatDate(i.quoteRequestedAt)}</p>}
                 </td>
@@ -190,8 +191,8 @@ function QuoteDialog({ item, onClose }: { item: RepItemRow; onClose: () => void 
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent title={`Recotización · ${ELEMENT_LABEL[item.element] ?? item.element}`} description={item.supplierName ?? undefined}>
         <div className="flex flex-col gap-3">
-          <Field label="Precio unitario (€/ud)" htmlFor="q-price">
-            <Input id="q-price" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0,045…" className="tabular-nums" autoComplete="off" />
+          <Field label={`Precio (${SUPPLIER_PRICE_UNIT})`} hint="Precio por cada 1.000 unidades, como lo cotizan los proveedores." htmlFor="q-price">
+            <Input id="q-price" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="45,00…" className="tabular-nums" autoComplete="off" />
           </Field>
           <Field label="Notas" hint="Plazo de entrega, mínimos, validez de la oferta…" htmlFor="q-notes">
             <Textarea id="q-notes" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={1000} />

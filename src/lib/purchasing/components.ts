@@ -27,3 +27,10 @@ export const COMPONENT_QUOTE_STATUS: Record<string, string> = { pending: "Sin pe
 
 export const componentLabel = (c: { component: string; description?: string | null }) =>
   `${COMPONENT_LABEL[c.component] ?? c.component}${c.description ? ` (${c.description})` : ""}`;
+
+/**
+ * Los proveedores de envases, componentes y etiquetas cotizan por millar: los precios de las
+ * cotizaciones de proveedores (componentes y reposiciones) se guardan y muestran en €/millar.
+ */
+export const SUPPLIER_PRICE_UNIT = "€/millar";
+export const fmtSupplierPrice = (v: number | string) => `${Number(v).toLocaleString("es-ES", { maximumFractionDigits: 4 })} ${SUPPLIER_PRICE_UNIT}`;

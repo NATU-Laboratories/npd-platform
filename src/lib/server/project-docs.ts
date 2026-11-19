@@ -6,7 +6,7 @@ import { labSamples, projectSheet } from "@/db/schema";
 import { describeActivity } from "@/lib/activity-describe";
 import { briefSections, type Lookups } from "@/lib/brief/display";
 import { replaceFile, storageDriver } from "@/lib/graph/storage";
-import { CATEGORY_LABEL, FILE_TAGS, PHASES, PRIORITY_LABEL, statusLabel, TYPE_LABEL } from "@/lib/labels";
+import { CATEGORY_LABEL, FILE_TAGS, phaseName, PRIORITY_LABEL, statusLabel, TYPE_LABEL } from "@/lib/labels";
 import { applicable, formatValue, SHEET_SECTIONS, type ScalarField } from "@/lib/sheet/sections";
 import { getActiveUsers, getAllCatalogs, getBrands, getDepartments } from "./catalogs";
 import { loadProjectDetail } from "./project-detail";
@@ -145,7 +145,7 @@ function buildDocx({ d, lookups, sheet, samples }: Ctx) {
   children.push(
     table([
       ["Código", p.code ?? "—"],
-      ["Situación", `${statusLabel(p.status, p.phase)} · fase ${p.phase} · ${PHASES[p.phase]?.name ?? ""}`],
+      ["Situación", `${statusLabel(p.status, p.phase, p.type)} · fase ${p.phase} · ${phaseName(p.phase, p.type)}`],
       ["Tipo", p.type ? TYPE_LABEL[p.type] : "—"],
       ["Categoría", p.category ? CATEGORY_LABEL[p.category] : "—"],
       ["Cliente / marca", d.clientName ?? d.brandName ?? "—"],

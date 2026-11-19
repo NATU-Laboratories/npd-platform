@@ -10,7 +10,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { hasRole, requireUser } from "@/lib/server/authz";
 import { dashboardStats, filterOptions, listProjects, myDrafts, PAGE_SIZE, pendingNewRequests, type ProjectFilters } from "@/lib/server/dashboard";
 import { getSettings } from "@/lib/server/settings";
-import { CATEGORY_LABEL, PHASES, PRIORITY_COLOR, PRIORITY_LABEL, stageOf } from "@/lib/labels";
+import { CATEGORY_LABEL, PHASES, phaseShort, PRIORITY_COLOR, PRIORITY_LABEL, stageOf } from "@/lib/labels";
 import { cn, formatDate } from "@/lib/utils";
 import { NeededBySignal } from "@/components/needed-by";
 
@@ -229,10 +229,10 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
                     <NeededBySignal date={p.neededBy} riskDays={settings.risk_days} status={p.status} compact />
                   </td>
                   <td className="px-3 py-2.5">
-                    <StatusBadge status={p.status} phase={p.phase} />
+                    <StatusBadge status={p.status} phase={p.phase} type={p.type} />
                     {p.status !== "in_production" && (
                       <div className="mt-0.5 whitespace-nowrap text-xs text-slate-500">
-                        Fase {p.phase} · {PHASES[p.phase]?.short}
+                        Fase {p.phase} · {phaseShort(p.phase, p.type)}
                       </div>
                     )}
                   </td>

@@ -311,11 +311,11 @@ function StateRow({ c, s, canEdit, refInfo, pc }: { c: DeptCard; s: DeptState; c
             : c.due
               ? "Aún no ha empezado."
               : c.waitsP2
-                ? "Se activa cuando el cliente aprueba el presupuesto (P2)."
+                ? "Se activa cuando se aprueba el presupuesto o los costes (P2)."
                 : `Empieza en la fase ${c.phase} · ${PHASES[c.phase]?.name}.`}
       </p>
       {c.auto && !c.completed && c.active && (
-        <p className="text-xs text-slate-500">Avanza con los botones de arriba: «Enviar cotización al comercial» y «Registrar respuesta del cliente (P2)».</p>
+        <p className="text-xs text-slate-500">Avanza con los botones de arriba: la cotización y la decisión de la P2.</p>
       )}
       {canEdit && !c.auto && (
         <div className="flex items-center gap-2">
@@ -639,7 +639,7 @@ export function MyWork({
               <div key={c.dept.key} className="flex flex-col gap-1 px-5 py-3">
                 {head}
                 <p className="text-sm text-slate-500">
-                  {c.waitsP2 ? "Tu parte empieza cuando el cliente apruebe el presupuesto (P2)." : `Tu parte empieza en la fase ${c.phase} · ${PHASES[c.phase]?.name}.`}
+                  {c.waitsP2 ? "Tu parte empieza cuando se apruebe el presupuesto o los costes (P2)." : `Tu parte empieza en la fase ${c.phase} · ${PHASES[c.phase]?.name}.`}
                   {canEdit && c.active && " Si quieres, puedes ir adelantando datos."}
                 </p>
               </div>
