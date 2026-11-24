@@ -32,6 +32,19 @@ import {
   type PreparedAction,
 } from "./assistant-actions";
 import { getSettings } from "./settings";
+import {
+  canUseNewsletters,
+  cambiosNewsletterInput,
+  crearNewsletter,
+  crearNewsletterInput,
+  estadoNewsletter,
+  estadoNewsletterInput,
+  NEWSLETTER_GUIDE,
+  newslettersEnabled,
+  pedirCambiosNewsletter,
+  pruebaNewsletterInput,
+  reenviarPruebaNewsletter,
+} from "./newsletter-agent";
 import { getFormulaTargetCost, loadSheet, pendingUpTo } from "./sheet";
 
 /** Modelo del asistente (OpenAI). Se puede cambiar con OPENAI_MODEL sin tocar código. */
@@ -422,7 +435,38 @@ function toolsFor(u: CurrentUser, ctx: ActionChannel & { prepared: PreparedActio
     },
   });
 
-  return [searchProjects, getProject, searchReps, getRep, notifyTool, commentTool, sheetFieldTool, labNoteTool, quoteReplyTool, quoteTool, noticesTool];
+  const newsletterTools =
+    newslettersEnabled() && canUseNewsletters(u)
+      ? [
+          defineTool({
+            name: "crear_newsletter",
+            description:
+              "Pide una newsletter al agente de newsletters (BetrésON por Mailrelay o NATU por Mailchimp). Crea los borradores y manda la prueba y el email de aprobación a esta persona. No envía nada a clientes. Tarda 1–3 minutos en segundo plano.",
+            inputSchema: crearNewsletterInput,
+            run: (i) => crearNewsletter(u, i),
+          }),
+          defineTool({
+            name: "estado_newsletter",
+            description: "Cómo va una newsletter (o las últimas de esta persona si no se indica cuál): estado, versiones, pruebas y fecha prevista.",
+            inputSchema: estadoNewsletterInput,
+            run: (i) => estadoNewsletter(u, i),
+          }),
+          defineTool({
+            name: "pedir_cambios_newsletter",
+            description: "Pide cambios en una newsletter: genera una versión nueva, actualiza los borradores y reenvía la prueba y el email de aprobación.",
+            inputSchema: cambiosNewsletterInput,
+            run: (i) => pedirCambiosNewsletter(u, i),
+          }),
+          defineTool({
+            name: "reenviar_prueba_newsletter",
+            description: "Reenvía la prueba de una newsletter a otros emails de la empresa.",
+            inputSchema: pruebaNewsletterInput,
+            run: (i) => reenviarPruebaNewsletter(u, i),
+          }),
+        ]
+      : [];
+
+  return [searchProjects, getProject, searchReps, getRep, notifyTool, commentTool, sheetFieldTool, labNoteTool, quoteReplyTool, quoteTool, noticesTool, ...newsletterTools];
 }
 
 export type ChatTurn = { role: "user" | "assistant"; content: string };
@@ -464,7 +508,7 @@ ${
   channel.current
     ? `\nAhora mismo la persona tiene abierto ${channel.current.kind === "proyecto" ? "el proyecto" : "la reposición"} ${channel.current.code} · ${channel.current.name} (${channel.current.extra}; id ${channel.current.id}). Si pregunta o pide algo sin decir de qué proyecto o reposición se trata («este proyecto», «avisa a Diseño de que corre prisa»…), se refiere a esta: usa su código en las herramientas sin preguntárselo.`
     : ""
-}`;
+}${newslettersEnabled() && canUseNewsletters(u) ? `\n${NEWSLETTER_GUIDE}` : ""}`;
   const tools = toolsFor(u, ctx);
   // API Responses (la de Chat Completions no admite herramientas con razonamiento en los
   // modelos nuevos). Sin guardar nada en OpenAI: el razonamiento viaja cifrado entre vueltas.
