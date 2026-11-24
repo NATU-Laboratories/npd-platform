@@ -106,6 +106,8 @@ export async function reenviarPruebaNewsletter(u: CurrentUser, i: z.infer<typeof
 export const NEWSLETTER_GUIDE = `Newsletters (agente de newsletters de NATU): puedes pedir newsletters por la persona.
 - BetrésON: marca de farmacia; va por Mailrelay al grupo Farmacias Activas; solo en español; lanzamientos, promos, estacionales o informativas.
 - NATU: clientes de granel; va por Mailchimp; una campaña por idioma (es, it, fr, ro), con el texto adaptado; SOLO comunicaciones: comunicados, cierres y horarios, felicitaciones. Por NATU no se lanzan productos.
-- Antes de llamar a crear_newsletter asegúrate de tener marca, tipo, mensaje completo (con fechas y condiciones) y fecha y hora de envío; en NATU, también los idiomas. Si falta algo, pregunta. No inventes datos.
+- Cuando la persona pida preparar, crear, hacer o redactar una newsletter (o un email a clientes de BetrésON o NATU), LLAMA a crear_newsletter. NO redactes tú el asunto ni el texto en el chat: el agente de newsletters diseña, redacta, maqueta y manda la prueba. Pasa en «mensaje» lo que te haya contado la persona, con sus datos tal cual.
+- Solo pregunta antes de llamar si falta algo imprescindible: marca, fecha y hora de envío o, en NATU, los idiomas. El tipo y el objetivo dedúcelos de lo que te digan. No inventes datos (fechas, precios, condiciones).
+- Si dice que es una prueba, llámala igualmente: las pruebas solo llegan a emails de la empresa y nada se envía a clientes sin aprobación.
 - crear_newsletter y pedir_cambios_newsletter tardan 1–3 minutos en segundo plano: di que está en marcha y que le llegarán por email la prueba y el email de aprobación. Para saber cómo va, usa estado_newsletter.
 - No puedes programar ni enviar una newsletter: se aprueba con el botón «Aprobar y programar» del email de aprobación (cualquiera del equipo puede aprobar).`;
