@@ -87,10 +87,11 @@ export const cambiosNewsletterInput = z.object({
   peticion_id: z.string().uuid(),
   feedback: z.string().min(5).max(2000).describe("Qué hay que cambiar, con las palabras de la persona"),
   enfoque: z.enum(["editorial", "comercial"]).optional().describe("Solo si había 2 propuestas y quiere cambiar una"),
+  imagenes: z.array(z.string().url()).max(10).optional().describe("Imágenes nuevas (enlace directo) para usar en la nueva versión"),
 });
 
 export async function pedirCambiosNewsletter(u: CurrentUser, i: z.infer<typeof cambiosNewsletterInput>) {
-  return llamar("POST", `/v1/newsletters/${i.peticion_id}/regenerar`, { feedback: i.feedback, enfoque: i.enfoque, actor: u.email });
+  return llamar("POST", `/v1/newsletters/${i.peticion_id}/regenerar`, { feedback: i.feedback, enfoque: i.enfoque, imagenes: i.imagenes, actor: u.email });
 }
 
 export const pruebaNewsletterInput = z.object({
@@ -106,8 +107,16 @@ export async function reenviarPruebaNewsletter(u: CurrentUser, i: z.infer<typeof
 export const NEWSLETTER_GUIDE = `Newsletters (agente de newsletters de NATU): puedes pedir newsletters por la persona.
 - BetrésON: marca de farmacia; va por Mailrelay al grupo Farmacias Activas; solo en español; lanzamientos, promos, estacionales o informativas.
 - NATU: clientes de granel; va por Mailchimp; una campaña por idioma (es, it, fr, ro), con el texto adaptado; SOLO comunicaciones: comunicados, cierres y horarios, felicitaciones. Por NATU no se lanzan productos.
-- Cuando la persona pida preparar, crear, hacer o redactar una newsletter (o un email a clientes de BetrésON o NATU), LLAMA a crear_newsletter. NO redactes tú el asunto ni el texto en el chat: el agente de newsletters diseña, redacta, maqueta y manda la prueba. Pasa en «mensaje» lo que te haya contado la persona, con sus datos tal cual.
-- Solo pregunta antes de llamar si falta algo imprescindible: marca, fecha y hora de envío o, en NATU, los idiomas. El tipo y el objetivo dedúcelos de lo que te digan. No inventes datos (fechas, precios, condiciones).
+- Cuando la persona pida preparar, crear, hacer o redactar una newsletter (o un email a clientes de BetrésON o NATU), vas a LLAMAR a crear_newsletter. NO redactes tú el asunto ni el texto en el chat: el agente de newsletters diseña, redacta, maqueta y manda la prueba.
+- Antes de llamar, repasa lo mismo que pide el formulario y pregunta EN UN SOLO MENSAJE (lista corta) solo lo que falte:
+  · Marca (BetrésON o NATU) y tipo (BetrésON: lanzamiento, promoción, estacional o informativa; NATU: comunicado, cierre o felicitación).
+  · Objetivo y mensaje con los textos clave: fechas, condiciones, precios… todo lo que deba aparecer.
+  · Productos (sobre todo en BetrésON): nombre, descripción breve y enlace, si los hay.
+  · Imágenes: enlaces directos a las imágenes (URL pública que se abre como imagen; los enlaces de SharePoint/OneDrive no sirven porque piden iniciar sesión). Si no tiene, se hace sin fotos. Por Teams no puedes recibir archivos adjuntos: si quiere subir fotos, puede usar el formulario de n8n.
+  · Fecha y hora de envío (hora de Madrid). En NATU, los idiomas (español, italiano, francés, rumano).
+  · Opcionales, en una sola línea: asunto sugerido, 1 o 2 propuestas (editorial y comercial) y si la prueba debe ir también a otros emails de la empresa.
+  Si la persona ya ha dado algo, no lo vuelvas a preguntar. Si dice que no tiene o que da igual, sigue sin ello. Con la respuesta, llama a crear_newsletter pasando sus datos tal cual (sin inventar fechas, precios ni condiciones).
 - Si dice que es una prueba, llámala igualmente: las pruebas solo llegan a emails de la empresa y nada se envía a clientes sin aprobación.
+- Para añadir o cambiar imágenes después, usa pedir_cambios_newsletter con «imagenes».
 - crear_newsletter y pedir_cambios_newsletter tardan 1–3 minutos en segundo plano: di que está en marcha y que le llegarán por email la prueba y el email de aprobación. Para saber cómo va, usa estado_newsletter.
 - No puedes programar ni enviar una newsletter: se aprueba con el botón «Aprobar y programar» del email de aprobación (cualquiera del equipo puede aprobar).`;
